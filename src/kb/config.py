@@ -94,8 +94,36 @@ class TelegramSource(BaseModel):
 Source = Annotated[ImapSource | TelegramSource, Field(discriminator="type")]
 
 
+class ScopeRule(BaseModel):
+    """Assign scopes to messages that match. Exactly one matcher must be set.
+
+    address: sender or recipient email address · domain: email domain (subdomains too)
+    chat: Telegram chat id or @username · folder: mail folder/label (optionally with `source`)
+    """
+
+    scopes: list[Scope]
+    address: str | None = None
+    domain: str | None = None
+    chat: int | str | None = None
+    folder: str | None = None
+    source: str | None = None
+
+    @field_validator("scopes")
+    @classmethod
+    def no_unsorted(cls, scopes: list[str]) -> list[str]:
+        if not scopes or "unsorted" in scopes:
+            raise ValueError("rule scopes must be one or more of personal, digisoft, quokka, rdim")
+        return scopes
+
+    def model_post_init(self, _: object) -> None:
+        set_fields = [f for f in ("address", "domain", "chat", "folder") if getattr(self, f)]
+        if len(set_fields) != 1:
+            raise ValueError("a scope rule needs exactly one of: address, domain, chat, folder")
+
+
 class Config(BaseModel):
     sources: list[Source] = Field(default_factory=list)
+    scope_rules: list[ScopeRule] = Field(default_factory=list)
 
     @field_validator("sources")
     @classmethod

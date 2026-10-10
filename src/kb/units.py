@@ -255,6 +255,12 @@ def rebuild(conn: Conn, source_id: str, unit_key: str) -> int | None:
                 scopes.append(s)
     if len(scopes) > 1 and "unsorted" in scopes:
         scopes.remove("unsorted")
+    override = conn.execute(
+        "SELECT scopes FROM scope_overrides WHERE source_id = %s AND unit_key = %s",
+        (source_id, unit_key),
+    ).fetchone()
+    if override:
+        scopes = list(override["scopes"])
     title = first["subject"] if is_email else (first["metadata"].get("chat_title") or "")
     metadata = {
         "message_count": len(msgs),

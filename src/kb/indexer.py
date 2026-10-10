@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any
 
-from kb import archive, email_parse, jobs, units
+from kb import archive, email_parse, jobs, scopes, units
 from kb.config import Config, ConfigError, TelegramSource
 from kb.connectors.base import get_state, set_state
 from kb.db import Conn
@@ -17,7 +17,8 @@ log = logging.getLogger(__name__)
 # Bump when the way items are built changes; the indexer then re-indexes the whole archive.
 # 2: secret redaction. 3: codes before keywords, alphanumeric codes, passwords without ':'.
 # 4: values on the next line after the keyword. 5: conversation units (threads, segments).
-INDEX_VERSION = 5
+# 6: scope layers (rules, review decisions, overrides); folder/chat username kept for rules.
+INDEX_VERSION = 6
 
 
 def index_raw(conn: Conn, config: Config, raw_id: int) -> int | None:
@@ -32,14 +33,8 @@ def index_raw(conn: Conn, config: Config, raw_id: int) -> int | None:
     raise ValueError(f"no indexer for kind {raw['kind']!r}")
 
 
-def _scopes(config: Config, source_id: str, payload: dict[str, Any] | None = None) -> list[str]:
-    try:
-        source = config.source(source_id)
-    except ConfigError:
-        return ["unsorted"]
-    if isinstance(source, TelegramSource) and payload is not None:
-        return source.scopes_for(payload["chat_id"], payload.get("chat_username"))
-    return list(source.scopes)
+def _resolve(conn: Conn, config: Config, facts: scopes.Facts) -> list[str]:
+    return scopes.resolver(conn, config).resolve(facts)[0]
 
 
 def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) -> int | None:
@@ -57,13 +52,23 @@ def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) ->
         sent_at=sent,
         body=redact_text(header + "\n" + units.strip_quoted(parsed.body)),
         author=parsed.sender,
-        scopes=_scopes(config, raw["source_id"]),
+        scopes=_resolve(
+            conn,
+            config,
+            scopes.Facts(
+                raw["source_id"],
+                "email",
+                parsed.sender,
+                tuple(parsed.participants),
+                folder=payload.get("folder"),
+            ),
+        ),
         participants=parsed.participants,
         subject=redact_text(parsed.subject),
         refs=[r for r in refs if r],
         version=raw["fetched_at"].isoformat(),
         locator=f"imap://{raw['source_id']}/{payload.get('folder')};UID={payload.get('uid')}",
-        metadata={"raw_id": raw_id},
+        metadata={"raw_id": raw_id, "folder": payload.get("folder")},
     )
     unit = units.assign_email_unit(conn, m)
     units.save(conn, m, unit)
@@ -97,7 +102,13 @@ def index_tg_message(conn: Conn, config: Config, raw: dict[str, Any]) -> int | N
         sent_at=datetime.fromisoformat(p["date"]),
         body=redact_text(f"{sender}: {text}"),
         author=sender,
-        scopes=_scopes(config, raw["source_id"], p),
+        scopes=_resolve(
+            conn,
+            config,
+            scopes.Facts(
+                raw["source_id"], "tg", sender, (sender,), chat_id, p.get("chat_username")
+            ),
+        ),
         participants=[sender],
         chat_id=chat_id,
         msg_id=int(p["msg_id"]),
@@ -107,6 +118,7 @@ def index_tg_message(conn: Conn, config: Config, raw: dict[str, Any]) -> int | N
         locator=tg_locator(p),
         metadata={
             "chat_title": p.get("chat_title"),
+            "chat_username": p.get("chat_username"),
             "peer_type": p.get("peer_type"),
             "reactions": p.get("reactions", 0),
         },

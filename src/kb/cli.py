@@ -8,7 +8,7 @@ import logging
 import os
 import time
 
-from kb import db, indexer
+from kb import db, indexer, scopes
 from kb.config import ConfigError, TelegramSource, database_url, load_config
 from kb.connectors import imap
 
@@ -25,8 +25,16 @@ def cmd_ingest(args: argparse.Namespace) -> None:
     config = load_config()
     last_run: dict[str, float] = {}
     while True:
+        try:
+            with db.connect(database_url()) as conn:
+                archived_set = scopes.archived(conn)
+        except Exception:
+            log.exception("cannot read archived scopes")
+            archived_set = set()
         for source in config.imap_sources():
             if time.monotonic() - last_run.get(source.id, -1e9) < source.poll_seconds:
+                continue
+            if scopes.imap_source_archived(source, archived_set):
                 continue
             last_run[source.id] = time.monotonic()
             try:
@@ -131,10 +139,33 @@ def cmd_telegram_chats(args: argparse.Namespace) -> None:
     asyncio.run(main())
 
 
+def cmd_unsorted(args: argparse.Namespace) -> None:
+    config = load_config()
+    with db.connect(database_url()) as conn:
+        if args.unsorted_command == "list":
+            rows = scopes.list_unsorted(conn, args.limit)
+            for r in rows:
+                when = r["last_activity_at"].strftime("%Y-%m-%d") if r["last_activity_at"] else "-"
+                who = ", ".join(r["participants"][:3])
+                print(f"{r['id']:>8}  {when}  {r['kind']:<15} {r['title'] or ''}  [{who}]")
+            print(f"{len(rows)} unsorted item(s)")
+        else:
+            apply_to = "chat" if args.apply_to_chat else "sender" if args.apply_to_sender else None
+            print(scopes.assign(conn, config, args.item_id, args.scopes, apply_to))
+
+
+def cmd_scope(args: argparse.Namespace) -> None:
+    with db.connect(database_url()) as conn:
+        if args.scope_command in ("archive", "unarchive"):
+            scopes.set_archived(conn, args.scope, args.scope_command == "archive")
+        print("archived scopes:", ", ".join(sorted(scopes.archived(conn))) or "none")
+
+
 def cmd_index(args: argparse.Namespace) -> None:
     config = load_config()
     with db.connect(database_url()) as conn:
-        indexer.ensure_index_version(conn)
+        if not indexer.ensure_index_version(conn):
+            scopes.ensure_rules_current(conn, config)
         while True:
             if not indexer.run_once(conn, config):
                 if args.once:
@@ -182,6 +213,25 @@ def main(argv: list[str] | None = None) -> None:
     p = tg.add_parser("chats", help="list your chats with ids for the allowlist")
     p.add_argument("source", nargs="?")
     p.set_defaults(func=cmd_telegram_chats)
+    p = sub.add_parser("unsorted", help="review items without a scope")
+    us = p.add_subparsers(dest="unsorted_command", required=True)
+    p = us.add_parser("list")
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_unsorted)
+    p = us.add_parser("assign", help="kb unsorted assign ITEM_ID SCOPE [SCOPE...]")
+    p.add_argument("item_id", type=int)
+    p.add_argument("scopes", nargs="+")
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--apply-to-chat", action="store_true", help="rule for the whole chat")
+    group.add_argument("--apply-to-sender", action="store_true", help="rule for this sender")
+    p.set_defaults(func=cmd_unsorted)
+    p = sub.add_parser("scope", help="archive scopes of ended engagements")
+    sc = p.add_subparsers(dest="scope_command", required=True)
+    for name in ("archive", "unarchive"):
+        p = sc.add_parser(name)
+        p.add_argument("scope")
+        p.set_defaults(func=cmd_scope)
+    sc.add_parser("list").set_defaults(func=cmd_scope)
     p = sub.add_parser("index", help="process indexing jobs")
     p.add_argument("--once", action="store_true")
     p.set_defaults(func=cmd_index)

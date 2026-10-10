@@ -72,11 +72,18 @@ passwords and one-time codes in en/uk/ru (`password|пароль|код|code|OTP
 *Alternative:* ML-based PII (Presidio) — rejected for v1 (ADR 0005: only hard secrets).
 
 ### D8. Enrichment via Anthropic API
-Model configurable (`KB_DISTILL_MODEL`, default the current Haiku-class model). Structured output via a
-tool schema: `question, summary, outcome, entities[], scope_guess, scope_confidence, language`. Backfill
-uses the Message Batches API (50% cheaper); live uses direct calls. Input truncated to the latest
-~8k tokens of a unit. Rough cost: ~25k units × ~2.5k tokens ≈ 60M input tokens one-off — single-digit to
-low-double-digit dollars on a Haiku-class batch tier; verify with the `kb cost-estimate` dry run before backfill.
+Model choice (owner decision 2026-10-10, after comparing Anthropic and OpenAI current prices — the
+cheap and mid tiers cost the same at both vendors, so staying with one vendor wins):
+- Distillation and scope classification: `claude-haiku-5-5` ($0.10 / $0.50 per MTok, −50% on the
+  Batch API), `output_config.effort: "low"` — extraction does not need deep thinking, and thinking
+  tokens are billed as output.
+- Digests, standups, reports (later changes): `claude-sonnet-5-5`.
+- Model ids live in config (`KB_DISTILL_MODEL`), so a model change is a config change + `kb rebuild`.
+Structured output via `output_config.format` (JSON schema): `question, summary, outcome,
+entities[], scope_guess, scope_confidence, language`. Backfill uses the Message Batches API; live
+uses direct calls. Input truncated to the latest ~8k tokens of a unit. Rough cost: ~30k units ×
+(~2.5k in + ~0.3k out) ≈ $6 for the 12-month backfill on batch, cents per month ongoing; verify
+with the `kb cost-estimate` dry run before backfill.
 
 ### D9. Local embeddings and reranker
 `BAAI/bge-m3` (dense, 1024-d, multilingual, 8k context) via sentence-transformers on CPU; embedded text =

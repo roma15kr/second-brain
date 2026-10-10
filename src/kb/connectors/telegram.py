@@ -135,9 +135,20 @@ def _remember_last_id(conn: Conn, source_id: str, chat_id: int, msg_id: int) -> 
         set_state(conn, source_id, _state_key(chat_id), {"last_id": msg_id})
 
 
+def chat_archived(conn: Conn, source: TelegramSource, chat: ChatInfo) -> bool:
+    """A chat stops syncing when every scope it belongs to is archived."""
+    from kb import scopes
+
+    return scopes.only_archived(
+        source.scopes_for(chat.chat_id, chat.username), scopes.archived(conn)
+    )
+
+
 def on_message(conn: Conn, source: TelegramSource, chat: ChatInfo, msg: Any) -> bool:
     """New or edited message. Returns True if something new was archived."""
     if source.chat_config(chat.chat_id, chat.username) is None:
+        return False
+    if chat_archived(conn, source, chat):
         return False
     stored = store(conn, message_record(source.id, chat, msg))
     _remember_last_id(conn, source.id, chat.chat_id, msg.id)
@@ -162,6 +173,8 @@ async def catch_up(
     since = (now or datetime.now(UTC)) - timedelta(days=source.backfill_days)
     for entity in entities:
         chat = chat_info(entity)
+        if chat_archived(conn, source, chat):
+            continue
         state = get_state(conn, source.id, _state_key(chat.chat_id))
         if state is None:
             messages = client.iter_messages(entity, offset_date=since, reverse=True)
