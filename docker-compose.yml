@@ -45,9 +45,10 @@ services:
       DATABASE_URL: postgresql://kb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kb
       KB_CONFIG_YAML: ${KB_CONFIG_YAML}
       KB_MCP_TOKEN: ${SERVICE_PASSWORD_64_MCPTOKEN}
-    ports:
-      # Private by default: bind to the server's loopback or Tailscale IP, never 0.0.0.0.
-      - "${MCP_BIND:-127.0.0.1}:8765:8765"
+    # No published ports: Coolify's proxy routes the assigned domain (HTTPS) to port 8765,
+    # and every request must carry KB_MCP_TOKEN. Move to Tailscale-only per ADR 0009.
+    expose:
+      - "8765"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health')"]
       interval: 15s
