@@ -18,7 +18,10 @@ _Last updated: 2026-10-10 by Claude_
    Slice 2 verified 2026-10-10: Telegram (owner's account, QR login, 12 allowlisted chats in KB_CONFIG_YAML) — live message
    searchable, edit replaced text, delete hid it.
    Slice 3 verified 2026-10-10: secret redaction live (INDEX_VERSION=4 re-indexed the archive); known OTPs and
-   passwords found in real data no longer appear in search. Next: slice 4 (conversation units: threads/segments).
+   passwords found in real data no longer appear in search.
+   Slice 4 verified 2026-10-10: email threads + Telegram conversations as search units (INDEX_VERSION=5 rebuild,
+   deletions survive rebuild), MCP get_item/recent_activity, clear tool errors over HTTP.
+   Next: slice 5 (scope rules + unsorted review) — or reorder per owner.
 1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
 2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
 3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.
@@ -31,6 +34,8 @@ _Last updated: 2026-10-10 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
+- Search items are units (`email_thread`, `tg_conversation`) built from `messages`; a full rebuild (INDEX_VERSION bump) empties search until the replay catches up (minutes).
+- MCP tools must raise `ToolError` for expected failures; other exceptions reach clients as a generic error.
 - Bumping `INDEX_VERSION` in `src/kb/indexer.py` re-indexes the whole archive on the next `kb index` start.
 - Redaction is rule-based (src/kb/redact.py); when a new leak shape is found, add a real-shaped test first.
 - Telegram login: codes for a new api_id may not be delivered; use `kb auth telegram --qr` (Coolify terminal, `telegram` container).

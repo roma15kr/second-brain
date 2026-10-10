@@ -23,9 +23,9 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## 4. Conversation units
 
-- [ ] 4.1 Email threading (Gmail-style thread id hook, References/In-Reply-To, subject fallback) with whole-thread rebuild on new message; verify `test_email_threads_from_references_and_fallback_subject` and that a reply yields one updated result
-- [ ] 4.2 Telegram segmentation (reply chains, forum topics, 45-min gap, late replies) with configurable gap; verify `test_tg_segment_split_on_gap`, `test_tg_late_reply_joins_old_unit`, `test_tg_forum_topic_is_unit`
-- [ ] 4.3 `get_item` and `recent_activity` MCP tools with pagination and clear errors; verify `test_mcp_unknown_scope_error_lists_valid` and paging over a 300-message fixture
+- [x] 4.1 Email threading (Gmail-style thread id hook, References/In-Reply-To, subject fallback) with whole-thread rebuild on new message; verify `test_email_threads_from_references_and_fallback_subject` and that a reply yields one updated result
+- [x] 4.2 Telegram segmentation (reply chains, forum topics, 45-min gap, late replies) with configurable gap; verify `test_tg_segment_split_on_gap`, `test_tg_late_reply_joins_old_unit`, `test_tg_forum_topic_is_unit`
+- [x] 4.3 `get_item` and `recent_activity` MCP tools with pagination and clear errors; verify `test_mcp_unknown_scope_error_lists_valid` and paging over a 300-message fixture
 
 ## 5. Scopes
 
