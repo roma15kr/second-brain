@@ -17,6 +17,7 @@
 - Ops registry: domains/TLS expiry alerts, subscriptions from receipts, failed-payment alerts, server inventory
 - Vault metadata push from Mac, `where_are_credentials`, leaked-secret alerts, weekly vault hygiene report
 - macOS meeting assistant (live transcript, live KB assistant, batch re-transcription)
+- Suggested mail replies: for emails that need an answer, draft a reply in the owner's tone using KB context (earlier threads, ClickUp, meetings, metrics); delivered as a Gmail/IMAP draft or in Telegram for one-tap approval; never sent automatically (needs a write scope only for drafts)
 
 ## Later / maybe
 - WhatsApp (chat exports or linked-device bridge) — v2 decision
