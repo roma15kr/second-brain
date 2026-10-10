@@ -2,11 +2,12 @@ from datetime import date, datetime
 
 import httpx
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from kb import db, indexer
 from kb.connectors import imap
 from kb.mcp_server import BearerAuth, build_app, build_server
-from tests.fakes import FakeImap, make_email
+from tests.fakes import FakeImap, call, make_email
 
 TOKEN = "test-token"
 
@@ -51,7 +52,7 @@ async def test_search_tool_returns_evidence(conn, pg_url, source, config):
     server = build_server(lambda: db.connect(pg_url))
     tools = {t.name: t for t in await server.list_tools()}
     assert "search" in tools and "scopes" in str(tools["search"].input_schema)
-    result = await server.call_tool("search", {"query": "Rozetka"})
+    result = await call(server, "search", {"query": "Rozetka"})
     assert "Marketplace contract" in str(result)
 
 
@@ -59,3 +60,11 @@ async def test_mail_and_chat_tools_are_listed(pg_url):
     server = build_server(lambda: db.connect(pg_url))
     names = {t.name for t in await server.list_tools()}
     assert {"search", "search_mail", "search_chats"} <= names
+
+
+async def test_bad_scope_and_date_reach_client_with_message(pg_url):
+    server = build_server(lambda: db.connect(pg_url))
+    with pytest.raises(ToolError, match="valid scopes: personal, digisoft, quokka, rdim"):
+        await call(server, "search", {"query": "x", "scopes": ["acme"]})
+    with pytest.raises(ToolError, match="YYYY-MM-DD"):
+        await call(server, "search", {"query": "x", "date_from": "10/09/2026"})

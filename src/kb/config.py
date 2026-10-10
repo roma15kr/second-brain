@@ -42,6 +42,7 @@ class TelegramChat(BaseModel):
 
     chat: int | str
     scopes: list[Scope] | None = None
+    gap_minutes: int | None = None  # silence that starts a new conversation (default: source)
 
     def matches(self, chat_id: int, username: str | None) -> bool:
         if isinstance(self.chat, int):
@@ -62,6 +63,9 @@ class TelegramSource(BaseModel):
     chats: list[TelegramChat] = Field(default_factory=list)
     backfill_days: int = 365
     catch_up_seconds: int = 600
+    gap_minutes: int = 45
+    max_unit_messages: int = 100
+    max_unit_hours: int = 12
 
     def api_id(self) -> int:
         value = _require_env(self.api_id_env, self.id)
@@ -77,6 +81,10 @@ class TelegramSource(BaseModel):
             if c.matches(chat_id, username):
                 return c
         return None
+
+    def gap_for(self, chat_id: int, username: str | None) -> int:
+        c = self.chat_config(chat_id, username)
+        return c.gap_minutes if c and c.gap_minutes else self.gap_minutes
 
     def scopes_for(self, chat_id: int, username: str | None) -> list[str]:
         c = self.chat_config(chat_id, username)

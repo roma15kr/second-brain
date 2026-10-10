@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
+from datetime import datetime, timedelta
 from typing import Any
 
-from kb import archive, email_parse, jobs
+from kb import archive, email_parse, jobs, units
 from kb.config import Config, ConfigError, TelegramSource
 from kb.connectors.base import get_state, set_state
 from kb.db import Conn
@@ -16,8 +16,8 @@ log = logging.getLogger(__name__)
 
 # Bump when the way items are built changes; the indexer then re-indexes the whole archive.
 # 2: secret redaction. 3: codes before keywords, alphanumeric codes, passwords without ':'.
-# 4: values on the next line after the keyword.
-INDEX_VERSION = 4
+# 4: values on the next line after the keyword. 5: conversation units (threads, segments).
+INDEX_VERSION = 5
 
 
 def index_raw(conn: Conn, config: Config, raw_id: int) -> int | None:
@@ -32,51 +32,42 @@ def index_raw(conn: Conn, config: Config, raw_id: int) -> int | None:
     raise ValueError(f"no indexer for kind {raw['kind']!r}")
 
 
-def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) -> int:
+def _scopes(config: Config, source_id: str, payload: dict[str, Any] | None = None) -> list[str]:
     try:
-        scopes = list(config.source(raw["source_id"]).scopes)
+        source = config.source(source_id)
     except ConfigError:
-        scopes = ["unsorted"]
+        return ["unsorted"]
+    if isinstance(source, TelegramSource) and payload is not None:
+        return source.scopes_for(payload["chat_id"], payload.get("chat_username"))
+    return list(source.scopes)
+
+
+def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) -> int | None:
     parsed = email_parse.parse(bytes(raw["blob"]))
-    occurred = parsed.date or raw["occurred_at"]
+    sent = parsed.date or raw["occurred_at"]
     header = f"From: {parsed.sender}\nTo: {', '.join(parsed.recipients)}\n"
     if parsed.attachments:
         header += f"Attachments: {', '.join(parsed.attachments)}\n"
     payload = raw["payload"]
-    row = conn.execute(
-        """
-        INSERT INTO items (source_id, source_item_key, kind, scopes, title, raw_text,
-                           participants, occurred_at, last_activity_at, locator, metadata)
-        VALUES (%s, %s, 'email', %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (source_id, source_item_key) DO UPDATE SET
-            scopes = EXCLUDED.scopes, title = EXCLUDED.title, raw_text = EXCLUDED.raw_text,
-            participants = EXCLUDED.participants, occurred_at = EXCLUDED.occurred_at,
-            last_activity_at = EXCLUDED.last_activity_at, locator = EXCLUDED.locator,
-            metadata = EXCLUDED.metadata, updated_at = now()
-        RETURNING id
-        """,
-        (
-            raw["source_id"],
-            parsed.message_id or raw["external_id"],
-            scopes,
-            redact_text(parsed.subject),
-            redact_text(header + "\n" + parsed.body),
-            parsed.participants,
-            occurred,
-            occurred,
-            f"imap://{raw['source_id']}/{payload.get('folder')};UID={payload.get('uid')}",
-            json.dumps(
-                {
-                    "message_id": parsed.message_id,
-                    "in_reply_to": parsed.in_reply_to,
-                    "references": parsed.references,
-                    "raw_ids": [raw_id],
-                }
-            ),
-        ),
-    ).fetchone()
-    assert row is not None
-    return int(row["id"])
+    refs = list(dict.fromkeys([*parsed.references, parsed.in_reply_to]))
+    m = units.Message(
+        source_id=raw["source_id"],
+        message_key=parsed.message_id or raw["external_id"],
+        kind="email",
+        sent_at=sent,
+        body=redact_text(header + "\n" + units.strip_quoted(parsed.body)),
+        author=parsed.sender,
+        scopes=_scopes(config, raw["source_id"]),
+        participants=parsed.participants,
+        subject=redact_text(parsed.subject),
+        refs=[r for r in refs if r],
+        version=raw["fetched_at"].isoformat(),
+        locator=f"imap://{raw['source_id']}/{payload.get('folder')};UID={payload.get('uid')}",
+        metadata={"raw_id": raw_id},
+    )
+    unit = units.assign_email_unit(conn, m)
+    units.save(conn, m, unit)
+    return units.rebuild(conn, m.source_id, unit)
 
 
 def tg_locator(payload: dict[str, Any]) -> str:
@@ -93,70 +84,65 @@ def index_tg_message(conn: Conn, config: Config, raw: dict[str, Any]) -> int | N
     text = (p.get("text") or "").strip()
     if not text:
         return None  # media without caption: archived, nothing to search yet
-    try:
-        source = config.source(raw["source_id"])
-        scopes = (
-            source.scopes_for(p["chat_id"], p.get("chat_username"))
-            if isinstance(source, TelegramSource)
-            else list(source.scopes)
-        )
-    except ConfigError:
-        scopes = ["unsorted"]
     sender = p.get("sender_name") or str(p.get("sender_id") or "unknown")
-    version = p.get("edit_date") or p["date"]
-    row = conn.execute(
-        """
-        INSERT INTO items (source_id, source_item_key, kind, scopes, title, raw_text,
-                           participants, occurred_at, last_activity_at, locator, metadata)
-        VALUES (%s, %s, 'tg_message', %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (source_id, source_item_key) DO UPDATE SET
-            scopes = EXCLUDED.scopes, title = EXCLUDED.title, raw_text = EXCLUDED.raw_text,
-            participants = EXCLUDED.participants, last_activity_at = EXCLUDED.last_activity_at,
-            locator = EXCLUDED.locator, metadata = EXCLUDED.metadata, updated_at = now()
-        WHERE items.metadata->>'version' <= EXCLUDED.metadata->>'version'
-        RETURNING id
-        """,
-        (
-            raw["source_id"],
-            f"{p['chat_id']}:{p['msg_id']}",
-            scopes,
-            p.get("chat_title"),
-            redact_text(f"{sender}: {text}"),
-            [sender],
-            p["date"],
-            version,
-            tg_locator(p),
-            json.dumps(
-                {
-                    "chat_id": p["chat_id"],
-                    "msg_id": p["msg_id"],
-                    "peer_type": p.get("peer_type"),
-                    "reply_to_msg_id": p.get("reply_to_msg_id"),
-                    "topic_id": p.get("topic_id"),
-                    "reactions": p.get("reactions", 0),
-                    "version": version,
-                }
-            ),
-        ),
-    ).fetchone()
-    return int(row["id"]) if row else None
+    chat_id = int(p["chat_id"])
+    topic = p.get("topic_id") or (p.get("reply_to_msg_id") if p.get("forum_topic") else None)
+    reply_to = p.get("reply_to_msg_id")
+    if reply_to and reply_to == topic:
+        reply_to = None  # posting into a forum topic, not a reply to a message
+    m = units.Message(
+        source_id=raw["source_id"],
+        message_key=f"{chat_id}:{p['msg_id']}",
+        kind="tg",
+        sent_at=datetime.fromisoformat(p["date"]),
+        body=redact_text(f"{sender}: {text}"),
+        author=sender,
+        scopes=_scopes(config, raw["source_id"], p),
+        participants=[sender],
+        chat_id=chat_id,
+        msg_id=int(p["msg_id"]),
+        topic_id=int(topic) if topic else None,
+        reply_to=f"{chat_id}:{reply_to}" if reply_to else None,
+        version=p.get("edit_date") or p["date"],
+        locator=tg_locator(p),
+        metadata={
+            "chat_title": p.get("chat_title"),
+            "peer_type": p.get("peer_type"),
+            "reactions": p.get("reactions", 0),
+        },
+    )
+    gap, max_messages, max_hours = 45, 100, 12
+    try:
+        source = config.source(m.source_id)
+        if isinstance(source, TelegramSource):
+            gap = source.gap_for(chat_id, p.get("chat_username"))
+            max_messages, max_hours = source.max_unit_messages, source.max_unit_hours
+    except ConfigError:
+        pass
+    unit = units.assign_tg_unit(
+        conn, m, timedelta(minutes=gap), max_messages, timedelta(hours=max_hours)
+    )
+    units.save(conn, m, unit)
+    return units.rebuild(conn, m.source_id, unit)
 
 
 def hide_tg_deleted(conn: Conn, raw: dict[str, Any]) -> None:
-    """Hide deleted messages. Without a chat id (private chats, basic groups) message ids are
-    account-wide, so they can only refer to non-channel chats."""
+    """Hide deleted messages and rebuild their conversations. Without a chat id (private chats,
+    basic groups) message ids are account-wide, so they can only refer to non-channel chats."""
     p = raw["payload"]
-    conn.execute(
+    rows = conn.execute(
         """
-        UPDATE items SET hidden = true, updated_at = now()
-        WHERE source_id = %(source)s AND kind = 'tg_message'
-          AND (metadata->>'msg_id')::bigint = ANY(%(ids)s)
+        UPDATE messages SET hidden = true
+        WHERE source_id = %(source)s AND kind = 'tg' AND msg_id = ANY(%(ids)s)
           AND CASE WHEN %(chat)s::bigint IS NULL
-                   THEN metadata->>'peer_type' <> 'channel'
-                   ELSE (metadata->>'chat_id')::bigint = %(chat)s::bigint END
+                   THEN coalesce(metadata->>'peer_type', '') <> 'channel'
+                   ELSE chat_id = %(chat)s::bigint END
+        RETURNING unit_key
         """,
         {"source": raw["source_id"], "ids": p["msg_ids"], "chat": p.get("chat_id")},
-    )
+    ).fetchall()
+    for unit in {r["unit_key"] for r in rows}:
+        units.rebuild(conn, raw["source_id"], unit)
 
 
 def ensure_index_version(conn: Conn) -> int:
@@ -168,6 +154,10 @@ def ensure_index_version(conn: Conn) -> int:
     state = get_state(conn, "_indexer", "version") or {}
     if int(state.get("version", 0)) >= INDEX_VERSION:
         return 0
+    # Derived data is rebuilt from scratch so unit assignment is consistent with the new code.
+    conn.execute("DELETE FROM messages")
+    conn.execute("DELETE FROM items WHERE kind IN ('email_thread', 'tg_conversation')")
+    conn.execute("DELETE FROM jobs WHERE kind = 'index.raw' AND done_at IS NULL")
     row = conn.execute(
         """
         WITH queued AS (

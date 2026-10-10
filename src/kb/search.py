@@ -55,18 +55,8 @@ class Evidence:
         return d
 
 
-def search(
-    conn: Conn, query: str, filters: SearchFilters | None = None, limit: int = 10
-) -> list[Evidence]:
-    filters = filters or SearchFilters()
-    filters.validate()
-    if not query.strip():
-        raise SearchError("query must not be empty")
-    if not 1 <= limit <= MAX_LIMIT:
-        raise SearchError(f"limit must be between 1 and {MAX_LIMIT}")
-
-    where = ["NOT hidden", "tsv @@ q"]
-    params: dict[str, Any] = {"query": query, "limit": limit}
+def _filter_sql(filters: SearchFilters, params: dict[str, Any]) -> list[str]:
+    where = ["NOT hidden"]
     if filters.scopes:
         where.append("scopes && %(scopes)s")
         params["scopes"] = filters.scopes
@@ -82,11 +72,63 @@ def search(
     if filters.date_to:
         where.append("occurred_at < %(date_to)s::date + 1")
         params["date_to"] = filters.date_to
+    return where
+
+
+def _evidence(r: dict[str, Any], excerpt: str, score: float) -> Evidence:
+    return Evidence(
+        item_id=r["id"],
+        source=r["source_id"],
+        kind=r["kind"],
+        scopes=list(r["scopes"]),
+        title=r["title"],
+        participants=list(r["participants"]),
+        occurred_at=r["occurred_at"],
+        last_activity_at=r["last_activity_at"],
+        excerpt=excerpt,
+        locator=r["locator"],
+        score=score,
+        extra={"message_count": (r.get("metadata") or {}).get("message_count")},
+    )
+
+
+def recent(conn: Conn, filters: SearchFilters | None = None, limit: int = 20) -> list[Evidence]:
+    """Most recently active items, newest first."""
+    filters = filters or SearchFilters()
+    filters.validate()
+    if not 1 <= limit <= MAX_LIMIT:
+        raise SearchError(f"limit must be between 1 and {MAX_LIMIT}")
+    params: dict[str, Any] = {"limit": limit}
+    where = _filter_sql(filters, params)
+    rows = conn.execute(
+        f"""
+        SELECT id, source_id, kind, scopes, title, participants, occurred_at, last_activity_at,
+               locator, metadata, right(raw_text, 400) AS tail
+        FROM items WHERE {" AND ".join(where)}
+        ORDER BY last_activity_at DESC NULLS LAST LIMIT %(limit)s
+        """,
+        params,
+    ).fetchall()
+    return [_evidence(r, r["tail"], 0.0) for r in rows]
+
+
+def search(
+    conn: Conn, query: str, filters: SearchFilters | None = None, limit: int = 10
+) -> list[Evidence]:
+    filters = filters or SearchFilters()
+    filters.validate()
+    if not query.strip():
+        raise SearchError("query must not be empty")
+    if not 1 <= limit <= MAX_LIMIT:
+        raise SearchError(f"limit must be between 1 and {MAX_LIMIT}")
+
+    params: dict[str, Any] = {"query": query, "limit": limit}
+    where = [*_filter_sql(filters, params), "tsv @@ q"]
 
     rows = conn.execute(
         f"""
         SELECT id, source_id, kind, scopes, title, participants, occurred_at, last_activity_at,
-               locator, ts_rank_cd(tsv, q) AS score,
+               locator, metadata, ts_rank_cd(tsv, q) AS score,
                ts_headline('simple', raw_text, q,
                            'MaxWords=60, MinWords=20, MaxFragments=2, FragmentDelimiter=" … "')
                    AS excerpt
@@ -97,19 +139,4 @@ def search(
         """,
         params,
     ).fetchall()
-    return [
-        Evidence(
-            item_id=r["id"],
-            source=r["source_id"],
-            kind=r["kind"],
-            scopes=list(r["scopes"]),
-            title=r["title"],
-            participants=list(r["participants"]),
-            occurred_at=r["occurred_at"],
-            last_activity_at=r["last_activity_at"],
-            excerpt=r["excerpt"],
-            locator=r["locator"],
-            score=float(r["score"]),
-        )
-        for r in rows
-    ]
+    return [_evidence(r, r["excerpt"], float(r["score"])) for r in rows]

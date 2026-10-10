@@ -107,6 +107,7 @@ def message_record(source_id: str, chat: ChatInfo, msg: Any) -> RawRecord:
             "text": getattr(msg, "message", None) or "",
             "reply_to_msg_id": getattr(reply_to, "reply_to_msg_id", None),
             "topic_id": getattr(reply_to, "reply_to_top_id", None),
+            "forum_topic": bool(getattr(reply_to, "forum_topic", False)),
             "reactions": _reactions(msg),
             "media": type(media).__name__ if media is not None else None,
         },

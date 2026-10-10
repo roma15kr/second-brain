@@ -64,3 +64,12 @@ class FakeImap:
             for u in messages
             if u in self.messages
         }
+
+
+async def call(server: Any, name: str, args: dict[str, Any]) -> Any:
+    """Call an MCP tool in-process and return the (non-elicitation) CallToolResult."""
+    from mcp.types import CallToolResult
+
+    result = await server.call_tool(name, args)
+    assert isinstance(result, CallToolResult)
+    return result

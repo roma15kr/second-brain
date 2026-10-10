@@ -6,7 +6,7 @@ from kb.config import Config, TelegramChat, TelegramSource
 from kb.connectors import imap, telegram
 from kb.mcp_server import build_server
 from kb.search import search
-from tests.fakes import FakeImap, make_email
+from tests.fakes import FakeImap, call, make_email
 
 BODY = "Your verification code is 482913. Server login: admin, password: Zx9!qq2L"
 
@@ -39,7 +39,7 @@ def test_secret_itself_is_not_searchable(conn, source, config):
 async def test_mcp_output_is_redacted(conn, pg_url, source, config):
     ingest_email(conn, source, config)
     server = build_server(lambda: db.connect(pg_url))
-    result = str(await server.call_tool("search_mail", {"query": "verification"}))
+    result = str(await call(server, "search_mail", {"query": "verification"}))
     assert "Access for hosting" in result
     assert "482913" not in result and "Zx9!qq2L" not in result
 

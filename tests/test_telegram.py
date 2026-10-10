@@ -83,7 +83,7 @@ def test_message_is_searchable_with_chat_scope_and_link(conn, tg_source, tg_conf
     telegram.on_message(conn, tg_source, ALLOWED, msg(42, "Rozetka listing approved"))
     index_all(conn, tg_config)
     [r] = search(conn, "Rozetka")
-    assert r.kind == "tg_message"
+    assert r.kind == "tg_conversation"
     assert r.scopes == ["quokka"]
     assert r.title == "Quokka team"
     assert r.locator == "https://t.me/c/1234/42"
@@ -175,8 +175,8 @@ async def test_catch_up_backfill_then_min_id(conn, tg_source, no_resolve):
 def test_search_kind_filter(conn, tg_source, tg_config):
     telegram.on_message(conn, tg_source, ALLOWED, msg(1, "contract signed"))
     index_all(conn, tg_config)
-    assert search(conn, "contract", SearchFilters(kinds=["email"])) == []
-    assert search(conn, "contract", SearchFilters(kinds=["tg_message"]))
+    assert search(conn, "contract", SearchFilters(kinds=["email_thread"])) == []
+    assert search(conn, "contract", SearchFilters(kinds=["tg_conversation"]))
 
 
 def test_telegram_chat_matching():

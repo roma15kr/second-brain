@@ -2,23 +2,41 @@
 
 from __future__ import annotations
 
+import functools
 import hmac
 from collections.abc import Callable
 from datetime import date
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from kb import units
 from kb.db import Conn
-from kb.search import SearchFilters, search
+from kb.search import SearchError, SearchFilters, recent, search
 
 INSTRUCTIONS = (
     "Personal knowledge base of the owner's mail and Telegram chats. "
     "Tools return ranked evidence with citations; compose answers yourself and cite item ids. "
     "Scopes: personal, digisoft, quokka, rdim, unsorted."
 )
+
+
+def clear_errors[F: Callable[..., Any]](fn: F) -> F:
+    """Report invalid input to the client with its specific message (not a generic crash)."""
+
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return fn(*args, **kwargs)
+        except SearchError as exc:
+            raise ToolError(str(exc)) from None
+        except ValueError as exc:  # e.g. date.fromisoformat
+            raise ToolError(f"invalid argument: {exc}; dates use YYYY-MM-DD") from None
+
+    return wrapper  # type: ignore[return-value]
 
 
 def build_server(get_conn: Callable[[], Conn]) -> MCPServer:
@@ -44,6 +62,7 @@ def build_server(get_conn: Callable[[], Conn]) -> MCPServer:
             return [e.to_dict() for e in search(conn, query, filters, limit)]
 
     @server.tool(name="search")
+    @clear_errors
     def search_all(
         query: str,
         scopes: list[str] | None = None,
@@ -57,6 +76,7 @@ def build_server(get_conn: Callable[[], Conn]) -> MCPServer:
         return run(query, None, scopes, sources, date_from, date_to, limit)
 
     @server.tool(name="search_mail")
+    @clear_errors
     def search_mail(
         query: str,
         scopes: list[str] | None = None,
@@ -64,10 +84,11 @@ def build_server(get_conn: Callable[[], Conn]) -> MCPServer:
         date_to: str | None = None,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        """Search email only. Same filters as `search`."""
-        return run(query, ["email"], scopes, None, date_from, date_to, limit)
+        """Search email threads only. Same filters as `search`."""
+        return run(query, ["email_thread"], scopes, None, date_from, date_to, limit)
 
     @server.tool(name="search_chats")
+    @clear_errors
     def search_chats(
         query: str,
         scopes: list[str] | None = None,
@@ -75,11 +96,80 @@ def build_server(get_conn: Callable[[], Conn]) -> MCPServer:
         date_to: str | None = None,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        """Search Telegram messages only (allowlisted chats). Each result is one message; its
-        locator links to the message in Telegram when possible."""
-        return run(query, ["tg_message"], scopes, None, date_from, date_to, limit)
+        """Search Telegram conversations only (allowlisted chats). Each result is one conversation;
+        its locator links to the first message in Telegram when possible."""
+        return run(query, ["tg_conversation"], scopes, None, date_from, date_to, limit)
+
+    @server.tool(name="get_item")
+    @clear_errors
+    def get_item(item_id: int, offset: int = 0, limit: int = 50) -> dict[str, Any]:
+        """Open one result (email thread or Telegram conversation) by its item_id: all messages
+        oldest first, with authors and times. Long conversations are paged: pass next_offset."""
+        if not 1 <= limit <= MAX_PAGE:
+            raise SearchError(f"limit must be between 1 and {MAX_PAGE}")
+        if offset < 0:
+            raise SearchError("offset must be 0 or more")
+        with get_conn() as conn:
+            try:
+                page = units.unit_messages(conn, item_id, offset, limit)
+            except KeyError:
+                raise SearchError(
+                    f"no item with item_id {item_id}; use an item_id returned by a search tool"
+                ) from None
+        item = page["item"]
+        return {
+            "item_id": item["id"],
+            "kind": item["kind"],
+            "source": item["source_id"],
+            "scopes": list(item["scopes"]),
+            "title": item["title"],
+            "participants": list(item["participants"]),
+            "occurred_at": _iso(item["occurred_at"]),
+            "last_activity_at": _iso(item["last_activity_at"]),
+            "locator": item["locator"],
+            "total_messages": page["total"],
+            "offset": offset,
+            "next_offset": page["next_offset"],
+            "messages": [
+                {
+                    "author": m["author"],
+                    "sent_at": _iso(m["sent_at"]),
+                    "text": m["body"],
+                    "locator": m["locator"],
+                }
+                for m in page["messages"]
+            ],
+        }
+
+    @server.tool(name="recent_activity")
+    @clear_errors
+    def recent_activity(
+        scopes: list[str] | None = None,
+        kind: str | None = None,
+        since: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Latest conversations by last activity. Optional: scopes, kind ('mail' or 'chats'),
+        since (YYYY-MM-DD)."""
+        kinds = {"mail": ["email_thread"], "chats": ["tg_conversation"], None: None}
+        if kind not in kinds:
+            raise SearchError("kind must be 'mail', 'chats' or omitted")
+        filters = SearchFilters(
+            scopes=scopes,
+            kinds=kinds[kind],
+            date_from=date.fromisoformat(since) if since else None,
+        )
+        with get_conn() as conn:
+            return [e.to_dict() for e in recent(conn, filters, limit)]
 
     return server
+
+
+MAX_PAGE = 200
+
+
+def _iso(value: Any) -> str | None:
+    return value.isoformat() if value is not None else None
 
 
 class BearerAuth:
