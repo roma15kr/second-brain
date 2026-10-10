@@ -8,9 +8,15 @@ from typing import Any
 
 from kb import archive, email_parse, jobs
 from kb.config import Config, ConfigError, TelegramSource
+from kb.connectors.base import get_state, set_state
 from kb.db import Conn
+from kb.redact import redact_text
 
 log = logging.getLogger(__name__)
+
+# Bump when the way items are built changes; the indexer then re-indexes the whole archive.
+# 2: secret redaction.
+INDEX_VERSION = 2
 
 
 def index_raw(conn: Conn, config: Config, raw_id: int) -> int | None:
@@ -52,8 +58,8 @@ def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) ->
             raw["source_id"],
             parsed.message_id or raw["external_id"],
             scopes,
-            parsed.subject,
-            header + "\n" + parsed.body,
+            redact_text(parsed.subject),
+            redact_text(header + "\n" + parsed.body),
             parsed.participants,
             occurred,
             occurred,
@@ -114,7 +120,7 @@ def index_tg_message(conn: Conn, config: Config, raw: dict[str, Any]) -> int | N
             f"{p['chat_id']}:{p['msg_id']}",
             scopes,
             p.get("chat_title"),
-            f"{sender}: {text}",
+            redact_text(f"{sender}: {text}"),
             [sender],
             p["date"],
             version,
@@ -150,6 +156,31 @@ def hide_tg_deleted(conn: Conn, raw: dict[str, Any]) -> None:
         """,
         {"source": raw["source_id"], "ids": p["msg_ids"], "chat": p.get("chat_id")},
     )
+
+
+def ensure_index_version(conn: Conn) -> int:
+    """If items were built by an older indexer, queue every archived record for re-indexing.
+
+    Records are queued in archive order, so newer versions of a message are applied last.
+    Returns the number of records queued.
+    """
+    state = get_state(conn, "_indexer", "version") or {}
+    if int(state.get("version", 0)) >= INDEX_VERSION:
+        return 0
+    row = conn.execute(
+        """
+        WITH queued AS (
+            INSERT INTO jobs (kind, payload)
+            SELECT 'index.raw', jsonb_build_object('raw_id', id) FROM raw_records ORDER BY id
+            RETURNING 1
+        )
+        SELECT count(*) AS n FROM queued
+        """
+    ).fetchone()
+    set_state(conn, "_indexer", "version", {"version": INDEX_VERSION})
+    n = int(row["n"]) if row else 0
+    log.info("index version %s: queued %d archived records for re-indexing", INDEX_VERSION, n)
+    return n
 
 
 def run_once(conn: Conn, config: Config) -> bool:

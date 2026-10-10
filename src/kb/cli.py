@@ -134,6 +134,7 @@ def cmd_telegram_chats(args: argparse.Namespace) -> None:
 def cmd_index(args: argparse.Namespace) -> None:
     config = load_config()
     with db.connect(database_url()) as conn:
+        indexer.ensure_index_version(conn)
         while True:
             if not indexer.run_once(conn, config):
                 if args.once:
