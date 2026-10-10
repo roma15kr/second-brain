@@ -17,3 +17,8 @@ with whitespace preserved (don't collapse `\s+` when inspecting) before calling 
 ## After a deploy, wait for /health = 200 before running live checks, and treat non-JSON responses as failures
 Seen: 2026-10-10 slice 3 verification  Count: 1
 Why: right after a Coolify redeploy the proxy returns an error page; a check that ignores parse errors reports false success.
+
+## Never pipe the verification gate into another command before `&&`
+Seen: 2026-10-10 slice 5 commit (`make check | tail -1 && git commit` committed a lint failure)  Count: 1
+Why: a pipeline's exit status is the last command's (`tail`), so the failure is hidden. Redirect to a file,
+check `$?`, or use `set -o pipefail`.

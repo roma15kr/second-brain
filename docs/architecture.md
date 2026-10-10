@@ -55,7 +55,7 @@ Ended contracts: scope switched to archived/read-only — sync stops, data stays
    topics; DMs and flat groups → segments split by time gap. Re-built whole whenever a new message joins.
 3. **Redact:** strip hard secrets (passwords, card/IBAN, OTP codes, API tokens) before anything leaves the server.
 4. **Index lexically** immediately (FTS + trigram) — raw text is searchable within seconds.
-5. **Distill** (cloud LLM, batched): question / summary / resolution / entities / scope guess / promises.
+5. **Distill** (OpenAI API, batched): question / summary / resolution / entities / scope guess / promises.
 6. **Burst** gate (rare token IDF ≥ 4, ≥ 200 chars, reactions) → embed bursts with topic prepended.
 7. **Embed** distilled form locally; write `items`.
 8. **Query:** MCP tool → parallel retrievers (FTS, vector, IDF-weighted lexical) with scope/time/person
@@ -94,5 +94,5 @@ restic for the raw archive. See [ADR 0009](decisions/0009-deployment-coolify-pri
 - Gmail API / IMAP; GitHub API; ClickUp API; Karakeep API; Google Calendar API
 - Meta (Facebook) Marketing API, Google Analytics Data API, Google Ads API, TikTok Ads API,
   marketplace API(s) (Quokka), Shopify Admin API, Stripe API (historical)
-- Anthropic API (distillation, synthesis); cloud STT (streaming + batch, uk/ru/en); local embedding
+- OpenAI API (distillation, digests; ADR 0005 amendment); Claude via MCP for interactive answers; cloud STT (streaming + batch, uk/ru/en); local embedding
   and reranker models (bge-m3 / bge-reranker-v2-m3 class)

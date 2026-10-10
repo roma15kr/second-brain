@@ -75,7 +75,7 @@ removed before any text reaches an AI service.
 ## Impact
 
 - Greenfield: first application code in the repository, a database and a deployable service.
-- New external dependencies: Gmail API / IMAP servers, Telegram (MTProto user session), Anthropic API,
+- New external dependencies: Gmail API / IMAP servers, Telegram (MTProto user session), OpenAI API,
   local embedding and reranking models.
 - New sensitive assets on the server: Telegram session, mail credentials, archive of private messages.
 - Cloud AI spend (backfill + ongoing), within the ≤ $100/month budget.

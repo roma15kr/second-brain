@@ -21,7 +21,9 @@ _Last updated: 2026-10-10 by Claude_
    passwords found in real data no longer appear in search.
    Slice 4 verified 2026-10-10: email threads + Telegram conversations as search units (INDEX_VERSION=5 rebuild,
    deletions survive rebuild), MCP get_item/recent_activity, clear tool errors over HTTP.
-   Next: slice 5 (scope rules + unsorted review) — or reorder per owner.
+   Slice 5 verified 2026-10-10: scope layers, `kb unsorted`, `kb scope archive` (INDEX_VERSION=6).
+   Server-side LLM switched to OpenAI (ADR 0005 amendment): gpt-6-luna distill, gpt-6.1-sol digests.
+   Next: owner sets OPENAI_API_KEY in Coolify + monthly spend limit; slice 6 (Gmail API, all folders, rebuild).
 1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
 2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
 3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.

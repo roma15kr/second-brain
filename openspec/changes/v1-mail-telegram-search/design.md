@@ -71,19 +71,21 @@ checksum, known token formats (`sk-`, `ghp_`, `xox…`, `AKIA…`, JWT, PEM bloc
 passwords and one-time codes in en/uk/ru (`password|пароль|код|code|OTP` + adjacent token).
 *Alternative:* ML-based PII (Presidio) — rejected for v1 (ADR 0005: only hard secrets).
 
-### D8. Enrichment via Anthropic API
-Model choice (owner decision 2026-10-10, after comparing Anthropic and OpenAI current prices — the
-cheap and mid tiers cost the same at both vendors, so staying with one vendor wins):
-- Distillation and scope classification: `claude-haiku-5-5` ($0.10 / $0.50 per MTok, −50% on the
-  Batch API), `output_config.effort: "low"` — extraction does not need deep thinking, and thinking
-  tokens are billed as output.
-- Digests, standups, reports (later changes): `claude-sonnet-5-5`.
-- Model ids live in config (`KB_DISTILL_MODEL`), so a model change is a config change + `kb rebuild`.
-Structured output via `output_config.format` (JSON schema): `question, summary, outcome,
-entities[], scope_guess, scope_confidence, language`. Backfill uses the Message Batches API; live
-uses direct calls. Input truncated to the latest ~8k tokens of a unit. Rough cost: ~30k units ×
-(~2.5k in + ~0.3k out) ≈ $6 for the 12-month backfill on batch, cents per month ongoing; verify
-with the `kb cost-estimate` dry run before backfill.
+### D8. Enrichment via the OpenAI API
+Model choice (owner decision 2026-10-10; ADR 0005 amendment): the owner's Claude Pro subscription
+does not cover API use and an OpenAI API key exists; current cheap/mid-tier prices are equal at
+both vendors.
+- Distillation and scope classification: `gpt-6-luna` ($0.10 / $0.50 per MTok; Batch API $0.05 /
+  $0.25), low reasoning effort — extraction does not need deep reasoning.
+- Digests, standups, reports (later changes): `gpt-6.1-sol` ($2 / $10).
+- Provider and model ids live in config (`KB_LLM_PROVIDER=openai`, `KB_DISTILL_MODEL`), behind a
+  small client interface, so switching provider is a config change + `kb rebuild`.
+Structured output via the provider's JSON-schema mode: `question, summary, outcome, entities[],
+scope_guess, scope_confidence, language`. Backfill uses the Batch API; live uses direct calls.
+Input truncated to the latest ~8k tokens of a unit. Rough cost: ~30k units × (~2.5k in + ~0.3k out)
+≈ $6 for the 12-month backfill on batch, cents per month ongoing; verify with the
+`kb cost-estimate` dry run before backfill. Exact SDK calls are checked against OpenAI's current
+docs at implementation time.
 
 ### D9. Local embeddings and reranker
 `BAAI/bge-m3` (dense, 1024-d, multilingual, 8k context) via sentence-transformers on CPU; embedded text =
@@ -134,7 +136,7 @@ schedule, backfill window, excluded folders), thresholds. Secrets only in env va
 | `src/kb/units/email_threads.py`, `telegram_segments.py` | Build conversation units |
 | `src/kb/redact.py` | Secret detectors |
 | `src/kb/scopes.py` | Rule engine + LLM fallback handling |
-| `src/kb/distill.py` | Anthropic enrichment (live + batch) |
+| `src/kb/distill.py` | LLM enrichment (live + batch) behind a provider interface (OpenAI) |
 | `src/kb/embed.py` | Embedding + reranker wrappers |
 | `src/kb/bursts.py`, `src/kb/idf.py` | Passage gating, document frequencies |
 | `src/kb/people.py` | Identity matching, merge/split |

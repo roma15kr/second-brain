@@ -29,8 +29,8 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## 5. Scopes
 
-- [ ] 5.1 Scope rule engine (mailbox, domain/address, label, chat) from `kb.yaml`; every item gets scopes or `unsorted`; scope filter in all search tools; verify `test_scope_rule_beats_llm` (with LLM stubbed) and scope-filter integration test
-- [ ] 5.2 `kb unsorted list|assign [--apply-to-chat|--apply-to-sender]` and archived-scope handling (sync stops, search still returns); verify `test_resolve_as_chat_rule_applies_to_existing` and an archived-scope integration test
+- [x] 5.1 Scope rule engine (mailbox, domain/address, label, chat) from `kb.yaml`; every item gets scopes or `unsorted`; scope filter in all search tools; verify `test_scope_rule_beats_llm` (with LLM stubbed) and scope-filter integration test
+- [x] 5.2 `kb unsorted list|assign [--apply-to-chat|--apply-to-sender]` and archived-scope handling (sync stops, search still returns); verify `test_resolve_as_chat_rule_applies_to_existing` and an archived-scope integration test
 
 ## 6. Gmail connector and backfill
 
@@ -40,7 +40,7 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## 7. Enrichment
 
-- [ ] 7.1 Settled-unit detection and `distill` via Anthropic tool schema (question, summary, outcome, entities, scope guess, language), redacted input only; LLM scope fallback with confidence threshold → `unsorted`; verify with a stubbed client (`test_low_confidence_is_unsorted`) and one live call on a fixture
+- [ ] 7.1 Settled-unit detection and `distill` via OpenAI structured output (question, summary, outcome, entities, scope guess, language), redacted input only; LLM scope fallback with confidence threshold → `unsorted`; verify with a stubbed client (`test_low_confidence_is_unsorted`) and one live call on a fixture
 - [ ] 7.2 Batch distillation for backfill + `kb cost-estimate` dry run + per-source daily token cap; verify cost estimate output on fixture data and that the cap stops enqueueing
 
 ## 8. Semantic and hybrid search
