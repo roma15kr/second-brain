@@ -3,13 +3,13 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
-from tests.fakes import FakeImap, make_email
 
 from kb import indexer, scopes
 from kb.config import Config, ImapSource, ScopeRule, TelegramChat, TelegramSource
 from kb.connectors import imap, telegram
 from kb.scopes import Facts, ReviewError, Rule
 from kb.search import SearchFilters, search
+from tests.fakes import FakeImap, make_email
 
 T0 = datetime(2026, 9, 1, 10, tzinfo=UTC)
 
