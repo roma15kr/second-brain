@@ -1,0 +1,37 @@
+# Optional nightly Scout: turns docs/product/signals/ and open issues into inbox reports
+# and opens a pull request. Needs the ANTHROPIC_API_KEY repository secret.
+# Enable the schedule by uncommenting it.
+name: Scout
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 5 * * 1-5"
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install -g @anthropic-ai/claude-code @fission-ai/openspec@latest
+      - name: Run Scout
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/factory.sh scout claude
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$(git status --porcelain docs/product)" ]; then echo "Nothing new"; exit 0; fi
+          branch="scout/$(date +%F)"
+          git config user.name "scout-bot"; git config user.email "scout-bot@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add docs/product
+          git commit -m "docs(product): scout report $(date +%F)"
+          git push -u origin "$branch"
+          gh pr create --title "Scout report $(date +%F)" --body "New evidence reports in docs/product/inbox/. Review, then triage."

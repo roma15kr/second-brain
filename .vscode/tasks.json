@@ -1,0 +1,65 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "AI: Claude Code",
+      "type": "shell",
+      "command": "claude",
+      "presentation": {
+        "panel": "dedicated",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "AI: Codex CLI",
+      "type": "shell",
+      "command": "codex",
+      "presentation": {
+        "panel": "dedicated",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "AI: Gemini CLI",
+      "type": "shell",
+      "command": "gemini",
+      "presentation": {
+        "panel": "dedicated",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "OpenSpec: dashboard",
+      "type": "shell",
+      "command": "openspec view",
+      "problemMatcher": []
+    },
+    {
+      "label": "OpenSpec: list changes",
+      "type": "shell",
+      "command": "openspec list",
+      "problemMatcher": []
+    },
+    {
+      "label": "OpenSpec: validate all",
+      "type": "shell",
+      "command": "openspec validate --all",
+      "problemMatcher": []
+    },
+    {
+      "label": "OpenSpec: init / update",
+      "type": "shell",
+      "command": "./scripts/init-openspec.sh .",
+      "problemMatcher": []
+    },
+    {
+      "label": "AI: Update all CLIs + OpenSpec",
+      "type": "shell",
+      "command": "npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest @google/gemini-cli@latest @fission-ai/openspec@latest && openspec update .",
+      "problemMatcher": []
+    }
+  ]
+}

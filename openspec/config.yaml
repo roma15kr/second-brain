@@ -1,0 +1,56 @@
+schema: spec-driven
+
+# Project context (optional)
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+# Example:
+#   context: |
+#     Designs and tasks must cover Windows, macOS, and Linux
+#     Write all artifacts in Spanish
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
+
+context: |
+  Project rules, stack and commands are in AGENTS.md; architecture in docs/architecture.md;
+  decisions in docs/decisions/; lessons learned in docs/learnings.md; current state in STATUS.md;
+  customer and business evidence in docs/product/. Read them and follow them.
+rules:
+  proposal:
+    - "Start with Problem (in the end user's words), Evidence (links to docs/product/inbox reports, feedback or issues) and Success metric (one number tied to the business, and how it is measured)."
+    - "Include an Announcement: 3-5 sentences telling users about the change. If you cannot write it convincingly, say the change may be the wrong one."
+    - "Include a Non-goals section."
+    - "No implementation details (tables, endpoints, file names) in the proposal; they belong in design."
+    - "For UI changes, create plain HTML mockups (no framework) in mockups/ inside the change folder, one file per screen."
+  specs:
+    - "Requirements describe observable behavior with WHEN/THEN scenarios, never implementation details."
+  design:
+    - "Read the relevant existing code before writing; never design against an imagined codebase."
+    - "Include: Files (each file created or changed, and why), Types and signatures (no bodies), Call stack for each main flow, Test plan (test names and what each asserts)."
+    - "End with Least confident decisions: a numbered list of the choices most worth challenging now."
+    - "Record env var NAMES and external services in docs/external/ (never secret values)."
+  tasks:
+    - "Organize tasks as vertical slices. Slice 1 is a tracer bullet: thin, end to end and runnable. Then real logic one testable slice at a time. Never build horizontally (all database, then all API, then all UI)."
+    - "Every slice ends in a working state, includes its tests, and is committed. A test must fail without the change it tests."
+    - "Never skip, weaken or delete tests to get to green."
+    - "The last task is always to update STATUS.md."

@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+.gemini/.env
+.DS_Store
+Thumbs.db
+.factory/

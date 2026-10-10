@@ -1,0 +1,47 @@
+# Runs the same gate as humans and AI agents: `make install` + `make check`.
+# Language runtimes are set up only for the stacks this repository actually contains.
+name: Check
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read STACKS from Makefile
+        id: stacks
+        run: |
+          value="$(sed -n 's/^STACKS := *//p' Makefile 2>/dev/null | xargs || true)"
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+          if [ -z "$value" ]; then
+            echo "::warning::STACKS is empty in Makefile; skipping make check. Run ./scripts/detect-stacks.sh"
+          fi
+
+      - name: Set up PHP
+        if: hashFiles('composer.json') != ''
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          tools: composer
+
+      - name: Set up Python (uv)
+        if: hashFiles('pyproject.toml', 'requirements.txt', 'setup.py', 'Pipfile') != ''
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Node.js
+        if: hashFiles('package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm/yarn if used
+        if: hashFiles('pnpm-lock.yaml', 'yarn.lock') != ''
+        run: corepack enable
+
+      - name: Install dependencies
+        if: steps.stacks.outputs.value != ''
+        run: make install
+
+      - name: Verify (make check)
+        if: steps.stacks.outputs.value != ''
+        run: make check

@@ -1,0 +1,8 @@
+We are ending this session. Please:
+1. Run `make check` and report the result. Fix failures before continuing.
+2. Run `openspec validate --all` and fix problems.
+3. If an OpenSpec change is complete and tested, tell me so I can archive it
+   (or archive it if I said so). If not complete, make sure tasks.md reflects real progress.
+4. Update STATUS.md (done, next steps, active change, open questions, gotchas, date, your name).
+5. Add an ADR in docs/decisions/ if we made an important decision.
+6. Propose a Conventional Commit message for the changes.
