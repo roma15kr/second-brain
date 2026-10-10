@@ -1,0 +1,13 @@
+# Copy to config/kb.yaml for local runs, or paste into the KB_CONFIG_YAML env var in Coolify.
+# No secrets here: credentials are read from the environment variables named below.
+sources:
+  - id: mail-main
+    type: imap
+    scopes: [digisoft]            # personal | digisoft | quokka | rdim
+    host: imap.zoho.eu
+    port: 993
+    username_env: IMAP_USER_MAIN
+    password_env: IMAP_PASSWORD_MAIN
+    folders: [INBOX]
+    poll_seconds: 60
+    backfill_days: 365

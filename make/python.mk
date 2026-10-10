@@ -1,6 +1,6 @@
 # Python: uv (when uv.lock exists) or a local .venv, pytest, Ruff, mypy.
 PY ?= $(if $(wildcard uv.lock),uv run python,$(if $(wildcard .venv/bin/python),.venv/bin/python,python3))
-PY_TYPECHECK ?= $(PY) -m mypy .
+PY_TYPECHECK ?= $(PY) -m mypy
 PY_TEST ?= $(PY) -m pytest -q
 
 .PHONY: install-python typecheck-python lint-python test-python fmt-python
