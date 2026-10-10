@@ -41,7 +41,9 @@ def cmd_ingest(args: argparse.Namespace) -> None:
                 client = imap.open_client(source)
                 try:
                     with db.connect(database_url()) as conn:
-                        imap.sync(conn, client, source)
+                        _, backfilling = imap.sync(conn, client, source)
+                    if backfilling:  # keep going quickly until the backfill is done
+                        last_run[source.id] -= source.poll_seconds - 5
                 finally:
                     client.logout()
             except Exception:
@@ -161,6 +163,12 @@ def cmd_scope(args: argparse.Namespace) -> None:
         print("archived scopes:", ", ".join(sorted(scopes.archived(conn))) or "none")
 
 
+def cmd_rebuild(args: argparse.Namespace) -> None:
+    with db.connect(database_url()) as conn:
+        n = indexer.rebuild(conn, args.source)
+    print(f"queued {n} archived records; the index service rebuilds them (no source is contacted)")
+
+
 def cmd_index(args: argparse.Namespace) -> None:
     config = load_config()
     with db.connect(database_url()) as conn:
@@ -232,6 +240,9 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("scope")
         p.set_defaults(func=cmd_scope)
     sc.add_parser("list").set_defaults(func=cmd_scope)
+    p = sub.add_parser("rebuild", help="rebuild search data from the archive")
+    p.add_argument("--source", help="only this source id (default: all)")
+    p.set_defaults(func=cmd_rebuild)
     p = sub.add_parser("index", help="process indexing jobs")
     p.add_argument("--once", action="store_true")
     p.set_defaults(func=cmd_index)

@@ -117,9 +117,17 @@ def save(conn: Conn, m: Message, unit_key: str) -> bool:
 
 
 def assign_email_unit(conn: Conn, m: Message) -> str:
-    """Thread by References/In-Reply-To (both directions), else by normalized subject with
-    shared participants within 30 days. Merges threads that turn out to be one."""
+    """Gmail: Gmail's own thread id. Otherwise thread by References/In-Reply-To (both directions),
+    else by normalized subject with shared participants within 30 days. Merges threads that turn
+    out to be one."""
     current = existing_unit(conn, m.source_id, m.message_key)
+    thrid = m.metadata.get("gm_thrid")
+    if thrid:
+        target = f"gmail:{thrid}"
+        if current and current != target:
+            # An earlier copy (e.g. from INBOX before All Mail) was threaded by headers.
+            merge_units(conn, m.source_id, target, [current])
+        return target
     if current:
         return current
     related = conn.execute(

@@ -8,7 +8,8 @@ sources:
     port: 993
     username_env: IMAP_USER_MAIN
     password_env: IMAP_PASSWORD_MAIN
-    folders: [INBOX]
+    # folders: [INBOX]          # omit to discover: Gmail → All Mail, others → all but junk/trash
+    exclude_folders: []
     poll_seconds: 60
     backfill_days: 365
 

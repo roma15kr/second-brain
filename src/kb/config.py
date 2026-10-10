@@ -26,9 +26,11 @@ class ImapSource(BaseModel):
     ssl: bool = True
     username_env: str
     password_env: str
-    folders: list[str] = Field(default_factory=lambda: ["INBOX"])
+    folders: list[str] | None = None  # None: discover (Gmail: All Mail; others: all but junk/trash)
+    exclude_folders: list[str] = Field(default_factory=list)
     poll_seconds: int = 60
     backfill_days: int = 365
+    backfill_batch: int = 200  # messages per folder per cycle while backfilling
 
     def username(self) -> str:
         return _require_env(self.username_env, self.id)

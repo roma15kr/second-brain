@@ -40,6 +40,7 @@ class Facts:
     chat_id: int | None = None
     chat_username: str | None = None
     folder: str | None = None
+    labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -66,8 +67,11 @@ class Rule:
             if v.lstrip("-").isdigit():
                 return f.chat_id == int(v)
             return bool(f.chat_username) and v.lstrip("@") == (f.chat_username or "").lower()
-        if self.kind == "folder":
-            return f.kind == "email" and (f.folder or "").lower() == v
+        if self.kind == "folder":  # mail folder or Gmail label
+            return f.kind == "email" and v in {
+                (f.folder or "").lower(),
+                *(x.lower() for x in f.labels),
+            }
         return False
 
 
@@ -147,6 +151,7 @@ def facts_from_row(row: dict[str, Any]) -> Facts:
         chat_id=row.get("chat_id"),
         chat_username=md.get("chat_username"),
         folder=md.get("folder"),
+        labels=tuple(md.get("labels") or ()),
     )
 
 

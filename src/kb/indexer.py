@@ -18,7 +18,8 @@ log = logging.getLogger(__name__)
 # 2: secret redaction. 3: codes before keywords, alphanumeric codes, passwords without ':'.
 # 4: values on the next line after the keyword. 5: conversation units (threads, segments).
 # 6: scope layers (rules, review decisions, overrides); folder/chat username kept for rules.
-INDEX_VERSION = 6
+# 7: Gmail thread ids and labels.
+INDEX_VERSION = 7
 
 
 def index_raw(conn: Conn, config: Config, raw_id: int) -> int | None:
@@ -61,6 +62,7 @@ def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) ->
                 parsed.sender,
                 tuple(parsed.participants),
                 folder=payload.get("folder"),
+                labels=tuple(payload.get("gm_labels") or ()),
             ),
         ),
         participants=parsed.participants,
@@ -68,7 +70,12 @@ def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) ->
         refs=[r for r in refs if r],
         version=raw["fetched_at"].isoformat(),
         locator=f"imap://{raw['source_id']}/{payload.get('folder')};UID={payload.get('uid')}",
-        metadata={"raw_id": raw_id, "folder": payload.get("folder")},
+        metadata={
+            "raw_id": raw_id,
+            "folder": payload.get("folder"),
+            "labels": payload.get("gm_labels") or [],
+            "gm_thrid": payload.get("gm_thrid"),
+        },
     )
     unit = units.assign_email_unit(conn, m)
     units.save(conn, m, unit)
@@ -157,31 +164,48 @@ def hide_tg_deleted(conn: Conn, raw: dict[str, Any]) -> None:
         units.rebuild(conn, raw["source_id"], unit)
 
 
-def ensure_index_version(conn: Conn) -> int:
-    """If items were built by an older indexer, queue every archived record for re-indexing.
-
-    Records are queued in archive order, so newer versions of a message are applied last.
-    Returns the number of records queued.
-    """
-    state = get_state(conn, "_indexer", "version") or {}
-    if int(state.get("version", 0)) >= INDEX_VERSION:
-        return 0
-    # Derived data is rebuilt from scratch so unit assignment is consistent with the new code.
-    conn.execute("DELETE FROM messages")
-    conn.execute("DELETE FROM items WHERE kind IN ('email_thread', 'tg_conversation')")
-    conn.execute("DELETE FROM jobs WHERE kind = 'index.raw' AND done_at IS NULL")
-    row = conn.execute(
+def rebuild(conn: Conn, source_id: str | None = None) -> int:
+    """Rebuild messages and search items from the archive (all sources or one), without
+    contacting any source. Review decisions (scope rules, overrides) are kept. Records are queued
+    in archive order, so newer versions of a message are applied last. Returns records queued."""
+    where, params = ("", ()) if source_id is None else ("WHERE source_id = %s", (source_id,))
+    conn.execute(f"DELETE FROM messages {where}", params)
+    unit_kinds = "kind IN ('email_thread', 'tg_conversation')"
+    item_where = f"WHERE {unit_kinds}" + ("" if source_id is None else " AND source_id = %s")
+    conn.execute(f"DELETE FROM items {item_where}", params)
+    conn.execute(
         """
+        DELETE FROM jobs WHERE kind = 'index.raw' AND done_at IS NULL
+          AND (%s::text IS NULL OR (payload->>'raw_id')::bigint IN
+               (SELECT id FROM raw_records WHERE source_id = %s))
+        """,
+        (source_id, source_id),
+    )
+    row = conn.execute(
+        f"""
         WITH queued AS (
             INSERT INTO jobs (kind, payload)
-            SELECT 'index.raw', jsonb_build_object('raw_id', id) FROM raw_records ORDER BY id
+            SELECT 'index.raw', jsonb_build_object('raw_id', id) FROM raw_records {where}
+            ORDER BY id
             RETURNING 1
         )
         SELECT count(*) AS n FROM queued
-        """
+        """,
+        params,
     ).fetchone()
-    set_state(conn, "_indexer", "version", {"version": INDEX_VERSION})
     n = int(row["n"]) if row else 0
+    log.info("rebuild %s: queued %d archived records", source_id or "all sources", n)
+    return n
+
+
+def ensure_index_version(conn: Conn) -> int:
+    """If items were built by an older indexer, rebuild everything from the archive.
+    Returns the number of records queued."""
+    state = get_state(conn, "_indexer", "version") or {}
+    if int(state.get("version", 0)) >= INDEX_VERSION:
+        return 0
+    n = rebuild(conn)
+    set_state(conn, "_indexer", "version", {"version": INDEX_VERSION})
     log.info("index version %s: queued %d archived records for re-indexing", INDEX_VERSION, n)
     return n
 

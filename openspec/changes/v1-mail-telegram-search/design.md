@@ -40,15 +40,21 @@ aren't stored in v1. One backup mechanism (Coolify's scheduled Postgres backup t
 This refines ADR 0009: restic is only needed once binary blobs (attachments, audio) arrive.
 
 ### D4. Mail connectors
-- **Gmail/Workspace:** Gmail API, OAuth installed-app flow run once via `kb auth gmail <mailbox>`;
-  refresh token stored in the DB, encrypted with `KB_SECRET_KEY`. Live sync = `history.list` polled every
-  60 s from the stored `historyId`; backfill = `messages.list q="after:<date>"` paged. Thread id = Gmail `threadId`.
-  The OAuth client must be Internal (Workspace) or In production (personal Gmail) — Testing mode
-  expires refresh tokens after 7 days.
-- **IMAP (Zoho/own domain/Proton Bridge):** `imapclient`; IDLE on INBOX plus a 5-minute poll of other folders;
-  cursor = (UIDVALIDITY, last UID) per folder. Threads assembled from `Message-ID`/`In-Reply-To`/`References`,
-  fallback to normalized subject + participants within 30 days.
-*Alternative:* IMAP for Gmail too (simpler auth, app passwords) — kept as fallback if OAuth becomes painful.
+All mailboxes use IMAP (owner decision 2026-10-10: no Google Cloud project / OAuth consent screen,
+no 7-day token expiry in "Testing", app passwords already work).
+- **Folder discovery:** with `folders` unset, the connector lists folders each cycle. Gmail
+  (capability `X-GM-EXT-1`) reads only the folder flagged `\All` ("All Mail", any locale): every
+  message once, including sent and archived. Other servers read every selectable folder except those
+  flagged `\Junk`, `\Trash`, `\Drafts` or named spam/trash/drafts (en/uk/ru), plus
+  `exclude_folders`.
+- **Gmail extensions:** fetch `X-GM-THRID` (Gmail's own thread id → exact email threads),
+  `X-GM-LABELS` (labels; folder scope rules match labels too) and `X-GM-MSGID`.
+- **Cursors:** per folder `(UIDVALIDITY, live last_uid, backfill position, backfill upper bound)`.
+  Each cycle first fetches new mail above the live cursor, then one backfill chunk (default 200) of
+  the 12-month window, so new mail is never blocked by the backfill; both survive restarts.
+- Non-Gmail threads: `Message-ID`/`In-Reply-To`/`References`, fallback to normalized subject +
+  participants within 30 days.
+- Known gap: label changes on already-fetched Gmail messages are not re-read (no CONDSTORE yet).
 
 ### D5. Telegram connector
 Telethon user client, session stored as a file on its own Docker volume (`/data/telegram`), created
