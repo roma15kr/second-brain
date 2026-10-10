@@ -122,3 +122,48 @@ def test_spans_reported():
     text, spans = redact("password: abc12345 and card 4111111111111111")
     assert [s.kind for s in spans] == ["password", "card"]
     assert text == "password: [REDACTED:password] and card [REDACTED:card]"
+
+
+@pytest.mark.parametrize(
+    "text, secret",
+    [
+        ("037402 is your verification code", "037402"),
+        ("5521 — ваш код для входу", "5521"),
+        ("Enter this code on the login verification page. GE5JA2 Your code", "GE5JA2"),
+        ("Here is the code you requested: 9E7EYS", "9E7EYS"),
+    ],
+)
+def test_more_otp_shapes(text, secret):
+    out = r(text)
+    assert secret not in out and "[REDACTED:otp]" in out
+
+
+@pytest.mark.parametrize(
+    "text, secret",
+    [
+        ("Логин пользователя demo Пароль Ab3kQ9xYz2Lm7Pq", "Ab3kQ9xYz2Lm7Pq"),
+        (
+            "Логин director Пароль (не я, ии такой нагенерировал) Demo!40ca59902af08f96",
+            "Demo!40ca59902af08f96",
+        ),
+        ("password for the router 12345678", "12345678"),
+        ("пароль от вайфая: kitten_42", "kitten_42"),
+    ],
+)
+def test_passwords_without_separator(text, secret):
+    out = r(text)
+    assert secret not in out and "[REDACTED:password]" in out
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Можно сделать админку + пароль",
+        "передать почта+ пароль",
+        "TikTok Ads code review on Monday",
+        "код ЄДРПОУ AB1234 (not a secret)",
+        "пароль змінили минулої весни",
+    ],
+)
+def test_loose_rules_leave_plain_text(text):
+    assert r(text) == text
