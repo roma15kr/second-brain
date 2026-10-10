@@ -116,7 +116,7 @@ def cmd_telegram_chats(args: argparse.Namespace) -> None:
     source = _telegram_source(args.source)
 
     async def main() -> None:
-        raw = telegram.make_client(source)
+        raw = telegram.make_client(source, snapshot=True)
         await raw.connect()
         if not await raw.is_user_authorized():
             raise ConfigError(f"not logged in; run `kb auth telegram {source.id}`")

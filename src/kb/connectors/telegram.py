@@ -188,12 +188,40 @@ async def resolve_chats(client: ReadOnlyClient, source: TelegramSource) -> list[
     return entities
 
 
-def make_client(source: TelegramSource) -> Any:
+def session_snapshot(session_path: str) -> Any:
+    """In-memory copy of a Telethon SQLite session, read without taking a write lock.
+
+    The ingest service keeps the session file open; helper commands use a snapshot so they
+    never write to (or wait on) the live file.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    from telethon.crypto import AuthKey
+    from telethon.sessions import StringSession
+
+    file = Path(session_path if session_path.endswith(".session") else f"{session_path}.session")
+    if not file.exists():
+        raise ConfigError(f"no Telegram session at {file}; run `kb auth telegram` first")
+    db = sqlite3.connect(f"file:{file}?mode=ro", uri=True, timeout=30)
+    try:
+        row = db.execute("SELECT dc_id, server_address, port, auth_key FROM sessions").fetchone()
+    finally:
+        db.close()
+    if not row or not row[3]:
+        raise ConfigError(f"Telegram session {file} is not logged in; run `kb auth telegram`")
+    session = StringSession()
+    session.set_dc(row[0], row[1], row[2])
+    session.auth_key = AuthKey(data=row[3])
+    return session
+
+
+def make_client(source: TelegramSource, snapshot: bool = False) -> Any:
+    """Client on the live session file, or (snapshot=True) on a read-only in-memory copy."""
     from telethon import TelegramClient
 
-    return TelegramClient(
-        source.session_path, source.api_id(), source.api_hash(), flood_sleep_threshold=120
-    )
+    session = session_snapshot(source.session_path) if snapshot else source.session_path
+    return TelegramClient(session, source.api_id(), source.api_hash(), flood_sleep_threshold=120)
 
 
 async def run(source: TelegramSource, connect_db: Callable[[], Conn]) -> None:

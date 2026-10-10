@@ -183,3 +183,35 @@ def test_telegram_chat_matching():
     c = TelegramChat(chat="@Oleh_Q")
     assert c.matches(555, "oleh_q") and not c.matches(555, None)
     assert TelegramChat(chat="-1001234").matches(-1001234, None)
+
+
+def test_session_snapshot_reads_while_live_file_is_write_locked(tmp_path):
+    import os
+    import sqlite3
+
+    from telethon.crypto import AuthKey
+    from telethon.sessions import SQLiteSession
+
+    live = SQLiteSession(str(tmp_path / "kb"))
+    live.set_dc(2, "149.154.167.51", 443)
+    key = os.urandom(256)
+    live.auth_key = AuthKey(data=key)
+    live.save()
+
+    holder = sqlite3.connect(tmp_path / "kb.session")
+    holder.execute("BEGIN IMMEDIATE")  # what the running ingest service can hold
+    holder.execute("DELETE FROM sessions")  # uncommitted write by the other process
+    try:
+        snap = telegram.session_snapshot(str(tmp_path / "kb.session"))
+    finally:
+        holder.rollback()
+        holder.close()
+    assert snap.auth_key.key == key
+    assert snap.server_address == "149.154.167.51"
+
+
+def test_session_snapshot_requires_login(tmp_path):
+    from kb.config import ConfigError
+
+    with pytest.raises(ConfigError, match="kb auth telegram"):
+        telegram.session_snapshot(str(tmp_path / "missing.session"))
