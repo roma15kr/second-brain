@@ -53,3 +53,9 @@ async def test_search_tool_returns_evidence(conn, pg_url, source, config):
     assert "search" in tools and "scopes" in str(tools["search"].input_schema)
     result = await server.call_tool("search", {"query": "Rozetka"})
     assert "Marketplace contract" in str(result)
+
+
+async def test_mail_and_chat_tools_are_listed(pg_url):
+    server = build_server(lambda: db.connect(pg_url))
+    names = {t.name for t in await server.list_tools()}
+    assert {"search", "search_mail", "search_chats"} <= names

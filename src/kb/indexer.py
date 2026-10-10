@@ -4,18 +4,28 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 from kb import archive, email_parse, jobs
-from kb.config import Config, ConfigError
+from kb.config import Config, ConfigError, TelegramSource
 from kb.db import Conn
 
 log = logging.getLogger(__name__)
 
 
-def index_raw(conn: Conn, config: Config, raw_id: int) -> int:
+def index_raw(conn: Conn, config: Config, raw_id: int) -> int | None:
     raw = archive.get(conn, raw_id)
-    if raw["kind"] != "email":
-        raise ValueError(f"no indexer for kind {raw['kind']!r}")
+    if raw["kind"] == "email":
+        return index_email(conn, config, raw_id, raw)
+    if raw["kind"] == "tg_message":
+        return index_tg_message(conn, config, raw)
+    if raw["kind"] == "tg_delete":
+        hide_tg_deleted(conn, raw)
+        return None
+    raise ValueError(f"no indexer for kind {raw['kind']!r}")
+
+
+def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) -> int:
     try:
         scopes = list(config.source(raw["source_id"]).scopes)
     except ConfigError:
@@ -60,6 +70,86 @@ def index_raw(conn: Conn, config: Config, raw_id: int) -> int:
     ).fetchone()
     assert row is not None
     return int(row["id"])
+
+
+def tg_locator(payload: dict[str, Any]) -> str:
+    chat_id, msg_id = int(payload["chat_id"]), int(payload["msg_id"])
+    if payload.get("chat_username"):
+        return f"https://t.me/{payload['chat_username']}/{msg_id}"
+    if payload.get("peer_type") == "channel" and str(chat_id).startswith("-100"):
+        return f"https://t.me/c/{str(chat_id)[4:]}/{msg_id}"
+    return f"telegram://chat/{chat_id}/{msg_id}"
+
+
+def index_tg_message(conn: Conn, config: Config, raw: dict[str, Any]) -> int | None:
+    p = raw["payload"]
+    text = (p.get("text") or "").strip()
+    if not text:
+        return None  # media without caption: archived, nothing to search yet
+    try:
+        source = config.source(raw["source_id"])
+        scopes = (
+            source.scopes_for(p["chat_id"], p.get("chat_username"))
+            if isinstance(source, TelegramSource)
+            else list(source.scopes)
+        )
+    except ConfigError:
+        scopes = ["unsorted"]
+    sender = p.get("sender_name") or str(p.get("sender_id") or "unknown")
+    version = p.get("edit_date") or p["date"]
+    row = conn.execute(
+        """
+        INSERT INTO items (source_id, source_item_key, kind, scopes, title, raw_text,
+                           participants, occurred_at, last_activity_at, locator, metadata)
+        VALUES (%s, %s, 'tg_message', %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (source_id, source_item_key) DO UPDATE SET
+            scopes = EXCLUDED.scopes, title = EXCLUDED.title, raw_text = EXCLUDED.raw_text,
+            participants = EXCLUDED.participants, last_activity_at = EXCLUDED.last_activity_at,
+            locator = EXCLUDED.locator, metadata = EXCLUDED.metadata, updated_at = now()
+        WHERE items.metadata->>'version' <= EXCLUDED.metadata->>'version'
+        RETURNING id
+        """,
+        (
+            raw["source_id"],
+            f"{p['chat_id']}:{p['msg_id']}",
+            scopes,
+            p.get("chat_title"),
+            f"{sender}: {text}",
+            [sender],
+            p["date"],
+            version,
+            tg_locator(p),
+            json.dumps(
+                {
+                    "chat_id": p["chat_id"],
+                    "msg_id": p["msg_id"],
+                    "peer_type": p.get("peer_type"),
+                    "reply_to_msg_id": p.get("reply_to_msg_id"),
+                    "topic_id": p.get("topic_id"),
+                    "reactions": p.get("reactions", 0),
+                    "version": version,
+                }
+            ),
+        ),
+    ).fetchone()
+    return int(row["id"]) if row else None
+
+
+def hide_tg_deleted(conn: Conn, raw: dict[str, Any]) -> None:
+    """Hide deleted messages. Without a chat id (private chats, basic groups) message ids are
+    account-wide, so they can only refer to non-channel chats."""
+    p = raw["payload"]
+    conn.execute(
+        """
+        UPDATE items SET hidden = true, updated_at = now()
+        WHERE source_id = %(source)s AND kind = 'tg_message'
+          AND (metadata->>'msg_id')::bigint = ANY(%(ids)s)
+          AND CASE WHEN %(chat)s::bigint IS NULL
+                   THEN metadata->>'peer_type' <> 'channel'
+                   ELSE (metadata->>'chat_id')::bigint = %(chat)s::bigint END
+        """,
+        {"source": raw["source_id"], "ids": p["msg_ids"], "chat": p.get("chat_id")},
+    )
 
 
 def run_once(conn: Conn, config: Config) -> bool:

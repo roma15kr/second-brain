@@ -34,6 +34,18 @@ services:
     <<: *kb
     command: ["sh", "-c", "kb migrate && exec kb ingest"]
 
+  telegram:
+    <<: *kb
+    command: ["sh", "-c", "kb migrate && exec kb ingest-telegram"]
+    environment:
+      DATABASE_URL: postgresql://kb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kb
+      KB_CONFIG_YAML: ${KB_CONFIG_YAML}
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+    volumes:
+      # The session file is equivalent to account access: own volume, never in backups of the app.
+      - kb-telegram:/data/telegram
+
   index:
     <<: *kb
     command: ["sh", "-c", "kb migrate && exec kb index"]
@@ -57,3 +69,4 @@ services:
 
 volumes:
   kb-postgres:
+  kb-telegram:

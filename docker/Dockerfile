@@ -8,7 +8,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
-RUN useradd --create-home --uid 1000 kb
+RUN useradd --create-home --uid 1000 kb \
+    && mkdir -p /data/telegram && chown kb:kb /data/telegram && chmod 700 /data/telegram
 USER kb
 ENV PATH="/app/.venv/bin:$PATH"
 CMD ["kb", "--help"]

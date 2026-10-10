@@ -15,7 +15,7 @@ from kb.db import Conn
 from kb.search import SearchFilters, search
 
 INSTRUCTIONS = (
-    "Personal knowledge base of the owner's mail (later also Telegram and more). "
+    "Personal knowledge base of the owner's mail and Telegram chats. "
     "Tools return ranked evidence with citations; compose answers yourself and cite item ids. "
     "Scopes: personal, digisoft, quokka, rdim, unsorted."
 )
@@ -24,8 +24,27 @@ INSTRUCTIONS = (
 def build_server(get_conn: Callable[[], Conn]) -> MCPServer:
     server = MCPServer(name="second-brain", instructions=INSTRUCTIONS)
 
+    def run(
+        query: str,
+        kinds: list[str] | None,
+        scopes: list[str] | None,
+        sources: list[str] | None,
+        date_from: str | None,
+        date_to: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        filters = SearchFilters(
+            scopes=scopes,
+            sources=sources,
+            kinds=kinds,
+            date_from=date.fromisoformat(date_from) if date_from else None,
+            date_to=date.fromisoformat(date_to) if date_to else None,
+        )
+        with get_conn() as conn:
+            return [e.to_dict() for e in search(conn, query, filters, limit)]
+
     @server.tool(name="search")
-    def search_tool(
+    def search_all(
         query: str,
         scopes: list[str] | None = None,
         sources: list[str] | None = None,
@@ -33,16 +52,32 @@ def build_server(get_conn: Callable[[], Conn]) -> MCPServer:
         date_to: str | None = None,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        """Search everything in the knowledge base. Exact words, names, ids and phrases work best
+        """Search everything (mail and Telegram). Exact words, names, ids and phrases work best
         for now. Optional filters: scopes, source ids, date_from/date_to (YYYY-MM-DD)."""
-        filters = SearchFilters(
-            scopes=scopes,
-            sources=sources,
-            date_from=date.fromisoformat(date_from) if date_from else None,
-            date_to=date.fromisoformat(date_to) if date_to else None,
-        )
-        with get_conn() as conn:
-            return [e.to_dict() for e in search(conn, query, filters, limit)]
+        return run(query, None, scopes, sources, date_from, date_to, limit)
+
+    @server.tool(name="search_mail")
+    def search_mail(
+        query: str,
+        scopes: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Search email only. Same filters as `search`."""
+        return run(query, ["email"], scopes, None, date_from, date_to, limit)
+
+    @server.tool(name="search_chats")
+    def search_chats(
+        query: str,
+        scopes: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Search Telegram messages only (allowlisted chats). Each result is one message; its
+        locator links to the message in Telegram when possible."""
+        return run(query, ["tg_message"], scopes, None, date_from, date_to, limit)
 
     return server
 

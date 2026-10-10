@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -37,23 +37,78 @@ class ImapSource(BaseModel):
         return _require_env(self.password_env, self.id)
 
 
+class TelegramChat(BaseModel):
+    """One allowlisted chat: numeric id (as shown by `kb telegram chats`) or @username."""
+
+    chat: int | str
+    scopes: list[Scope] | None = None
+
+    def matches(self, chat_id: int, username: str | None) -> bool:
+        if isinstance(self.chat, int):
+            return self.chat == chat_id
+        ref = self.chat.strip()
+        if ref.lstrip("-").isdigit():
+            return int(ref) == chat_id
+        return bool(username) and ref.lstrip("@").lower() == (username or "").lower()
+
+
+class TelegramSource(BaseModel):
+    id: str
+    type: Literal["telegram"]
+    scopes: list[Scope] = Field(default_factory=lambda: ["unsorted"])  # type: ignore[arg-type]
+    api_id_env: str = "TELEGRAM_API_ID"
+    api_hash_env: str = "TELEGRAM_API_HASH"
+    session_path: str = "/data/telegram/kb.session"
+    chats: list[TelegramChat] = Field(default_factory=list)
+    backfill_days: int = 365
+    catch_up_seconds: int = 600
+
+    def api_id(self) -> int:
+        value = _require_env(self.api_id_env, self.id)
+        if not value.isdigit():
+            raise ConfigError(f"source {self.id}: {self.api_id_env} must be a number")
+        return int(value)
+
+    def api_hash(self) -> str:
+        return _require_env(self.api_hash_env, self.id)
+
+    def chat_config(self, chat_id: int, username: str | None) -> TelegramChat | None:
+        for c in self.chats:
+            if c.matches(chat_id, username):
+                return c
+        return None
+
+    def scopes_for(self, chat_id: int, username: str | None) -> list[str]:
+        c = self.chat_config(chat_id, username)
+        return list(c.scopes) if c and c.scopes else list(self.scopes)
+
+
+Source = Annotated[ImapSource | TelegramSource, Field(discriminator="type")]
+
+
 class Config(BaseModel):
-    sources: list[ImapSource] = Field(default_factory=list)
+    sources: list[Source] = Field(default_factory=list)
 
     @field_validator("sources")
     @classmethod
-    def unique_ids(cls, sources: list[ImapSource]) -> list[ImapSource]:
+    def unique_ids(cls, sources: list[Source]) -> list[Source]:
         ids = [s.id for s in sources]
         dupes = {i for i in ids if ids.count(i) > 1}
         if dupes:
             raise ValueError(f"duplicate source ids: {sorted(dupes)}")
         return sources
 
-    def source(self, source_id: str) -> ImapSource:
+    def source(self, source_id: str) -> Source:
         for s in self.sources:
             if s.id == source_id:
                 return s
         raise ConfigError(f"unknown source {source_id!r}")
+
+    def imap_sources(self) -> list[ImapSource]:
+        return [s for s in self.sources if isinstance(s, ImapSource)]
+
+    def telegram_sources(self) -> list[TelegramSource]:
+        return [s for s in self.sources if isinstance(s, TelegramSource)]
 
 
 def _require_env(name: str, source_id: str) -> str:

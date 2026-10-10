@@ -21,6 +21,7 @@ class SearchError(ValueError):
 class SearchFilters:
     scopes: list[str] | None = None
     sources: list[str] | None = None
+    kinds: list[str] | None = None
     date_from: date | None = None
     date_to: date | None = None
 
@@ -72,6 +73,9 @@ def search(
     if filters.sources:
         where.append("source_id = ANY(%(sources)s)")
         params["sources"] = filters.sources
+    if filters.kinds:
+        where.append("kind = ANY(%(kinds)s)")
+        params["kinds"] = filters.kinds
     if filters.date_from:
         where.append("last_activity_at >= %(date_from)s")
         params["date_from"] = filters.date_from

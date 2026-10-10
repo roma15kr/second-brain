@@ -9,7 +9,7 @@ import os
 import time
 
 from kb import db, indexer
-from kb.config import database_url, load_config
+from kb.config import ConfigError, TelegramSource, database_url, load_config
 from kb.connectors import imap
 
 log = logging.getLogger("kb")
@@ -25,7 +25,7 @@ def cmd_ingest(args: argparse.Namespace) -> None:
     config = load_config()
     last_run: dict[str, float] = {}
     while True:
-        for source in config.sources:
+        for source in config.imap_sources():
             if time.monotonic() - last_run.get(source.id, -1e9) < source.poll_seconds:
                 continue
             last_run[source.id] = time.monotonic()
@@ -41,6 +41,85 @@ def cmd_ingest(args: argparse.Namespace) -> None:
         if args.once:
             return
         time.sleep(5)
+
+
+def _telegram_source(source_id: str | None) -> TelegramSource:
+    sources = load_config().telegram_sources()
+    found = [s for s in sources if s.id == source_id] if source_id else sources[:1]
+    if not found:
+        raise ConfigError(f"no telegram source {source_id!r} in config")
+    return found[0]
+
+
+def cmd_ingest_telegram(_: argparse.Namespace) -> None:
+    import asyncio
+
+    from kb.connectors import telegram
+
+    sources = load_config().telegram_sources()
+    if not sources:
+        raise ConfigError("no telegram source in config")
+    url = database_url()
+
+    async def follow(source: TelegramSource) -> None:
+        # Not logged in yet / missing API credentials: wait for the owner instead of crash-looping.
+        while True:
+            try:
+                await telegram.run(source, lambda: db.connect(url))
+            except ConfigError as exc:
+                log.error("%s; retrying in 60s", exc)
+            except Exception:
+                log.exception("telegram %s stopped; restarting in 60s", source.id)
+            await asyncio.sleep(60)
+
+    async def main() -> None:
+        await asyncio.gather(*(follow(s) for s in sources))
+
+    asyncio.run(main())
+
+
+def cmd_auth_telegram(args: argparse.Namespace) -> None:
+    """Interactive one-time login (phone, code, 2FA password); stores the session file."""
+    import asyncio
+    import os as _os
+
+    from kb.connectors import telegram
+
+    source = _telegram_source(args.source)
+    _os.makedirs(_os.path.dirname(source.session_path) or ".", exist_ok=True)
+
+    async def main() -> None:
+        client = telegram.make_client(source)
+        await client.start()
+        me = await client.get_me()
+        print(f"logged in as {me.first_name} (id {me.id}); session saved to {source.session_path}")
+        await client.disconnect()
+
+    asyncio.run(main())
+
+
+def cmd_telegram_chats(args: argparse.Namespace) -> None:
+    """List your chats (id, type, title, @username) to build the allowlist."""
+    import asyncio
+
+    from kb.connectors import telegram
+
+    source = _telegram_source(args.source)
+
+    async def main() -> None:
+        raw = telegram.make_client(source)
+        await raw.connect()
+        if not await raw.is_user_authorized():
+            raise ConfigError(f"not logged in; run `kb auth telegram {source.id}`")
+        client = telegram.ReadOnlyClient(raw)
+        async for dialog in client.iter_dialogs():
+            info = telegram.chat_info(dialog.entity)
+            mark = "✓" if source.chat_config(info.chat_id, info.username) else " "
+            user = f"@{info.username}" if info.username else ""
+            print(f"{mark} {info.chat_id:>16}  {info.peer_type:<7}  {info.title}  {user}")
+        await raw.disconnect()
+
+    asyncio.run(main())
 
 
 def cmd_index(args: argparse.Namespace) -> None:
@@ -79,6 +158,19 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("ingest", help="run source connectors")
     p.add_argument("--once", action="store_true")
     p.set_defaults(func=cmd_ingest)
+    sub.add_parser("ingest-telegram", help="follow allowlisted Telegram chats").set_defaults(
+        func=cmd_ingest_telegram
+    )
+    p = sub.add_parser("auth", help="one-time interactive logins")
+    auth = p.add_subparsers(dest="provider", required=True)
+    p = auth.add_parser("telegram", help="log in to Telegram as yourself (read-only use)")
+    p.add_argument("source", nargs="?")
+    p.set_defaults(func=cmd_auth_telegram)
+    p = sub.add_parser("telegram", help="Telegram helpers")
+    tg = p.add_subparsers(dest="tg_command", required=True)
+    p = tg.add_parser("chats", help="list your chats with ids for the allowlist")
+    p.add_argument("source", nargs="?")
+    p.set_defaults(func=cmd_telegram_chats)
     p = sub.add_parser("index", help="process indexing jobs")
     p.add_argument("--once", action="store_true")
     p.set_defaults(func=cmd_index)

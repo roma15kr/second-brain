@@ -11,3 +11,15 @@ sources:
     folders: [INBOX]
     poll_seconds: 60
     backfill_days: 365
+
+  - id: telegram
+    type: telegram
+    scopes: [personal]            # default for chats without their own scopes
+    api_id_env: TELEGRAM_API_ID   # from my.telegram.org
+    api_hash_env: TELEGRAM_API_HASH
+    session_path: /data/telegram/kb.session   # created by `kb auth telegram`
+    backfill_days: 365
+    chats:                        # allowlist; ids from `kb telegram chats`
+      - chat: -1001234567890
+        scopes: [quokka]
+      - chat: "@some_username"
