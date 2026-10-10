@@ -88,9 +88,18 @@ def cmd_auth_telegram(args: argparse.Namespace) -> None:
     source = _telegram_source(args.source)
     _os.makedirs(_os.path.dirname(source.session_path) or ".", exist_ok=True)
 
+    import getpass
+
+    from kb import telegram_auth
+
     async def main() -> None:
         client = telegram.make_client(source)
-        await client.start()
+        await client.connect()
+        if not await client.is_user_authorized():
+            if args.qr:
+                await telegram_auth.login_with_qr(client, getpass.getpass, print)
+            else:
+                await telegram_auth.login_with_code(client, input, getpass.getpass, print)
         me = await client.get_me()
         print(f"logged in as {me.first_name} (id {me.id}); session saved to {source.session_path}")
         await client.disconnect()
@@ -165,6 +174,7 @@ def main(argv: list[str] | None = None) -> None:
     auth = p.add_subparsers(dest="provider", required=True)
     p = auth.add_parser("telegram", help="log in to Telegram as yourself (read-only use)")
     p.add_argument("source", nargs="?")
+    p.add_argument("--qr", action="store_true", help="log in by scanning a QR code instead")
     p.set_defaults(func=cmd_auth_telegram)
     p = sub.add_parser("telegram", help="Telegram helpers")
     tg = p.add_subparsers(dest="tg_command", required=True)
