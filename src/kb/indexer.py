@@ -16,7 +16,8 @@ log = logging.getLogger(__name__)
 
 # Bump when the way items are built changes; the indexer then re-indexes the whole archive.
 # 2: secret redaction. 3: codes before keywords, alphanumeric codes, passwords without ':'.
-INDEX_VERSION = 3
+# 4: values on the next line after the keyword.
+INDEX_VERSION = 4
 
 
 def index_raw(conn: Conn, config: Config, raw_id: int) -> int | None:

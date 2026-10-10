@@ -82,27 +82,35 @@ _KEY_CONTEXT = re.compile(
 _URL_CREDS = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://[^\s:/@]+:([^\s@/]+)@")
 _PASSWORD = re.compile(
     r"(?i)(?:\b|^)(?:password|passwd|pwd|pass|passcode|пароль|пароля|паролю|парол|пасс|пасворд)"
-    r"\b[^\n:=]{0,30}?\s*[:=]\s*(\S+)"
+    r"\b[^:=]{0,30}?\s*[:=]\s*(\S+)"
 )
 _OTP = re.compile(
     r"(?i)(?:\b|^)(code|codes|otp|pin|passcode|verification|one[- ]time|код|коду|кода|пін|пин|"
-    r"підтвердження|подтверждения|верифікації|верификации)\b([^\d\n]{0,40}?)(\d{4,8})\b"
+    r"підтвердження|подтверждения|верифікації|верификации)\b([^\d]{0,40}?)(\d{4,8})\b"
 )
 _GOOGLE_CODE = re.compile(r"\bG-\d{6}\b")
 # "037402 is your verification code", "5521 — ваш код"
 _OTP_BEFORE = re.compile(
-    r"(?i)\b(\d{4,8})\s+(?:is\s+(?:your|the)\b|[\u2014\u2013-]|(?:это|це|ваш|your)\b)[^\n\d]{0,30}?"
+    r"(?i)\b(\d{4,8})\s+(?:is\s+(?:your|the)\b|[\u2014\u2013-]|(?:это|це|ваш|your)\b)[^\d]{0,30}?"
     r"\b(?:code|codes|otp|pin|код|коду|кода)\b"
 )
 # Alphanumeric one-time codes: "Enter this code on the login page. GE5JA2"
 _OTP_ALNUM = re.compile(
-    r"(?i:\b(?:code|otp|passcode|verification|код|коду|кода)\b)[^\n]{0,80}?"
+    r"(?i:\b(?:code|otp|passcode|verification|код|коду|кода)\b)[\s\S]{0,80}?"
     r"\b((?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{5,8})\b"
+)
+# Code shown on its own line or right after a colon, within a short distance of a code keyword:
+# "Here is your verification code. It expires in 10 minutes: 731512"
+_OTP_FAR = re.compile(
+    r"(?i:\b(?:code|otp|passcode|verification|код|коду|кода)\b)[\s\S]{0,150}?"
+    r"(?:(?m:^)[ \t]*|:[ \t]*)"
+    r"(\d{4,8}|(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{5,8})(?=[ \t]*(?:$|\n|[.,;]|\s))",
+    re.MULTILINE,
 )
 # Password value without ":"/"=": the first secret-looking token shortly after the keyword.
 _PASSWORD_LOOSE = re.compile(
     r"(?i:(?:\b|^)(?:password|passwd|pwd|passcode|пароль|пароля|паролем|пасс)\b)"
-    r"[^\n]{0,60}?(?<!\S)"
+    r"[\s\S]{0,60}?(?<!\S)"
     r"((?=\S*[A-Za-z\u0400-\u04ff])(?=\S*[\d!@#$%^&*_+=?~])\S{6,}|\d{6,})(?!\S)"
 )
 _OTP_NOT = re.compile(
@@ -142,6 +150,9 @@ def find(text: str) -> list[Redaction]:
     for m in _OTP_BEFORE.finditer(text):
         add("otp", m.start(1), m.end(1))
     for m in _OTP_ALNUM.finditer(text):
+        if not _OTP_NOT.search(text[max(0, m.start() - 20) : m.start(1)]):
+            add("otp", m.start(1), m.end(1))
+    for m in _OTP_FAR.finditer(text):
         if not _OTP_NOT.search(text[max(0, m.start() - 20) : m.start(1)]):
             add("otp", m.start(1), m.end(1))
     for m in _PASSWORD_LOOSE.finditer(text):

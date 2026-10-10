@@ -167,3 +167,32 @@ def test_passwords_without_separator(text, secret):
 )
 def test_loose_rules_leave_plain_text(text):
     assert r(text) == text
+
+
+@pytest.mark.parametrize(
+    "text, secret, kind",
+    [
+        (
+            "To verify your account, enter this code in TikTok:\n\n037402\n\nCodes expire",
+            "037402",
+            "otp",
+        ),
+        (
+            "Here is your verification code. It expires in 10 minutes: 731512 Best regards",
+            "731512",
+            "otp",
+        ),
+        ("Your code\nexpires in 10 minutes\n\n731512\n", "731512", "otp"),
+        ("Enter this code on the login verification page.\n\n9E7EYS\n\nYour code", "9E7EYS", "otp"),
+        ("Логин пользователя demo\n Пароль\nAb3kQ9xYz2Lm7Pq", "Ab3kQ9xYz2Lm7Pq", "password"),
+        (
+            "Логин director\n Пароль (не я)\nDemo!40ca59902af08f96",
+            "Demo!40ca59902af08f96",
+            "password",
+        ),
+        ("password:\nhunter22", "hunter22", "password"),
+    ],
+)
+def test_value_on_next_line(text, secret, kind):
+    out = r(text)
+    assert secret not in out and f"[REDACTED:{kind}]" in out
