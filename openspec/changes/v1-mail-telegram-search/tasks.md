@@ -18,8 +18,8 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## 3. Secret redaction
 
-- [ ] 3.1 Implement `kb.redact` (cards with Luhn, IBAN, token formats, password/OTP context en/uk/ru) and apply it when building item text; verify the redaction unit tests in the design test plan pass
-- [ ] 3.2 Verify archive keeps originals and MCP output shows `[REDACTED:…]` (integration test on a fixture message containing an OTP and a password)
+- [x] 3.1 Implement `kb.redact` (cards with Luhn, IBAN, token formats, password/OTP context en/uk/ru) and apply it when building item text; verify the redaction unit tests in the design test plan pass
+- [x] 3.2 Verify archive keeps originals and MCP output shows `[REDACTED:…]` (integration test on a fixture message containing an OTP and a password)
 
 ## 4. Conversation units
 

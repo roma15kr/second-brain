@@ -16,7 +16,9 @@ _Last updated: 2026-10-10 by Claude_
 ## Next steps
 1. Slice 1 verified 2026-10-10: digisoftou@gmail.com INBOX (scope digisoft) ingested on Coolify and found via MCP search.
    Slice 2 verified 2026-10-10: Telegram (owner's account, QR login, 12 allowlisted chats in KB_CONFIG_YAML) — live message
-   searchable, edit replaced text, delete hid it. Next: slice 3 (secret redaction) before adding personal sources.
+   searchable, edit replaced text, delete hid it.
+   Slice 3 verified 2026-10-10: secret redaction live (INDEX_VERSION=4 re-indexed the archive); known OTPs and
+   passwords found in real data no longer appear in search. Next: slice 4 (conversation units: threads/segments).
 1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
 2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
 3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.
@@ -29,6 +31,8 @@ _Last updated: 2026-10-10 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
+- Bumping `INDEX_VERSION` in `src/kb/indexer.py` re-indexes the whole archive on the next `kb index` start.
+- Redaction is rule-based (src/kb/redact.py); when a new leak shape is found, add a real-shaped test first.
 - Telegram login: codes for a new api_id may not be delivered; use `kb auth telegram --qr` (Coolify terminal, `telegram` container).
 - Helper commands (`kb telegram chats`) use a read-only session snapshot; the ingest service keeps the session file locked.
 - Telegram session = account access; lives on the `kb-telegram` volume; revoke in Telegram → Settings → Devices.
