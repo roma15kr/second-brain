@@ -12,9 +12,9 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## 2. Telegram live ingestion (lexical)
 
-- [ ] 2.1 `kb auth telegram` creates the session on the `telegram` volume; read-only Telethon wrapper with allowlist; verify `test_telegram_wrapper_has_no_write_methods` and a non-allowlisted chat stores nothing
-- [ ] 2.2 Live handlers for new/edited/deleted messages + catch-up from last id; verify `test_tg_edit_updates_search_delete_hides` and that messages stay unread in the Telegram app (manual check)
-- [ ] 2.3 Add `search_chats` and `search_mail` MCP tools (source filter); verify an allowlisted message is found within 2 minutes end to end
+- [x] 2.1 `kb auth telegram` creates the session on the `telegram` volume; read-only Telethon wrapper with allowlist; verify `test_telegram_wrapper_has_no_write_methods` and a non-allowlisted chat stores nothing
+- [x] 2.2 Live handlers for new/edited/deleted messages + catch-up from last id; verify `test_tg_edit_updates_search_delete_hides` and that messages stay unread in the Telegram app (manual check)
+- [x] 2.3 Add `search_chats` and `search_mail` MCP tools (source filter); verify an allowlisted message is found within 2 minutes end to end
 
 ## 3. Secret redaction
 

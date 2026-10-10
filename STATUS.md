@@ -14,7 +14,9 @@ _Last updated: 2026-10-10 by Claude_
 - Architecture in `docs/architecture.md`; decisions in ADRs 0004–0012; roadmap in `docs/product/roadmap.md`.
 
 ## Next steps
-1. Slice 1 verified 2026-10-10: digisoftou@gmail.com INBOX (scope digisoft) ingested on Coolify and found via MCP search. Next: slice 2 (Telegram).
+1. Slice 1 verified 2026-10-10: digisoftou@gmail.com INBOX (scope digisoft) ingested on Coolify and found via MCP search.
+   Slice 2 verified 2026-10-10: Telegram (owner's account, QR login, 12 allowlisted chats in KB_CONFIG_YAML) — live message
+   searchable, edit replaced text, delete hid it. Next: slice 3 (secret redaction) before adding personal sources.
 1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
 2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
 3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.
@@ -27,6 +29,9 @@ _Last updated: 2026-10-10 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
+- Telegram login: codes for a new api_id may not be delivered; use `kb auth telegram --qr` (Coolify terminal, `telegram` container).
+- Helper commands (`kb telegram chats`) use a read-only session snapshot; the ingest service keeps the session file locked.
+- Telegram session = account access; lives on the `kb-telegram` volume; revoke in Telegram → Settings → Devices.
 - No Docker in the dev workspace: tests use an embedded Postgres (`pgserver`, has pgvector but no pg_trgm/unaccent).
 - Public HTTPS MCP endpoint is a test-only deviation from ADR 0009 (Tailscale-only); move before real personal data grows.
 - `.env` holds COOLIFY_URL/COOLIFY_TOKEN; the token contains `|` — never `source` the file, read values with grep/cut.
