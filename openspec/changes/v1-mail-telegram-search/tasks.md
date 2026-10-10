@@ -7,8 +7,8 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 - [x] 1.1 Scaffold `pyproject.toml` (uv, ruff, mypy, pytest), set `STACKS := python` in the Makefile, add `docker-compose.yml` with pgvector Postgres; verify `make check` passes on an empty test suite and `docker compose up -d postgres` is healthy
 - [x] 1.2 Add `kb.config`, `kb.db` migration runner and `migrations/0001_core.sql` (raw_records, items, sources, sync_state, schema_migrations); verify `kb migrate` is idempotent (test: running twice applies nothing new)
 - [x] 1.3 Implement `archive.put` with content-hash dedupe and an IMAP connector for one folder (INBOX, UID cursor); verify `test_ingest_idempotent_twice_same_rows` against recorded IMAP fixtures
-- [ ] 1.4 Build one item per email (no threading yet) with `tsvector('simple', unaccent)`; add `search()` lexical-only and MCP `search` tool with bearer token; verify `test_mcp_requires_token` and a manual `claude mcp add` query returns a seeded email
-- [ ] 1.5 Add `docker/Dockerfile`, `ingest`/`index`/`mcp` services and `config/kb.example.yaml`; verify `docker compose up` ingests a real test mailbox and Claude Code finds a message by an exact word
+- [x] 1.4 Build one item per email (no threading yet) with `tsvector('simple', unaccent)`; add `search()` lexical-only and MCP `search` tool with bearer token; verify `test_mcp_requires_token` and a manual `claude mcp add` query returns a seeded email
+- [x] 1.5 Add `docker/Dockerfile`, `ingest`/`index`/`mcp` services and `config/kb.example.yaml`; verify `docker compose up` ingests a real test mailbox and Claude Code finds a message by an exact word
 
 ## 2. Telegram live ingestion (lexical)
 

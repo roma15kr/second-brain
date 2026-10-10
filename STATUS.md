@@ -14,7 +14,8 @@ _Last updated: 2026-10-10 by Claude_
 - Architecture in `docs/architecture.md`; decisions in ADRs 0004–0012; roadmap in `docs/product/roadmap.md`.
 
 ## Next steps
-1. Owner sets `IMAP_USER_MAIN` / `IMAP_PASSWORD_MAIN` (Gmail app password) in Coolify; verify a real email is found via MCP (closes tasks 1.4, 1.5).
+1. Slice 1 verified 2026-10-10: digisoftou@gmail.com INBOX (scope digisoft) ingested on Coolify and found via MCP search. Next: slice 2 (Telegram).
+1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
 2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
 3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.
 4. Owner adds reserve (off-site) storage: different provider/region; receives nightly encrypted Vaultwarden export and Postgres backups; credentials + export passphrase go in the printed emergency kit; do one test restore (ADR 0013).
