@@ -109,6 +109,8 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
             "model": config.embedding.model,
             "embedded": emb["done"] if emb else 0,
             "missing": emb["missing"] if emb else 0,
+            "last_error": (get_state(conn, "_embeddings", KEY) or {}).get("last_error"),
+            "last_error_at": (get_state(conn, "_embeddings", KEY) or {}).get("last_error_at"),
         },
         "llm": {
             "enabled": config.llm.enabled,

@@ -134,3 +134,42 @@ def test_cross_language_fixture_top10(conn):
     assert "Друкарня" in (hits[0].excerpt or "")
     hits = search(conn, "когда запускаем рекламу", embedder=e, limit=10)
     assert "маркетплейсі" in (hits[0].excerpt or "")
+
+
+class FlakyEmbedder(TrigramEmbedder):
+    """Fails on any batch containing 'poison', and on that text alone."""
+
+    def passages(self, texts):
+        if any("poison" in t for t in texts):
+            if len(texts) > 1:
+                raise RuntimeError("batch failed")
+            raise RuntimeError("bad input")
+        return super().passages(texts)
+
+
+class NanEmbedder(TrigramEmbedder):
+    def passages(self, texts):
+        return [[float("nan")] * self.dims if "nan" in t else self._vec(t) for t in texts]
+
+
+def test_one_bad_item_does_not_block_the_rest(conn):
+    cfg = make(conn, ["good one", "poison pill text", "good two"])
+    assert embed.run_cycle(conn, cfg, FlakyEmbedder()) == 3
+    rows = conn.execute("SELECT raw_text, embedding IS NOT NULL AS ok FROM items").fetchall()
+    assert sorted((("poison" in r["raw_text"]), r["ok"]) for r in rows) == [
+        (False, True),
+        (False, True),
+        (True, False),
+    ]
+    assert embed.run_cycle(conn, cfg, FlakyEmbedder()) == 0  # parked, not retried forever
+    from kb import health
+
+    st = health.get_state(conn, "_embeddings", "health")
+    assert st is not None and "no vector" in st["last_error"]
+
+
+def test_nan_vectors_are_rejected(conn):
+    cfg = make(conn, ["nan maker", "fine text"])
+    embed.run_cycle(conn, cfg, NanEmbedder())
+    ok = conn.execute("SELECT count(*) AS n FROM items WHERE embedding IS NOT NULL").fetchone()
+    assert ok["n"] == 1

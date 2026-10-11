@@ -8,6 +8,7 @@ An item is re-embedded when its content, its summary or the model changes (`embe
 from __future__ import annotations
 
 import logging
+import math
 import threading
 from collections.abc import Sequence
 from typing import Any, Protocol
@@ -99,18 +100,47 @@ def pending(conn: Conn, cfg: EmbeddingConfig, limit: int) -> list[dict[str, Any]
     ).fetchall()
 
 
+def _valid(vec: Sequence[float], dims: int) -> bool:
+    return len(vec) == dims and all(math.isfinite(x) for x in vec)
+
+
 def run_cycle(conn: Conn, config: Config, embedder: Embedder) -> int:
-    """Embed up to `per_cycle` stale items. Returns how many were embedded."""
+    """Embed up to `per_cycle` stale items. A failing batch is retried item by item; an item that
+    still fails is parked (embedded_key set, no vector) with its error recorded, so one bad item
+    never blocks the rest. Returns how many items were processed (embedded or parked)."""
+    from kb import health
+
     cfg = config.embedding
     todo = pending(conn, cfg, cfg.per_cycle)
     if not todo:
         return 0
-    vecs = embedder.passages([embed_text(it, cfg.max_chars) for it in todo])
+    texts = [embed_text(it, cfg.max_chars) for it in todo]
+    try:
+        vecs: list[list[float] | None] = list(embedder.passages(texts))
+    except Exception:
+        log.exception("embedding batch failed; retrying items one by one")
+        vecs = []
+        for t in texts:
+            try:
+                vecs.append(embedder.passages([t])[0])
+            except Exception as exc:
+                log.warning("embedding failed: %s", exc)
+                vecs.append(None)
+    done = 0
     for it, vec in zip(todo, vecs, strict=True):
-        if len(vec) != cfg.dims:
-            raise ValueError(f"model returned {len(vec)} dims, expected {cfg.dims}")
-        conn.execute(
-            "UPDATE items SET embedding = %s::vector, embedded_key = %s WHERE id = %s",
-            (vector_literal(vec), it["key"], it["id"]),
-        )
+        if vec is not None and _valid(vec, cfg.dims):
+            conn.execute(
+                "UPDATE items SET embedding = %s::vector, embedded_key = %s WHERE id = %s",
+                (vector_literal(vec), it["key"], it["id"]),
+            )
+            done += 1
+        else:
+            problem = "no vector" if vec is None else f"invalid vector (len {len(vec)})"
+            conn.execute(
+                "UPDATE items SET embedding = NULL, embedded_key = %s WHERE id = %s",
+                (it["key"], it["id"]),
+            )
+            health.record_error(conn, "_embeddings", f"item {it['id']}: {problem}")
+    if done:
+        health.record_ok(conn, "_embeddings", last_batch=done)
     return len(todo)

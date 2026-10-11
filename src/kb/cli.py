@@ -214,8 +214,10 @@ def cmd_index(args: argparse.Namespace) -> None:
                 try:
                     if embed.run_cycle(conn, config, embedder):
                         continue  # keep embedding while there is work
-                except Exception:
+                except Exception as exc:
                     log.exception("embedding cycle failed")
+                    health.record_error(conn, "_embeddings", f"{type(exc).__name__}: {exc}")
+                    time.sleep(10)
             if client is not None and time.monotonic() - last_cycle > 30:
                 last_cycle = time.monotonic()
                 try:
