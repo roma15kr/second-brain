@@ -332,9 +332,12 @@ def rank(
     if reranker is not None and head:
         docs = [_rerank_doc(r, cfg.rerank_chars) for r, _ in head]
         rel = scores_within(reranker, query, docs, cfg.rerank_budget_seconds)
+    method = "rerank" if rel is not None else "fused"
     if rel is None:
         top = max((s for _, s in head), default=1.0) or 1.0
         rel = [s / top for _, s in head]  # fused scores scaled to 0..1
+    for r, _ in head:
+        r["_ranking"] = method
     scored = [
         (r, rel[i] * decay(r.get("last_activity_at"), now, cfg)) for i, (r, _) in enumerate(head)
     ]
@@ -416,6 +419,7 @@ def search(
     for r, score in ranked:
         e = _evidence(r, r["excerpt"], score)
         e.extra["exact_match"] = r["id"] in pinned_ids
+        e.extra["ranking"] = "exact" if r["id"] in pinned_ids else r.get("_ranking", "fused")
         ctx = _context(conn, r, query, cfg.context_messages)
         if ctx:
             e.locator = ctx["locator"] or e.locator

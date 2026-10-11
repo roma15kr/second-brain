@@ -147,3 +147,18 @@ def test_search_latency_p50_under_3s_on_seeded_50k_items(conn):
     p50, p95 = times[len(times) // 2], times[int(len(times) * 0.95)]
     print(f"p50={p50:.3f}s p95={p95:.3f}s")
     assert p50 < 3.0 and p95 < 8.0
+
+
+def test_ranking_method_is_reported():
+    a, b = row(1, 1, "budget plan"), row(2, 1, "invoice from printer")
+    rank([(a, 0.9), (b, 0.8)], "q", CFG, WordReranker("invoice"), now=NOW)
+    assert a["_ranking"] == "rerank"
+    c = row(3, 1)
+    rank(
+        [(c, 0.9)],
+        "q",
+        SearchConfig(rerank_budget_seconds=0.1),
+        WordReranker("x", delay=0.5),
+        now=NOW,
+    )
+    assert c["_ranking"] == "fused"
