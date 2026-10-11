@@ -94,11 +94,15 @@ Input truncated to the latest ~8k tokens of a unit. Rough cost: ~30k units × (~
 docs at implementation time.
 
 ### D9. Local embeddings and reranker
-`BAAI/bge-m3` (dense, 1024-d, multilingual, 8k context) via sentence-transformers on CPU; embedded text =
-`question + summary + outcome + entities` (Cerebras normalization) for units, `topic + text` for
-passages. Before enrichment, a unit gets a provisional embedding of its first ~512 tokens so
-semantic search works early. Reranker: `BAAI/bge-reranker-v2-m3` cross-encoder, top 20 → 10, inputs
-truncated to 384 tokens. Models downloaded at image build into a cache volume.
+Embeddings: `intfloat/multilingual-e5-large` (1024-d) via `fastembed` (ONNX Runtime, no PyTorch:
+~1.5 GB smaller image), on CPU. Measured 2026-10-11 on the workspace CPU: ~21 passages/s, model
+2.1 GB, cross-language queries (en→uk, ru→uk) rank the right passage first. e5 needs explicit
+`query: ` / `passage: ` prefixes (fastembed does not add them). The 512-token context is enough
+because units are embedded from their AI summary fields + title + start of the text (max 2,000
+chars), not the whole raw thread. bge-m3 (8k context) stays the alternative if long-text recall
+proves weak (change model in config + re-embed). Re-embedding is driven by `embedded_key`
+(content hash + summary key + model). The model lives on a shared `kb-models` volume.
+Reranker (8.3): a multilingual cross-encoder via fastembed, top 20 → 10, inputs truncated.
 *Alternative:* cloud embeddings (higher quality, but ADR 0005 keeps embeddings local).
 
 ### D10. Retrieval pipeline (SQL + Python)

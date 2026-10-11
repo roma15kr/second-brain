@@ -154,10 +154,25 @@ class LlmConfig(BaseModel):
         return os.environ.get("KB_DISTILL_MODEL") or self.distill_model
 
 
+class EmbeddingConfig(BaseModel):
+    """Local multilingual embeddings (ADR 0005: embeddings never leave the server)."""
+
+    enabled: bool = True
+    model: str = "intfloat/multilingual-e5-large"
+    dims: int = 1024
+    cache_dir: str = Field(default_factory=lambda: os.environ.get("KB_MODEL_CACHE", "/models"))
+    batch: int = 16
+    per_cycle: int = 256
+    max_chars: int = 2_000  # e5 reads 512 tokens; the summary + start of the text fits
+    query_prefix: str = "query: "  # e5 models are trained with these prefixes
+    passage_prefix: str = "passage: "
+
+
 class Config(BaseModel):
     sources: list[Source] = Field(default_factory=list)
     scope_rules: list[ScopeRule] = Field(default_factory=list)
     llm: LlmConfig = Field(default_factory=LlmConfig)
+    embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     scope_descriptions: dict[str, str] = Field(
         default_factory=lambda: dict(DEFAULT_SCOPE_DESCRIPTIONS)
     )

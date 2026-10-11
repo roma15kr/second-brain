@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from kb.config import SCOPES
@@ -11,6 +12,7 @@ from kb.db import Conn
 
 VALID_SCOPES = (*SCOPES, "unsorted")
 MAX_LIMIT = 50
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
 class SearchError(ValueError):
@@ -118,31 +120,84 @@ def recent(conn: Conn, filters: SearchFilters | None = None, limit: int = 20) ->
     return [_evidence(r, r["tail"], 0.0) for r in rows]
 
 
-def search(
-    conn: Conn, query: str, filters: SearchFilters | None = None, limit: int = 10
-) -> list[Evidence]:
-    filters = filters or SearchFilters()
-    filters.validate()
-    if not query.strip():
-        raise SearchError("query must not be empty")
-    if not 1 <= limit <= MAX_LIMIT:
-        raise SearchError(f"limit must be between 1 and {MAX_LIMIT}")
+RRF_K = 60
+CANDIDATES = 50
+_COLUMNS = """id, source_id, kind, scopes, title, participants, occurred_at, last_activity_at,
+               locator, metadata, summary, question, outcome"""
 
-    params: dict[str, Any] = {"query": query, "limit": limit}
+
+def _lexical(conn: Conn, query: str, filters: SearchFilters) -> list[dict[str, Any]]:
+    params: dict[str, Any] = {"query": query, "n": CANDIDATES}
     where = [*_filter_sql(filters, params), "tsv @@ q"]
-
-    rows = conn.execute(
+    return conn.execute(
         f"""
-        SELECT id, source_id, kind, scopes, title, participants, occurred_at, last_activity_at,
-               locator, metadata, summary, question, outcome, ts_rank_cd(tsv, q) AS score,
+        SELECT {_COLUMNS}, ts_rank_cd(tsv, q) AS score,
                ts_headline('simple', raw_text, q,
                            'MaxWords=60, MinWords=20, MaxFragments=2, FragmentDelimiter=" … "')
                    AS excerpt
         FROM items, websearch_to_tsquery('simple', %(query)s) AS q
         WHERE {" AND ".join(where)}
         ORDER BY score DESC, last_activity_at DESC NULLS LAST
-        LIMIT %(limit)s
+        LIMIT %(n)s
         """,
         params,
     ).fetchall()
-    return [_evidence(r, r["excerpt"], float(r["score"])) for r in rows]
+
+
+def _vector(conn: Conn, qvec: list[float], filters: SearchFilters) -> list[dict[str, Any]]:
+    from kb.embed import vector_literal
+
+    # Iterative scans keep filtered HNSW queries complete (pgvector >= 0.8; ignored before).
+    for setting in ("SET hnsw.ef_search = 200", "SET hnsw.iterative_scan = relaxed_order"):
+        with contextlib.suppress(Exception):
+            conn.execute(setting)
+    params: dict[str, Any] = {"q": vector_literal(qvec), "n": CANDIDATES}
+    where = [*_filter_sql(filters, params), "embedding IS NOT NULL"]
+    return conn.execute(
+        f"""
+        SELECT {_COLUMNS}, 1 - (embedding <=> %(q)s::vector) AS score,
+               coalesce(summary, left(raw_text, 300)) AS excerpt
+        FROM items
+        WHERE {" AND ".join(where)}
+        ORDER BY embedding <=> %(q)s::vector
+        LIMIT %(n)s
+        """,
+        params,
+    ).fetchall()
+
+
+def fuse(*ranked: list[dict[str, Any]], k: int = RRF_K) -> list[tuple[dict[str, Any], float]]:
+    """Reciprocal rank fusion: score = sum of 1 / (k + rank) over the lists an item appears in.
+    Consensus across retrievers beats a single strong vote. The first list's row (e.g. the
+    lexical one, with its highlighted excerpt) is kept for items found by several."""
+    scores: dict[int, float] = {}
+    rows: dict[int, dict[str, Any]] = {}
+    for lst in ranked:
+        for rank, row in enumerate(lst, start=1):
+            scores[row["id"]] = scores.get(row["id"], 0.0) + 1.0 / (k + rank)
+            rows.setdefault(row["id"], row)
+    order = sorted(
+        scores, key=lambda i: (-scores[i], -(rows[i]["last_activity_at"] or _EPOCH).timestamp())
+    )
+    return [(rows[i], scores[i]) for i in order]
+
+
+def search(
+    conn: Conn,
+    query: str,
+    filters: SearchFilters | None = None,
+    limit: int = 10,
+    embedder: Any = None,
+) -> list[Evidence]:
+    """Hybrid search: full-text and (when an embedder is given) meaning-based retrieval, fused
+    with reciprocal rank fusion."""
+    filters = filters or SearchFilters()
+    filters.validate()
+    if not query.strip():
+        raise SearchError("query must not be empty")
+    if not 1 <= limit <= MAX_LIMIT:
+        raise SearchError(f"limit must be between 1 and {MAX_LIMIT}")
+    lists = [_lexical(conn, query, filters)]
+    if embedder is not None:
+        lists.append(_vector(conn, embedder.query(query), filters))
+    return [_evidence(r, r["excerpt"], score) for r, score in fuse(*lists)[:limit]]

@@ -45,7 +45,7 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## 8. Semantic and hybrid search
 
-- [ ] 8.1 `migrations/0002_search.sql` (vector, pg_trgm, HNSW, token_df); bge-m3 embedding of provisional and distilled text; vector retriever; verify `test_cross_language_fixture_top10` (slow)
+- [ ] 8.1 Migration 0006 (pgvector, HNSW); local multilingual-e5-large embeddings (fastembed, e5 prefixes) of summary + title + text start, refreshed via embedded_key; vector retriever fused with full-text by RRF (moved here from 8.2); verify `test_cross_language_fixture_top10` (slow) and live cross-language queries on the server
 - [ ] 8.2 IDF maintenance, rare-term retriever, exact-match pin, RRF fusion and unit collapse; verify `test_rrf_consensus_beats_single_top`, `test_collapse_passage_into_unit`, `test_exact_string_ranks_first`
 - [ ] 8.3 Cross-encoder rerank with time budget, age decay, neighbour expansion, `Evidence` with deep links; verify `test_decay_prefers_recent_on_tie` and `test_search_latency_p50_under_3s_on_seeded_50k_items` (slow)
 - [ ] 8.4 Burst passages (gate: ≥ 200 chars and rare token or reaction; topic prepended); verify `test_burst_gate_filler_rejected_rare_token_accepted_reaction_accepted` and the "detail buried in a long thread" scenario on a fixture

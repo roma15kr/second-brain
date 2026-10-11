@@ -51,10 +51,14 @@ services:
   index:
     <<: *kb
     command: ["sh", "-c", "kb migrate && exec kb index"]
+    volumes:
+      - kb-models:/models  # embedding model (~2 GB), downloaded once
 
   mcp:
     <<: *kb
     command: ["sh", "-c", "kb migrate && exec kb mcp --port 8765"]
+    volumes:
+      - kb-models:/models
     environment:
       DATABASE_URL: postgresql://kb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kb
       KB_CONFIG_YAML: ${KB_CONFIG_YAML}
@@ -72,3 +76,4 @@ services:
 volumes:
   kb-postgres:
   kb-telegram:
+  kb-models:

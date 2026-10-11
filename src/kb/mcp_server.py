@@ -20,7 +20,8 @@ from kb.search import SearchError, SearchFilters, recent, search
 
 INSTRUCTIONS = (
     "Personal knowledge base of the owner's mail and Telegram chats. "
-    "Tools return ranked evidence with citations; compose answers yourself and cite item ids. "
+    "Search matches exact words and meaning (any language: uk/ru/en). Tools return ranked "
+    "evidence with citations and AI summaries; compose answers yourself and cite item ids. "
     "Scopes: personal, digisoft, quokka, rdim, unsorted."
 )
 
@@ -40,7 +41,9 @@ def clear_errors[F: Callable[..., Any]](fn: F) -> F:
     return wrapper  # type: ignore[return-value]
 
 
-def build_server(get_conn: Callable[[], Conn], config: Config | None = None) -> MCPServer:
+def build_server(
+    get_conn: Callable[[], Conn], config: Config | None = None, embedder: Any = None
+) -> MCPServer:
     server = MCPServer(name="second-brain", instructions=INSTRUCTIONS)
 
     def run(
@@ -60,7 +63,7 @@ def build_server(get_conn: Callable[[], Conn], config: Config | None = None) -> 
             date_to=date.fromisoformat(date_to) if date_to else None,
         )
         with get_conn() as conn:
-            return [e.to_dict() for e in search(conn, query, filters, limit)]
+            return [e.to_dict() for e in search(conn, query, filters, limit, embedder)]
 
     @server.tool(name="search")
     @clear_errors
@@ -222,8 +225,10 @@ async def _respond(send: Send, status: int, body: bytes) -> None:
     await send({"type": "http.response.body", "body": body})
 
 
-def build_app(get_conn: Callable[[], Conn], token: str, config: Config | None = None) -> ASGIApp:
-    server = build_server(get_conn, config)
+def build_app(
+    get_conn: Callable[[], Conn], token: str, config: Config | None = None, embedder: Any = None
+) -> ASGIApp:
+    server = build_server(get_conn, config, embedder)
     # Host-header checks are disabled: access is limited by the private network + bearer token.
     app = server.streamable_http_app(
         stateless_http=True,

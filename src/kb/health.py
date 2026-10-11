@@ -87,6 +87,10 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
         "coalesce(sum(output_tokens), 0) AS o FROM llm_usage WHERE day = %s",
         (now.date(),),
     ).fetchone()
+    emb = conn.execute(
+        "SELECT count(*) FILTER (WHERE embedding IS NOT NULL) AS done, "
+        "count(*) FILTER (WHERE embedding IS NULL) AS missing FROM items WHERE NOT hidden"
+    ).fetchone()
     inflight = conn.execute(
         "SELECT count(*) AS n FROM distill_batches WHERE finished_at IS NULL"
     ).fetchone()
@@ -100,6 +104,12 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
             "recent_errors": [dict(e) for e in errors],
         },
         "items": {r["kind"]: r["n"] for r in counts},
+        "embeddings": {
+            "enabled": config.embedding.enabled,
+            "model": config.embedding.model,
+            "embedded": emb["done"] if emb else 0,
+            "missing": emb["missing"] if emb else 0,
+        },
         "llm": {
             "enabled": config.llm.enabled,
             "model": config.llm.model(),

@@ -197,9 +197,10 @@ def cmd_cost_estimate(_: argparse.Namespace) -> None:
 
 def cmd_index(args: argparse.Namespace) -> None:
     config = load_config()
-    from kb import distill
+    from kb import distill, embed
 
     client = distill.default_client(config)
+    embedder = embed.default_embedder(config)
     if client is None:
         log.warning("AI summaries disabled: set llm.enabled: true and OPENAI_API_KEY to enable")
     last_cycle = 0.0
@@ -209,6 +210,12 @@ def cmd_index(args: argparse.Namespace) -> None:
         while True:
             if indexer.run_once(conn, config):
                 continue
+            if embedder is not None:
+                try:
+                    if embed.run_cycle(conn, config, embedder):
+                        continue  # keep embedding while there is work
+                except Exception:
+                    log.exception("embedding cycle failed")
             if client is not None and time.monotonic() - last_cycle > 30:
                 last_cycle = time.monotonic()
                 try:
@@ -226,10 +233,15 @@ def cmd_index(args: argparse.Namespace) -> None:
 def cmd_mcp(args: argparse.Namespace) -> None:
     import uvicorn
 
+    from kb import embed
     from kb.mcp_server import build_app
 
     url = database_url()
-    app = build_app(lambda: db.connect(url), os.environ.get("KB_MCP_TOKEN", ""), load_config())
+    config = load_config()
+    embedder = embed.default_embedder(config)
+    if isinstance(embedder, embed.FastEmbedder):
+        embedder.preload()
+    app = build_app(lambda: db.connect(url), os.environ.get("KB_MCP_TOKEN", ""), config, embedder)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
