@@ -26,7 +26,9 @@ _Last updated: 2026-10-10 by Claude_
    Slice 6 verified 2026-10-11: Gmail via IMAP extensions (All Mail, X-GM-THRID threads, labels), folder discovery,
    live+backfill cursors, `kb rebuild`. Live: 604 email threads, 2133 Telegram conversations, sent mail searchable.
    Pulled forward from 10.1: `kb status` / MCP `status` (sync health, index queue).
-   OPENAI_API_KEY is set in Coolify (rotate later: it was pasted in chat). Next: slice 7 (summaries) or 8.1 (vectors).
+   OPENAI_API_KEY is set in Coolify (rotate later: it was pasted in chat).
+   Slice 7 verified 2026-10-11: AI summaries (gpt-6-luna) live; backfill batch 2596/2596 ok, ~$0.33
+   (3.04M in / 0.71M out tokens). `llm.enabled: true` set in KB_CONFIG_YAML. Next: slice 8 (vectors, RRF, rerank).
 1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
 2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
 3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.

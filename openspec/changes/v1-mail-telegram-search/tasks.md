@@ -40,8 +40,8 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## 7. Enrichment
 
-- [ ] 7.1 Settled-unit detection and `distill` via OpenAI structured output (question, summary, outcome, entities, scope guess, language), redacted input only; LLM scope fallback with confidence threshold → `unsorted`; verify with a stubbed client (`test_low_confidence_is_unsorted`) and one live call on a fixture
-- [ ] 7.2 Batch distillation for backfill + `kb cost-estimate` dry run + per-source daily token cap; verify cost estimate output on fixture data and that the cap stops enqueueing
+- [x] 7.1 Settled-unit detection and `distill` via OpenAI structured output (question, summary, outcome, entities, scope guess, language), redacted input only; LLM scope fallback with confidence threshold → `unsorted`; verify with a stubbed client (`test_low_confidence_is_unsorted`) and one live call on a fixture
+- [x] 7.2 Batch distillation for backfill + `kb cost-estimate` dry run + per-source daily token cap; verify cost estimate output on fixture data and that the cap stops enqueueing
 
 ## 8. Semantic and hybrid search
 
