@@ -233,3 +233,24 @@ def test_disabled_by_default_and_needs_key(monkeypatch):
     assert distill.default_client(Config()) is None
     monkeypatch.delenv("OPENAI_API_KEY")
     assert distill.default_client(Config(llm=LlmConfig(enabled=True))) is None
+
+
+def test_sql_content_hash_matches_python(conn):
+    setup(conn)
+    it = item(conn)
+    sql = conn.execute(
+        "SELECT encode(sha256(convert_to("
+        "coalesce(title, '') || E'\\n' || raw_text, 'UTF8')), 'hex') AS h FROM items WHERE id = %s",
+        (it["id"],),
+    ).fetchone()["h"]
+    assert sql == it["content_hash"] == distill.content_hash(it["title"], it["raw_text"])
+
+
+def test_items_without_hash_get_pending_after_backfill_migration(conn):
+    from importlib import resources
+
+    _, cfg = setup(conn)
+    conn.execute("UPDATE items SET content_hash = NULL")
+    assert distill.pending(conn, cfg.llm, 10, now=LATER) == []  # the bug
+    conn.execute((resources.files("kb.migrations") / "0005_backfill_content_hash.sql").read_text())
+    assert len(distill.pending(conn, cfg.llm, 10, now=LATER)) == 1
