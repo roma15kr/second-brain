@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import contextlib
+import math
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-from kb.config import SCOPES
+from kb.config import SCOPES, SearchConfig
 from kb.db import Conn
 
 VALID_SCOPES = (*SCOPES, "unsorted")
@@ -285,6 +286,84 @@ def collapse(results: list[tuple[dict[str, Any], float]]) -> list[tuple[dict[str
     return out
 
 
+def decay(when: datetime | None, now: datetime, cfg: SearchConfig) -> float:
+    """Recency as a tie-breaker: 1.0 now, approaching `decay_floor` for old results."""
+    if when is None:
+        return cfg.decay_floor
+    age_days = max((now - when).total_seconds() / 86400, 0.0)
+    return cfg.decay_floor + (1 - cfg.decay_floor) * math.exp(-age_days / cfg.decay_half_life_days)
+
+
+def _rerank_doc(row: dict[str, Any], chars: int) -> str:
+    parts = [row.get("title") or "", row.get("summary") or "", row.get("excerpt") or ""]
+    return re.sub(r"<[^>]+>", "", " \n".join(p for p in parts if p))[:chars]
+
+
+def rank(
+    candidates: list[tuple[dict[str, Any], float]],
+    query: str,
+    cfg: SearchConfig,
+    reranker: Any = None,
+    now: datetime | None = None,
+) -> list[tuple[dict[str, Any], float]]:
+    """Rerank the top candidates (cross-encoder, within the time budget), then let recency break
+    near-ties. Without a reranker (or past the budget) the fused score is used."""
+    from kb.rerank import scores_within
+
+    now = now or datetime.now(UTC)
+    head, tail = candidates[: cfg.rerank_top], candidates[cfg.rerank_top :]
+    rel: list[float] | None = None
+    if reranker is not None and head:
+        docs = [_rerank_doc(r, cfg.rerank_chars) for r, _ in head]
+        rel = scores_within(reranker, query, docs, cfg.rerank_budget_seconds)
+    if rel is None:
+        top = max((s for _, s in head), default=1.0) or 1.0
+        rel = [s / top for _, s in head]  # fused scores scaled to 0..1
+    scored = [
+        (r, rel[i] * decay(r.get("last_activity_at"), now, cfg)) for i, (r, _) in enumerate(head)
+    ]
+    scored.sort(key=lambda t: -t[1])
+    return scored + tail
+
+
+def _context(conn: Conn, row: dict[str, Any], query: str, n: int) -> dict[str, Any]:
+    """The matched message (best full-text match, else the latest) with n neighbours each side."""
+    msgs = conn.execute(
+        """
+        SELECT m.body, m.author, m.sent_at, m.locator,
+               ts_rank(to_tsvector('simple', m.body),
+                       to_tsquery('simple', coalesce(nullif(%(orq)s, ''), 'xxxxxxxx'))) AS r
+        FROM messages m JOIN items i
+          ON i.source_id = m.source_id AND i.source_item_key = m.unit_key
+        WHERE i.id = %(id)s AND NOT m.hidden
+        ORDER BY m.sent_at, m.id
+        """,
+        {"id": row["id"], "orq": _or_query(query)},
+    ).fetchall()
+    if not msgs:
+        return {}
+    best = max(range(len(msgs)), key=lambda i: (msgs[i]["r"], i))
+    window = msgs[max(0, best - n) : best + n + 1]
+    return {
+        "locator": msgs[best]["locator"],
+        "context": [
+            {
+                "author": m["author"],
+                "sent_at": m["sent_at"].isoformat(),
+                "text": m["body"][:400],
+                "matched": m is msgs[best],
+                "locator": m["locator"],
+            }
+            for m in window
+        ],
+    }
+
+
+def _or_query(query: str) -> str:
+    toks = re.findall(r"[\w@.-]{2,}", query.lower())
+    return " | ".join("'" + t.replace("'", "''") + "'" for t in toks)
+
+
 def search(
     conn: Conn,
     query: str,
@@ -292,12 +371,17 @@ def search(
     limit: int = 10,
     embedder: Any = None,
     min_idf: float | None = None,
+    reranker: Any = None,
+    settings: SearchConfig | None = None,
+    now: datetime | None = None,
 ) -> list[Evidence]:
     """Hybrid search. Exact ids/emails/codes/quoted phrases are pinned first; then full-text,
-    rare-term and (with an embedder) meaning-based results fused by reciprocal rank fusion,
-    one result per conversation."""
+    rare-term and (with an embedder) meaning-based results fused by reciprocal rank fusion, one
+    per conversation, reranked by a cross-encoder (within a time budget) with recency as a
+    tie-breaker. Each result carries the matched message with neighbouring messages."""
     from kb.idf import MIN_RARE_IDF
 
+    cfg = settings or SearchConfig()
     filters = filters or SearchFilters()
     filters.validate()
     if not query.strip():
@@ -308,11 +392,16 @@ def search(
     lists = [_lexical(conn, query, filters), _rare(conn, query, filters, min_idf or MIN_RARE_IDF)]
     if embedder is not None:
         lists.append(_vector(conn, embedder.query(query), filters))
-    results = collapse(pinned + fuse(*lists))[:limit]
     pinned_ids = {r["id"] for r, _ in pinned}
+    fused = [(r, sc) for r, sc in collapse(fuse(*lists)) if r["id"] not in pinned_ids]
+    ranked = collapse(pinned + rank(fused, query, cfg, reranker, now))[:limit]
     out = []
-    for r, score in results:
+    for r, score in ranked:
         e = _evidence(r, r["excerpt"], score)
         e.extra["exact_match"] = r["id"] in pinned_ids
+        ctx = _context(conn, r, query, cfg.context_messages)
+        if ctx:
+            e.locator = ctx["locator"] or e.locator
+            e.extra["context"] = ctx["context"]
         out.append(e)
     return out

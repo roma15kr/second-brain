@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 
 from kb import archive, email_parse, jobs, scopes, units
-from kb.config import Config, ConfigError, TelegramSource
+from kb.config import Config, ConfigError, ImapSource, TelegramSource
 from kb.connectors.base import get_state, set_state
 from kb.db import Conn
 from kb.redact import redact_text
@@ -18,8 +19,8 @@ log = logging.getLogger(__name__)
 # 2: secret redaction. 3: codes before keywords, alphanumeric codes, passwords without ':'.
 # 4: values on the next line after the keyword. 5: conversation units (threads, segments).
 # 6: scope layers (rules, review decisions, overrides); folder/chat username kept for rules.
-# 7: Gmail thread ids and labels.
-INDEX_VERSION = 7
+# 7: Gmail thread ids and labels. 8: Gmail web deep links per message.
+INDEX_VERSION = 8
 
 
 def index_raw(conn: Conn, config: Config, raw_id: int) -> int | None:
@@ -69,7 +70,7 @@ def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) ->
         subject=redact_text(parsed.subject),
         refs=[r for r in refs if r],
         version=raw["fetched_at"].isoformat(),
-        locator=f"imap://{raw['source_id']}/{payload.get('folder')};UID={payload.get('uid')}",
+        locator=email_locator(config, raw["source_id"], payload, parsed.message_id),
         metadata={
             "raw_id": raw_id,
             "folder": payload.get("folder"),
@@ -80,6 +81,23 @@ def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) ->
     unit = units.assign_email_unit(conn, m)
     units.save(conn, m, unit)
     return units.rebuild(conn, m.source_id, unit)
+
+
+def email_locator(
+    config: Config, source_id: str, payload: dict[str, Any], message_id: str | None
+) -> str:
+    """Gmail: a web link that opens the message by Message-ID; otherwise an IMAP locator."""
+    if payload.get("gm_thrid") and message_id:
+        account = ""
+        try:
+            source = config.source(source_id)
+            if isinstance(source, ImapSource):
+                account = f"?authuser={quote(source.username(), safe='@')}"
+        except ConfigError:
+            pass
+        mid = quote("rfc822msgid:" + message_id.strip("<>"), safe=":@")
+        return f"https://mail.google.com/mail/{account}#search/{mid}"
+    return f"imap://{source_id}/{payload.get('folder')};UID={payload.get('uid')}"
 
 
 def tg_locator(payload: dict[str, Any]) -> str:

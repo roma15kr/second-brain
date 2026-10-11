@@ -168,11 +168,23 @@ class EmbeddingConfig(BaseModel):
     passage_prefix: str = "passage: "
 
 
+class SearchConfig(BaseModel):
+    rerank: bool = True
+    rerank_model: str = "jinaai/jina-reranker-v2-base-multilingual"
+    rerank_top: int = 12  # fused candidates rescored by the cross-encoder
+    rerank_chars: int = 400  # per candidate: title + summary + excerpt
+    rerank_budget_seconds: float = 1.5  # slower → return the fused order instead
+    decay_floor: float = 0.85  # recency only breaks near-ties: a year-old result loses <= 15%
+    decay_half_life_days: float = 180
+    context_messages: int = 2  # messages shown before/after the matched one
+
+
 class Config(BaseModel):
     sources: list[Source] = Field(default_factory=list)
     scope_rules: list[ScopeRule] = Field(default_factory=list)
     llm: LlmConfig = Field(default_factory=LlmConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
+    search: SearchConfig = Field(default_factory=SearchConfig)
     scope_descriptions: dict[str, str] = Field(
         default_factory=lambda: dict(DEFAULT_SCOPE_DESCRIPTIONS)
     )

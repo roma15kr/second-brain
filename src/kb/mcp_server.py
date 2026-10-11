@@ -42,7 +42,10 @@ def clear_errors[F: Callable[..., Any]](fn: F) -> F:
 
 
 def build_server(
-    get_conn: Callable[[], Conn], config: Config | None = None, embedder: Any = None
+    get_conn: Callable[[], Conn],
+    config: Config | None = None,
+    embedder: Any = None,
+    reranker: Any = None,
 ) -> MCPServer:
     server = MCPServer(name="second-brain", instructions=INSTRUCTIONS)
 
@@ -63,7 +66,16 @@ def build_server(
             date_to=date.fromisoformat(date_to) if date_to else None,
         )
         with get_conn() as conn:
-            return [e.to_dict() for e in search(conn, query, filters, limit, embedder)]
+            hits = search(
+                conn,
+                query,
+                filters,
+                limit,
+                embedder,
+                reranker=reranker,
+                settings=config.search if config else None,
+            )
+            return [e.to_dict() for e in hits]
 
     @server.tool(name="search")
     @clear_errors
@@ -226,9 +238,13 @@ async def _respond(send: Send, status: int, body: bytes) -> None:
 
 
 def build_app(
-    get_conn: Callable[[], Conn], token: str, config: Config | None = None, embedder: Any = None
+    get_conn: Callable[[], Conn],
+    token: str,
+    config: Config | None = None,
+    embedder: Any = None,
+    reranker: Any = None,
 ) -> ASGIApp:
-    server = build_server(get_conn, config, embedder)
+    server = build_server(get_conn, config, embedder, reranker)
     # Host-header checks are disabled: access is limited by the private network + bearer token.
     app = server.streamable_http_app(
         stateless_http=True,
