@@ -31,7 +31,9 @@ _Last updated: 2026-10-10 by Claude_
    (3.04M in / 0.71M out tokens). `llm.enabled: true` set in KB_CONFIG_YAML.
    Slice 8.1 verified 2026-10-11: local multilingual-e5-large (fastembed) + pgvector + RRF; live cross-language
    queries work, 0.23-0.42 s end to end. One-time embedding backfill runs ~1 item/s (512-token inputs on CPU).
-   Next: 8.2 (rare-term, exact pin, collapse), 8.3 (rerank, age decay), 8.4 (bursts).
+   Slice 8.2 verified 2026-10-11: IDF rare-term retrieval, exact pinning (emails/ids/domains/codes), collapse;
+   embeddings complete (2740/2740). Exact-match queries ~1 s (ILIKE scan; add pg_trgm index if it grows).
+   Next: 8.3 (rerank, age decay, neighbour expansion), 8.4 (bursts).
 1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
 2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
 3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.
