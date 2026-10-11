@@ -68,3 +68,23 @@ async def test_bad_scope_and_date_reach_client_with_message(pg_url):
         await call(server, "search", {"query": "x", "scopes": ["acme"]})
     with pytest.raises(ToolError, match="YYYY-MM-DD"):
         await call(server, "search", {"query": "x", "date_from": "10/09/2026"})
+
+
+def test_mcp_app_wires_the_reranker(pg_url, monkeypatch):
+    """Regression: cmd_mcp once built the server without a reranker (results were all 'fused')."""
+    from kb import mcp_server, rerank
+    from kb.cli import build_mcp_app
+    from kb.config import Config, EmbeddingConfig
+
+    captured: dict[str, object] = {}
+
+    def fake_build_app(get_conn, token, config=None, embedder=None, reranker=None):
+        captured.update(token=token, reranker=reranker, embedder=embedder)
+        return "app"
+
+    monkeypatch.setattr(mcp_server, "build_app", fake_build_app)
+    cfg = Config(embedding=EmbeddingConfig(enabled=False, cache_dir="/nonexistent"))
+    assert build_mcp_app(cfg, pg_url, "tok", preload=False) == "app"
+    assert isinstance(captured["reranker"], rerank.FastReranker)
+    assert captured["reranker"].model_name == "jinaai/jina-reranker-v2-base-multilingual"
+    assert captured["token"] == "tok" and captured["embedder"] is None

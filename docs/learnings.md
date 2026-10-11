@@ -22,3 +22,10 @@ Why: right after a Coolify redeploy the proxy returns an error page; a check tha
 Seen: 2026-10-10 slice 5 commit (`make check | tail -1 && git commit` committed a lint failure)  Count: 1
 Why: a pipeline's exit status is the last command's (`tail`), so the failure is hidden. Redirect to a file,
 check `$?`, or use `set -o pipefail`.
+
+## Scripted text replacements must assert they matched
+Seen: 2026-10-11 slice 8.3 (cmd_mcp never got the reranker), slice 3/8 test edits missed after the
+formatter rewrapped lines (3 times)  Count: 3
+Why: `s.replace(old, new)` silently does nothing when `old` differs by a line break, so a change "applied"
+in a script never reached the file; tests that bypass the entry point (cmd_mcp) did not notice. Assert
+`old in s` before replacing, or use the Edit tool; add a test at the real entry point.

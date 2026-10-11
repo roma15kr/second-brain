@@ -7,9 +7,10 @@ import json
 import logging
 import os
 import time
+from typing import Any
 
 from kb import db, health, idf, indexer, scopes
-from kb.config import ConfigError, TelegramSource, database_url, load_config
+from kb.config import Config, ConfigError, TelegramSource, database_url, load_config
 from kb.connectors import imap
 
 log = logging.getLogger("kb")
@@ -244,18 +245,26 @@ def cmd_index(args: argparse.Namespace) -> None:
             time.sleep(2)
 
 
+def build_mcp_app(config: Config, url: str, token: str, preload: bool = True) -> Any:
+    """The MCP app with everything search uses: embedder and reranker (models load in the
+    background when `preload`)."""
+    from kb import embed, rerank
+    from kb.mcp_server import build_app
+
+    embedder = embed.default_embedder(config)
+    reranker = rerank.default_reranker(config)
+    if preload:
+        if isinstance(embedder, embed.FastEmbedder):
+            embedder.preload()
+        if isinstance(reranker, rerank.FastReranker):
+            reranker.preload()
+    return build_app(lambda: db.connect(url), token, config, embedder, reranker)
+
+
 def cmd_mcp(args: argparse.Namespace) -> None:
     import uvicorn
 
-    from kb import embed
-    from kb.mcp_server import build_app
-
-    url = database_url()
-    config = load_config()
-    embedder = embed.default_embedder(config)
-    if isinstance(embedder, embed.FastEmbedder):
-        embedder.preload()
-    app = build_app(lambda: db.connect(url), os.environ.get("KB_MCP_TOKEN", ""), config, embedder)
+    app = build_mcp_app(load_config(), database_url(), os.environ.get("KB_MCP_TOKEN", ""))
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 

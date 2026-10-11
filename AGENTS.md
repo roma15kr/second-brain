@@ -43,6 +43,7 @@
 - Never commit secrets. Never edit `.env` files.
 - Do not reverse a decision recorded in `docs/decisions/` without asking.
 - If something is unclear, ask instead of guessing.
+- Scripted find/replace edits must assert the target text exists (formatters rewrap lines); test wiring at the real entry point, not only the inner function.
 
 ## Spec-driven workflow (OpenSpec)
 - `openspec/specs/` = source of truth for how the system BEHAVES. Trust it; keep it true.
