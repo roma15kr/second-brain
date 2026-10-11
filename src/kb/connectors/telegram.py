@@ -186,6 +186,9 @@ async def catch_up(
             if on_message(conn, source, chat, msg):
                 stored += 1
         log.info("telegram %s: caught up %s", source.id, chat.title)
+    from kb import health
+
+    health.record_ok(conn, source.id, new=stored, chats=len(entities))
     return stored
 
 

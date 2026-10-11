@@ -8,7 +8,7 @@ import logging
 import os
 import time
 
-from kb import db, indexer, scopes
+from kb import db, health, indexer, scopes
 from kb.config import ConfigError, TelegramSource, database_url, load_config
 from kb.connectors import imap
 
@@ -41,16 +41,32 @@ def cmd_ingest(args: argparse.Namespace) -> None:
                 client = imap.open_client(source)
                 try:
                     with db.connect(database_url()) as conn:
-                        _, backfilling = imap.sync(conn, client, source)
+                        new, backfilling = imap.sync(conn, client, source)
+                        health.record_ok(conn, source.id, new=new, backfilling=backfilling)
                     if backfilling:  # keep going quickly until the backfill is done
                         last_run[source.id] -= source.poll_seconds - 5
                 finally:
                     client.logout()
-            except Exception:
+            except Exception as exc:
                 log.exception("sync failed for %s", source.id)
+                _record_error(source.id, exc)
         if args.once:
             return
         time.sleep(5)
+
+
+def _record_error(source_id: str, exc: BaseException) -> None:
+    try:
+        with db.connect(database_url()) as conn:
+            health.record_error(conn, source_id, f"{type(exc).__name__}: {exc}")
+    except Exception:
+        log.exception("cannot record error for %s", source_id)
+
+
+def cmd_status(_: argparse.Namespace) -> None:
+    config = load_config()
+    with db.connect(database_url()) as conn:
+        print(json.dumps(health.status(conn, config), ensure_ascii=False, indent=2, default=str))
 
 
 def _telegram_source(source_id: str | None) -> TelegramSource:
@@ -78,8 +94,10 @@ def cmd_ingest_telegram(_: argparse.Namespace) -> None:
                 await telegram.run(source, lambda: db.connect(url))
             except ConfigError as exc:
                 log.error("%s; retrying in 60s", exc)
-            except Exception:
+                _record_error(source.id, exc)
+            except Exception as exc:
                 log.exception("telegram %s stopped; restarting in 60s", source.id)
+                _record_error(source.id, exc)
             await asyncio.sleep(60)
 
     async def main() -> None:
@@ -187,7 +205,7 @@ def cmd_mcp(args: argparse.Namespace) -> None:
     from kb.mcp_server import build_app
 
     url = database_url()
-    app = build_app(lambda: db.connect(url), os.environ.get("KB_MCP_TOKEN", ""))
+    app = build_app(lambda: db.connect(url), os.environ.get("KB_MCP_TOKEN", ""), load_config())
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
@@ -240,6 +258,7 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("scope")
         p.set_defaults(func=cmd_scope)
     sc.add_parser("list").set_defaults(func=cmd_scope)
+    sub.add_parser("status", help="sync health, index queue, counts").set_defaults(func=cmd_status)
     p = sub.add_parser("rebuild", help="rebuild search data from the archive")
     p.add_argument("--source", help="only this source id (default: all)")
     p.set_defaults(func=cmd_rebuild)

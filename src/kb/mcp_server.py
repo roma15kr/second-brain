@@ -13,7 +13,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from kb import units
+from kb import health, units
+from kb.config import Config
 from kb.db import Conn
 from kb.search import SearchError, SearchFilters, recent, search
 
@@ -39,7 +40,7 @@ def clear_errors[F: Callable[..., Any]](fn: F) -> F:
     return wrapper  # type: ignore[return-value]
 
 
-def build_server(get_conn: Callable[[], Conn]) -> MCPServer:
+def build_server(get_conn: Callable[[], Conn], config: Config | None = None) -> MCPServer:
     server = MCPServer(name="second-brain", instructions=INSTRUCTIONS)
 
     def run(
@@ -162,6 +163,16 @@ def build_server(get_conn: Callable[[], Conn]) -> MCPServer:
         with get_conn() as conn:
             return [e.to_dict() for e in recent(conn, filters, limit)]
 
+    @server.tool(name="status")
+    @clear_errors
+    def status() -> dict[str, Any]:
+        """Health of the knowledge base: per-source last sync and errors, backfill progress,
+        index queue, item counts. Use when results look stale or incomplete."""
+        if config is None:
+            raise SearchError("status needs the server configuration")
+        with get_conn() as conn:
+            return health.status(conn, config)
+
     return server
 
 
@@ -207,8 +218,8 @@ async def _respond(send: Send, status: int, body: bytes) -> None:
     await send({"type": "http.response.body", "body": body})
 
 
-def build_app(get_conn: Callable[[], Conn], token: str) -> ASGIApp:
-    server = build_server(get_conn)
+def build_app(get_conn: Callable[[], Conn], token: str, config: Config | None = None) -> ASGIApp:
+    server = build_server(get_conn, config)
     # Host-header checks are disabled: access is limited by the private network + bearer token.
     app = server.streamable_http_app(
         stateless_http=True,
