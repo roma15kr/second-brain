@@ -8,7 +8,7 @@ import logging
 import os
 import time
 
-from kb import db, health, indexer, scopes
+from kb import db, health, idf, indexer, scopes
 from kb.config import ConfigError, TelegramSource, database_url, load_config
 from kb.connectors import imap
 
@@ -204,12 +204,19 @@ def cmd_index(args: argparse.Namespace) -> None:
     if client is None:
         log.warning("AI summaries disabled: set llm.enabled: true and OPENAI_API_KEY to enable")
     last_cycle = 0.0
+    last_idf = 0.0
     with db.connect(database_url()) as conn:
         if not indexer.ensure_index_version(conn):
             scopes.ensure_rules_current(conn, config)
         while True:
             if indexer.run_once(conn, config):
                 continue
+            if time.monotonic() - last_idf > 600:
+                last_idf = time.monotonic()
+                try:
+                    idf.refresh(conn)
+                except Exception:
+                    log.exception("idf refresh failed")
             if embedder is not None:
                 try:
                     if embed.run_cycle(conn, config, embedder):
