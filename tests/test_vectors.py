@@ -173,3 +173,30 @@ def test_nan_vectors_are_rejected(conn):
     embed.run_cycle(conn, cfg, NanEmbedder())
     ok = conn.execute("SELECT count(*) AS n FROM items WHERE embedding IS NOT NULL").fetchone()
     assert ok["n"] == 1
+
+
+class CountingEmbedder(TrigramEmbedder):
+    def __init__(self):
+        self.calls = 0
+
+    def passages(self, texts):
+        self.calls += len(texts)
+        return super().passages(texts)
+
+
+def test_rebuild_reuses_cached_embeddings(conn):
+    cfg = make(conn, ["printing invoice attached", "lunch tomorrow"])
+    e = CountingEmbedder()
+    embed.run_cycle(conn, cfg, e)
+    assert e.calls == 2
+    indexer.rebuild(conn)
+    while indexer.run_once(conn, cfg):
+        pass
+    assert (
+        conn.execute("SELECT count(*) AS n FROM items WHERE embedding IS NULL").fetchone()["n"] == 2
+    )
+    assert embed.run_cycle(conn, cfg, e) == 2  # filled from the cache
+    assert e.calls == 2  # no new model calls
+    assert (
+        conn.execute("SELECT count(*) AS n FROM items WHERE embedding IS NULL").fetchone()["n"] == 0
+    )

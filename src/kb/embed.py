@@ -81,9 +81,16 @@ def embed_text(item: dict[str, Any], max_chars: int) -> str:
     return f"{head}\n{item['raw_text'][:room]}"[:max_chars]
 
 
-_KEY_SQL = (
-    "md5(coalesce(content_hash, '') || ':' || coalesce(distilled_key, '') || ':' || %(model)s)"
-)
+def key_sql(alias: str = "") -> str:
+    """SQL for an item's embedding key: content + summary + model (`%(model)s` bound)."""
+    a = f"{alias}." if alias else ""
+    return (
+        f"md5(coalesce({a}content_hash, '') || ':' || coalesce({a}distilled_key, '') "
+        f"|| ':' || %(model)s)"
+    )
+
+
+_KEY_SQL = key_sql()
 
 
 def pending(conn: Conn, cfg: EmbeddingConfig, limit: int) -> list[dict[str, Any]]:
@@ -100,6 +107,23 @@ def pending(conn: Conn, cfg: EmbeddingConfig, limit: int) -> list[dict[str, Any]
     ).fetchall()
 
 
+def reuse_cached(conn: Conn, cfg: EmbeddingConfig) -> int:
+    """Copy cached vectors to items whose current key was embedded before (e.g. after a
+    rebuild). Returns how many items were filled."""
+    k = key_sql("i")
+    rows = conn.execute(
+        f"""
+        UPDATE items i SET embedding = c.embedding, embedded_key = c.key
+        FROM embedding_cache c
+        WHERE NOT i.hidden AND i.kind = ANY(%(kinds)s)
+          AND i.embedded_key IS DISTINCT FROM {k} AND c.key = {k}
+        RETURNING i.id
+        """,
+        {"kinds": list(UNIT_KINDS), "model": cfg.model},
+    ).fetchall()
+    return len(rows)
+
+
 def _valid(vec: Sequence[float], dims: int) -> bool:
     return len(vec) == dims and all(math.isfinite(x) for x in vec)
 
@@ -111,9 +135,10 @@ def run_cycle(conn: Conn, config: Config, embedder: Embedder) -> int:
     from kb import health
 
     cfg = config.embedding
+    reused = reuse_cached(conn, cfg)
     todo = pending(conn, cfg, cfg.per_cycle)
     if not todo:
-        return 0
+        return reused
     texts = [embed_text(it, cfg.max_chars) for it in todo]
     try:
         vecs: list[list[float] | None] = list(embedder.passages(texts))
@@ -129,9 +154,15 @@ def run_cycle(conn: Conn, config: Config, embedder: Embedder) -> int:
     done = 0
     for it, vec in zip(todo, vecs, strict=True):
         if vec is not None and _valid(vec, cfg.dims):
+            lit = vector_literal(vec)
             conn.execute(
                 "UPDATE items SET embedding = %s::vector, embedded_key = %s WHERE id = %s",
-                (vector_literal(vec), it["key"], it["id"]),
+                (lit, it["key"], it["id"]),
+            )
+            conn.execute(
+                "INSERT INTO embedding_cache (key, embedding) VALUES (%s, %s::vector) "
+                "ON CONFLICT DO NOTHING",
+                (it["key"], lit),
             )
             done += 1
         else:
