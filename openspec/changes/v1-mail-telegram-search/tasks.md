@@ -34,9 +34,9 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## 6. Gmail connector and backfill
 
-- [ ] 6.1 Gmail via IMAP extensions (owner decision 2026-10-10, replaces Gmail API/OAuth): auto-discover folders — Gmail reads only the `\All` folder with X-GM-THRID (exact threads) and X-GM-LABELS (labels usable in folder scope rules); other servers read all folders except Junk/Trash/Drafts and configured exclusions; verify with fixtures (Gmail and generic folder lists) and on the real mailbox (sent/archived mail becomes searchable, Gmail threads intact)
-- [ ] 6.2 Backfill for Gmail, IMAP (all non-excluded folders) and Telegram (allowlisted chats) with resumable cursors and rate limiting, running alongside live sync; verify `test_restart_resumes_backfill_cursor`
-- [ ] 6.3 `kb rebuild --source` from archive; verify `test_rebuild_from_archive_makes_no_connector_calls`
+- [x] 6.1 Gmail via IMAP extensions (owner decision 2026-10-10, replaces Gmail API/OAuth): auto-discover folders — Gmail reads only the `\All` folder with X-GM-THRID (exact threads) and X-GM-LABELS (labels usable in folder scope rules); other servers read all folders except Junk/Trash/Drafts and configured exclusions; verify with fixtures (Gmail and generic folder lists) and on the real mailbox (sent/archived mail becomes searchable, Gmail threads intact)
+- [x] 6.2 Backfill for Gmail, IMAP (all non-excluded folders) and Telegram (allowlisted chats) with resumable cursors and rate limiting, running alongside live sync; verify `test_restart_resumes_backfill_cursor`
+- [x] 6.3 `kb rebuild --source` from archive; verify `test_rebuild_from_archive_makes_no_connector_calls`
 
 ## 7. Enrichment
 

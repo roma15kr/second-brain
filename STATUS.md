@@ -23,7 +23,10 @@ _Last updated: 2026-10-10 by Claude_
    deletions survive rebuild), MCP get_item/recent_activity, clear tool errors over HTTP.
    Slice 5 verified 2026-10-10: scope layers, `kb unsorted`, `kb scope archive` (INDEX_VERSION=6).
    Server-side LLM switched to OpenAI (ADR 0005 amendment): gpt-6-luna distill, gpt-6.1-sol digests.
-   Next: owner sets OPENAI_API_KEY in Coolify + monthly spend limit; slice 6 (Gmail API, all folders, rebuild).
+   Slice 6 verified 2026-10-11: Gmail via IMAP extensions (All Mail, X-GM-THRID threads, labels), folder discovery,
+   live+backfill cursors, `kb rebuild`. Live: 604 email threads, 2133 Telegram conversations, sent mail searchable.
+   Pulled forward from 10.1: `kb status` / MCP `status` (sync health, index queue).
+   OPENAI_API_KEY is set in Coolify (rotate later: it was pasted in chat). Next: slice 7 (summaries) or 8.1 (vectors).
 1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
 2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
 3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.
@@ -36,6 +39,8 @@ _Last updated: 2026-10-10 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
+- After an INDEX_VERSION bump, new mail/messages wait behind the full rebuild in the job queue (minutes); `status` shows the queue.
+- Gmail label changes on already-fetched mail are not re-read (no CONDSTORE yet).
 - Search items are units (`email_thread`, `tg_conversation`) built from `messages`; a full rebuild (INDEX_VERSION bump) empties search until the replay catches up (minutes).
 - MCP tools must raise `ToolError` for expected failures; other exceptions reach clients as a generic error.
 - Bumping `INDEX_VERSION` in `src/kb/indexer.py` re-indexes the whole archive on the next `kb index` start.
