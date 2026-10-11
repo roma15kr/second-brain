@@ -188,7 +188,7 @@ def rebuild(conn: Conn, source_id: str | None = None) -> int:
     in archive order, so newer versions of a message are applied last. Returns records queued."""
     where, params = ("", ()) if source_id is None else ("WHERE source_id = %s", (source_id,))
     conn.execute(f"DELETE FROM messages {where}", params)
-    unit_kinds = "kind IN ('email_thread', 'tg_conversation')"
+    unit_kinds = "kind IN ('email_thread', 'tg_conversation', 'passage')"
     item_where = f"WHERE {unit_kinds}" + ("" if source_id is None else " AND source_id = %s")
     conn.execute(f"DELETE FROM items {item_where}", params)
     conn.execute(

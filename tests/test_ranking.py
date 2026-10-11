@@ -103,3 +103,9 @@ def test_collapse_passage_into_unit():
     passage = {"id": 2, "metadata": {"parent_item_id": 1}}
     other = {"id": 3, "metadata": {}}
     assert [r["id"] for r, _ in collapse([(passage, 0.9), (unit, 0.8), (other, 0.5)])] == [2, 3]
+
+
+def test_unseen_tokens_count_as_rare(corpus):
+    idf.refresh(corpus)
+    toks = dict(idf.rare_tokens(corpus, "zyxwvut sounds"))
+    assert "zyxwvut" in toks and "sounds" not in toks

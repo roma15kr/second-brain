@@ -197,7 +197,7 @@ def cmd_cost_estimate(_: argparse.Namespace) -> None:
 
 def cmd_index(args: argparse.Namespace) -> None:
     config = load_config()
-    from kb import distill, embed
+    from kb import distill, embed, passages
 
     client = distill.default_client(config)
     embedder = embed.default_embedder(config)
@@ -217,6 +217,11 @@ def cmd_index(args: argparse.Namespace) -> None:
                     idf.refresh(conn)
                 except Exception:
                     log.exception("idf refresh failed")
+            try:
+                if passages.backfill_cycle(conn):
+                    continue
+            except Exception:
+                log.exception("passage backfill failed")
             if embedder is not None:
                 try:
                     if embed.run_cycle(conn, config, embedder):

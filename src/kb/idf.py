@@ -35,13 +35,14 @@ def rare_tokens(conn: Conn, query: str, min_idf: float = MIN_RARE_IDF) -> list[t
     n = total_docs(conn)
     if n == 0:
         return []
+    # A token never seen in the corpus is as rare as it gets: count it as df = 1.
     rows = conn.execute(
         """
-        SELECT d.token, d.df
+        SELECT q.token, coalesce(d.df, 1) AS df
         FROM unnest(tsvector_to_array(to_tsvector('simple', %s))) AS q(token)
-        JOIN token_df d ON d.token = q.token
+        LEFT JOIN token_df d ON d.token = q.token
         """,
         (query,),
     ).fetchall()
-    out = [(r["token"], math.log(n / r["df"])) for r in rows if r["df"] > 0]
+    out = [(r["token"], math.log(n / max(r["df"], 1))) for r in rows]
     return sorted((t for t in out if t[1] >= min_idf), key=lambda t: -t[1])

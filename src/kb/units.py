@@ -174,8 +174,9 @@ def merge_units(conn: Conn, source_id: str, keep: str, others: list[str]) -> Non
         (keep, source_id, others),
     )
     conn.execute(
-        "DELETE FROM items WHERE source_id = %s AND source_item_key = ANY(%s)",
-        (source_id, others),
+        "DELETE FROM items WHERE source_id = %s AND (source_item_key = ANY(%s) "
+        "OR (kind = 'passage' AND metadata->>'unit_key' = ANY(%s)))",
+        (source_id, others, others),
     )
 
 
@@ -239,8 +240,9 @@ def rebuild(conn: Conn, source_id: str, unit_key: str) -> int | None:
     if not msgs:
         conn.execute(
             "UPDATE items SET hidden = true, updated_at = now() "
-            "WHERE source_id = %s AND source_item_key = %s",
-            (source_id, unit_key),
+            "WHERE source_id = %s AND (source_item_key = %s "
+            "OR (kind = 'passage' AND metadata->>'unit_key' = %s))",
+            (source_id, unit_key, unit_key),
         )
         return None
     first, last = msgs[0], msgs[-1]
@@ -312,6 +314,14 @@ def rebuild(conn: Conn, source_id: str, unit_key: str) -> int | None:
     ).fetchone()
     assert row is not None
     distill.reattach(conn, source_id, unit_key, chash, scopes)
+    from kb import passages
+
+    unit = conn.execute(
+        "SELECT id, source_id, source_item_key, scopes, title, question FROM items WHERE id = %s",
+        (row["id"],),
+    ).fetchone()
+    assert unit is not None
+    passages.build_for_unit(conn, unit)
     return int(row["id"])
 
 

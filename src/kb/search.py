@@ -109,7 +109,7 @@ def recent(conn: Conn, filters: SearchFilters | None = None, limit: int = 20) ->
     if not 1 <= limit <= MAX_LIMIT:
         raise SearchError(f"limit must be between 1 and {MAX_LIMIT}")
     params: dict[str, Any] = {"limit": limit}
-    where = _filter_sql(filters, params)
+    where = [*_filter_sql(filters, params), "kind <> 'passage'"]
     rows = conn.execute(
         f"""
         SELECT id, source_id, kind, scopes, title, participants, occurred_at, last_activity_at,
@@ -273,6 +273,22 @@ def _snippet(row: dict[str, Any], terms: list[str]) -> str | None:
     return None
 
 
+def _as_parent(conn: Conn, row: dict[str, Any]) -> dict[str, Any]:
+    """Report a passage as its conversation, keeping the passage text as the excerpt."""
+    parent_id = (row.get("metadata") or {}).get("parent_item_id")
+    if not parent_id:
+        return row
+    parent = conn.execute(
+        f"SELECT {_COLUMNS} FROM items WHERE id = %s AND NOT hidden",
+        (parent_id,),
+    ).fetchone()
+    if parent is None:
+        return row
+    parent["excerpt"] = row.get("excerpt")
+    parent["metadata"] = {**(parent.get("metadata") or {}), "via_passage": True}
+    return parent
+
+
 def collapse(results: list[tuple[dict[str, Any], float]]) -> list[tuple[dict[str, Any], float]]:
     """One result per conversation: a passage (8.4) counts toward its parent unit."""
     seen: set[Any] = set()
@@ -395,6 +411,7 @@ def search(
     pinned_ids = {r["id"] for r, _ in pinned}
     fused = [(r, sc) for r, sc in collapse(fuse(*lists)) if r["id"] not in pinned_ids]
     ranked = collapse(pinned + rank(fused, query, cfg, reranker, now))[:limit]
+    ranked = [(_as_parent(conn, r), sc) for r, sc in ranked]
     out = []
     for r, score in ranked:
         e = _evidence(r, r["excerpt"], score)
