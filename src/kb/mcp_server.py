@@ -190,7 +190,10 @@ def build_server(
         if config is None:
             raise SearchError("status needs the server configuration")
         with get_conn() as conn:
-            return health.status(conn, config)
+            st = health.status(conn, config)
+        state = getattr(reranker, "state", None)
+        st["reranker"] = state() if callable(state) else {"enabled": reranker is not None}
+        return st
 
     return server
 

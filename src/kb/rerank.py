@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import math
 import threading
@@ -24,6 +25,9 @@ class FastReranker:
         self.model_name, self.cache_dir = model, cache_dir
         self._model: Any = None
         self._lock = threading.Lock()
+        self._loading = False
+        self.load_error: str | None = None
+        self.last_ms: float | None = None
 
     def _get(self) -> Any:
         with self._lock:
@@ -31,17 +35,47 @@ class FastReranker:
                 from fastembed.rerank.cross_encoder import TextCrossEncoder
 
                 log.info("loading reranker %s", self.model_name)
-                self._model = TextCrossEncoder(self.model_name, cache_dir=self.cache_dir)
+                try:
+                    self._model = TextCrossEncoder(self.model_name, cache_dir=self.cache_dir)
+                    self.load_error = None
+                except Exception as exc:
+                    self.load_error = f"{type(exc).__name__}: {exc}"[:500]
+                    log.exception("reranker failed to load")
+                    raise
+                finally:
+                    self._loading = False
             return self._model
 
     def preload(self) -> None:
-        threading.Thread(target=self._get, daemon=True).start()
+        if self._model is not None or self._loading:
+            return
+        self._loading = True
+
+        def load() -> None:
+            with contextlib.suppress(Exception):  # recorded in load_error
+                self._get()
+
+        threading.Thread(target=load, daemon=True).start()
 
     def ready(self) -> bool:
         return self._model is not None
 
+    def state(self) -> dict[str, Any]:
+        return {
+            "model": self.model_name,
+            "ready": self.ready(),
+            "loading": self._loading,
+            "load_error": self.load_error,
+            "last_rerank_ms": self.last_ms,
+        }
+
     def scores(self, query: str, docs: Sequence[str]) -> list[float]:
-        return [float(s) for s in self._get().rerank(query, list(docs))]
+        import time
+
+        t = time.perf_counter()
+        out = [float(s) for s in self._get().rerank(query, list(docs))]
+        self.last_ms = round((time.perf_counter() - t) * 1000, 1)
+        return out
 
 
 def default_reranker(config: Config) -> Reranker | None:
