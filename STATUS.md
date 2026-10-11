@@ -28,7 +28,10 @@ _Last updated: 2026-10-10 by Claude_
    Pulled forward from 10.1: `kb status` / MCP `status` (sync health, index queue).
    OPENAI_API_KEY is set in Coolify (rotate later: it was pasted in chat).
    Slice 7 verified 2026-10-11: AI summaries (gpt-6-luna) live; backfill batch 2596/2596 ok, ~$0.33
-   (3.04M in / 0.71M out tokens). `llm.enabled: true` set in KB_CONFIG_YAML. Next: slice 8 (vectors, RRF, rerank).
+   (3.04M in / 0.71M out tokens). `llm.enabled: true` set in KB_CONFIG_YAML.
+   Slice 8.1 verified 2026-10-11: local multilingual-e5-large (fastembed) + pgvector + RRF; live cross-language
+   queries work, 0.23-0.42 s end to end. One-time embedding backfill runs ~1 item/s (512-token inputs on CPU).
+   Next: 8.2 (rare-term, exact pin, collapse), 8.3 (rerank, age decay), 8.4 (bursts).
 1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
 2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
 3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.
@@ -41,6 +44,8 @@ _Last updated: 2026-10-10 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
+- Embedding cost scales with input length: ~1 unit/s on the server CPU at 2,000 chars; a full re-embed of ~3k units takes ~50 min.
+- Workspace has no `bc`; use `curl -w %{time_total}` for timings.
 - After an INDEX_VERSION bump, new mail/messages wait behind the full rebuild in the job queue (minutes); `status` shows the queue.
 - Gmail label changes on already-fetched mail are not re-read (no CONDSTORE yet).
 - Search items are units (`email_thread`, `tg_conversation`) built from `messages`; a full rebuild (INDEX_VERSION bump) empties search until the replay catches up (minutes).
