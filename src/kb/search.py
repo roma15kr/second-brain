@@ -88,7 +88,13 @@ def _evidence(r: dict[str, Any], excerpt: str, score: float) -> Evidence:
         excerpt=excerpt,
         locator=r["locator"],
         score=score,
-        extra={"message_count": (r.get("metadata") or {}).get("message_count")},
+        summary=r.get("summary"),
+        extra={
+            "message_count": (r.get("metadata") or {}).get("message_count"),
+            "question": r.get("question"),
+            "outcome": r.get("outcome"),
+            "scope_by": (r.get("metadata") or {}).get("scope_by"),
+        },
     )
 
 
@@ -103,7 +109,7 @@ def recent(conn: Conn, filters: SearchFilters | None = None, limit: int = 20) ->
     rows = conn.execute(
         f"""
         SELECT id, source_id, kind, scopes, title, participants, occurred_at, last_activity_at,
-               locator, metadata, right(raw_text, 400) AS tail
+               locator, metadata, summary, question, outcome, right(raw_text, 400) AS tail
         FROM items WHERE {" AND ".join(where)}
         ORDER BY last_activity_at DESC NULLS LAST LIMIT %(limit)s
         """,
@@ -128,7 +134,7 @@ def search(
     rows = conn.execute(
         f"""
         SELECT id, source_id, kind, scopes, title, participants, occurred_at, last_activity_at,
-               locator, metadata, ts_rank_cd(tsv, q) AS score,
+               locator, metadata, summary, question, outcome, ts_rank_cd(tsv, q) AS score,
                ts_headline('simple', raw_text, q,
                            'MaxWords=60, MinWords=20, MaxFragments=2, FragmentDelimiter=" … "')
                    AS excerpt

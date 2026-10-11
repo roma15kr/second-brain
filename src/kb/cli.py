@@ -187,16 +187,40 @@ def cmd_rebuild(args: argparse.Namespace) -> None:
     print(f"queued {n} archived records; the index service rebuilds them (no source is contacted)")
 
 
+def cmd_cost_estimate(_: argparse.Namespace) -> None:
+    from kb import distill
+
+    config = load_config()
+    with db.connect(database_url()) as conn:
+        print(json.dumps(distill.cost_estimate(conn, config), indent=2))
+
+
 def cmd_index(args: argparse.Namespace) -> None:
     config = load_config()
+    from kb import distill
+
+    client = distill.default_client(config)
+    if client is None:
+        log.warning("AI summaries disabled: set llm.enabled: true and OPENAI_API_KEY to enable")
+    last_cycle = 0.0
     with db.connect(database_url()) as conn:
         if not indexer.ensure_index_version(conn):
             scopes.ensure_rules_current(conn, config)
         while True:
-            if not indexer.run_once(conn, config):
-                if args.once:
-                    return
-                time.sleep(2)
+            if indexer.run_once(conn, config):
+                continue
+            if client is not None and time.monotonic() - last_cycle > 30:
+                last_cycle = time.monotonic()
+                try:
+                    stats = distill.run_cycle(conn, config, client)
+                    if any(stats.values()):
+                        log.info("distill: %s", stats)
+                except Exception:
+                    log.exception("distill cycle failed")
+                continue
+            if args.once:
+                return
+            time.sleep(2)
 
 
 def cmd_mcp(args: argparse.Namespace) -> None:
@@ -259,6 +283,9 @@ def main(argv: list[str] | None = None) -> None:
         p.set_defaults(func=cmd_scope)
     sc.add_parser("list").set_defaults(func=cmd_scope)
     sub.add_parser("status", help="sync health, index queue, counts").set_defaults(func=cmd_status)
+    sub.add_parser("cost-estimate", help="dry run: what AI summaries would cost now").set_defaults(
+        func=cmd_cost_estimate
+    )
     p = sub.add_parser("rebuild", help="rebuild search data from the archive")
     p.add_argument("--source", help="only this source id (default: all)")
     p.set_defaults(func=cmd_rebuild)

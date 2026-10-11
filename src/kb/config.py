@@ -123,9 +123,44 @@ class ScopeRule(BaseModel):
             raise ValueError("a scope rule needs exactly one of: address, domain, chat, folder")
 
 
+DEFAULT_SCOPE_DESCRIPTIONS = {
+    "personal": "the owner's private life: family, friends, health, home, personal purchases",
+    "digisoft": "Digisoft, the owner's own company: consulting clients, software projects, "
+    "Shopify dropshipping, its hosting/domains/payments",
+    "quokka": "Quokka, where the owner is CMO: marketplaces, ClickUp tasks, TikTok/Facebook ads, "
+    "analytics",
+    "rdim": "RDIM, where the owner is CMO: heating equipment B2B, its websites, Google/Facebook "
+    "ads, analytics, B2B system",
+}
+
+
+class LlmConfig(BaseModel):
+    """Server-side LLM (ADR 0005 amendment: OpenAI). Disabled when OPENAI_API_KEY is unset."""
+
+    enabled: bool = False  # opt in after checking `kb cost-estimate` / status
+    provider: Literal["openai"] = "openai"
+    distill_model: str = "gpt-6-luna"
+    effort: Literal["none", "minimal", "low", "medium", "high"] = "low"
+    settle_minutes: int = 20  # a conversation is summarized once quiet this long
+    min_chars: int = 80  # shorter conversations are not summarized
+    max_input_chars: int = 24_000  # newest part of long conversations
+    live_per_cycle: int = 20
+    batch_threshold: int = 100  # backlog at least this big goes through the Batch API (-50%)
+    batch_max: int = 5_000
+    daily_token_cap: int = 3_000_000  # per source per day, input + output
+    scope_min_confidence: float = 0.7
+
+    def model(self) -> str:
+        return os.environ.get("KB_DISTILL_MODEL") or self.distill_model
+
+
 class Config(BaseModel):
     sources: list[Source] = Field(default_factory=list)
     scope_rules: list[ScopeRule] = Field(default_factory=list)
+    llm: LlmConfig = Field(default_factory=LlmConfig)
+    scope_descriptions: dict[str, str] = Field(
+        default_factory=lambda: dict(DEFAULT_SCOPE_DESCRIPTIONS)
+    )
 
     @field_validator("sources")
     @classmethod

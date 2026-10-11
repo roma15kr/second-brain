@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn>=0.30",
     "telethon>=1.36",
     "qrcode>=7.4",
+    "openai>=2",
 ]
 
 [project.scripts]

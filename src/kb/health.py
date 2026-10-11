@@ -80,6 +80,16 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
     ).fetchall()
     assert q is not None
     sources = [source_status(conn, s, now) for s in config.sources]
+    from kb import distill
+
+    usage = conn.execute(
+        "SELECT coalesce(sum(requests), 0) AS r, coalesce(sum(input_tokens), 0) AS i, "
+        "coalesce(sum(output_tokens), 0) AS o FROM llm_usage WHERE day = %s",
+        (now.date(),),
+    ).fetchone()
+    inflight = conn.execute(
+        "SELECT count(*) AS n FROM distill_batches WHERE finished_at IS NULL"
+    ).fetchone()
     return {
         "healthy": all(s["healthy"] for s in sources) and q["failed"] == 0,
         "sources": sources,
@@ -90,6 +100,13 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
             "recent_errors": [dict(e) for e in errors],
         },
         "items": {r["kind"]: r["n"] for r in counts},
+        "llm": {
+            "enabled": config.llm.enabled,
+            "model": config.llm.model(),
+            "today": dict(usage) if usage else {},
+            "batches_in_flight": inflight["n"] if inflight else 0,
+            "estimate_for_pending": distill.cost_estimate(conn, config, now),
+        },
         "archive": {
             r["source_id"]: {"records": r["n"], "last_fetched": r["last"].isoformat()}
             for r in archive

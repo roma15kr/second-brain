@@ -277,17 +277,22 @@ def rebuild(conn: Conn, source_id: str, unit_key: str) -> int | None:
         "chat_id": first["chat_id"],
         "topic_id": first["topic_id"],
     }
+    from kb import distill
+
+    text = text[:MAX_UNIT_CHARS]
+    chash = distill.content_hash(title, text)
     row = conn.execute(
         """
         INSERT INTO items (source_id, source_item_key, kind, scopes, title, raw_text,
-                           participants, occurred_at, last_activity_at, locator, metadata)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                           participants, occurred_at, last_activity_at, locator, metadata,
+                           content_hash)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (source_id, source_item_key) DO UPDATE SET
             kind = EXCLUDED.kind, scopes = EXCLUDED.scopes, title = EXCLUDED.title,
             raw_text = EXCLUDED.raw_text, participants = EXCLUDED.participants,
             occurred_at = EXCLUDED.occurred_at, last_activity_at = EXCLUDED.last_activity_at,
             locator = EXCLUDED.locator, metadata = EXCLUDED.metadata, hidden = false,
-            updated_at = now()
+            content_hash = EXCLUDED.content_hash, updated_at = now()
         RETURNING id
         """,
         (
@@ -296,15 +301,17 @@ def rebuild(conn: Conn, source_id: str, unit_key: str) -> int | None:
             "email_thread" if is_email else "tg_conversation",
             scopes,
             title,
-            text[:MAX_UNIT_CHARS],
+            text,
             participants,
             first["sent_at"],
             last["sent_at"],
             first["locator"],
             json.dumps(metadata),
+            chash,
         ),
     ).fetchone()
     assert row is not None
+    distill.reattach(conn, source_id, unit_key, chash, scopes)
     return int(row["id"])
 
 
