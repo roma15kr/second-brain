@@ -23,10 +23,12 @@
   - TypeScript: `npx vitest run src/foo.test.ts -t "test name"` (Jest: `npx jest src/foo.test.ts -t "name"`;
     use `pnpm exec` / `yarn` instead of `npx` if the project uses them)
 - Never skip, weaken or delete a test, and never loosen lint or type settings to make the gate pass.
-- Run the app locally: `<e.g. make dev / composer run dev / npm run dev>`
+- Run the app locally: `uv run kb migrate && uv run kb index` (needs `DATABASE_URL`, `KB_CONFIG_YAML`); production runs on Coolify (`docker-compose.yml`). Health: `kb status`; acceptance: `kb eval eval/questions.yaml --mcp-url …`.
 
 ### Testing traps (add one whenever a test-related mistake happens twice)
-- <e.g. integration tests need `docker compose up -d db` first>
+- Tests use an embedded Postgres (`pgserver`, has pgvector, no pg_trgm/unaccent): no Docker needed.
+- Slow tests (`-m slow`) need the e5 model cache (`KB_MODEL_CACHE`) or `OPENAI_API_KEY`; they skip otherwise.
+- Ruff flags single Cyrillic letters that look Latin (RUF001) in test strings: use whole words, not loosened lint.
 
 ## Tools in this environment
 - Search code with `rg` (ripgrep): fast, respects .gitignore. Prefer it over `grep -r` and `find | xargs grep`.

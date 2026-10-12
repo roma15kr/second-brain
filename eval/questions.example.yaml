@@ -1,0 +1,24 @@
+# Acceptance questions: real things you would ask, with where the answer is.
+# Copy to eval/questions.yaml and replace with your own ~30 questions (uk/ru/en mix).
+# expect: any one of title_contains / text_contains / locator_contains / item_id counts as found.
+# Run against the live server:  KB_MCP_TOKEN=… kb eval eval/questions.yaml --mcp-url https://…/mcp
+
+- q: "Тестовое письмо"
+  expect: {title_contains: "Тестовое письмо"}
+  note: "Gmail digisoft, test mail from roma15kr@gmail.com, 2026-10-11"
+
+- q: "Woodmart update"
+  expect: {title_contains: "WoodMart"}
+  note: "Envato ThemeForest update notice"
+
+- q: "AppsFlyer интеграция"
+  expect: {text_contains: "AppsFlyer"}
+  note: "Telegram -=StressOFF Dev=-"
+
+- q: "who asked to fix email forwarding via SMTP"
+  expect: {text_contains: "SMTP"}
+  note: "Telegram, Вячеслав Никонов, Mirohost SMTP forwarding"
+
+- q: "знижка на рекламу TikTok"
+  expect: {title_contains: "Gifts from TikTok ads"}
+  note: "TikTok welcome offer for a new ad account (Digisoft)"

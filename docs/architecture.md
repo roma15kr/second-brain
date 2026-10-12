@@ -17,23 +17,30 @@ Scope assignment: rules (mail account, sender domain, label, Telegram chat → s
 LLM fallback with confidence, low confidence → `unsorted` for review ([ADR 0007](decisions/0007-scopes-and-people.md)).
 Ended contracts: scope switched to archived/read-only — sync stops, data stays searchable.
 
-## Modules (planned; Python core, Swift macOS app)
-| Module | Path | Responsibility |
-|--------|------|----------------|
-| core | `src/kb/core/` | Shared schema, config, scope rules, secret redaction |
-| raw archive | `src/kb/archive/` | Append-only store of fetched payloads per source (lossless, re-processable) |
-| connectors | `src/kb/connectors/<source>/` | One plugin per source: fetch, cursor/sync state, emit raw records |
-| distill | `src/kb/distill/` | Thread/segment building, LLM distillation, burst gating |
-| embed | `src/kb/embed/` | Local multilingual embeddings (bge-m3 class) on CPU |
-| retrieval | `src/kb/retrieval/` | FTS, vector, IDF, age decay, RRF fusion, rerank, context expansion |
-| people | `src/kb/people/` | Person registry: identities per channel, matching, merge |
-| metrics | `src/kb/metrics/` | Typed tables for ads/analytics/commerce, read-only SQL views |
-| mcp | `src/kb/mcp/` | MCP server exposing retrieval primitives |
-| bot | `src/kb/bot/` | Telegram bot: questions, digests, standups, link capture → Karakeep |
-| ops registry | `src/kb/ops/` | Servers, domains (RDAP expiry), TLS certs, subscriptions from receipts, vault metadata pointers |
-| automations | `src/kb/automations/` | Scheduled jobs: digest, follow-ups, meeting prep, CMO standups, weekly report |
-| meeting app | `apps/meeting-mac/` | macOS recorder + live transcript + live KB assistant |
-| vault exporter | `apps/vault-push-mac/` | launchd job: `bw` CLI → vault metadata + local hygiene findings pushed to KB (no secrets) |
+## Modules
+Built in v1 (`v1-mail-telegram-search`), one Python package `kb` (`src/kb/`):
+
+| Module | Responsibility |
+|--------|----------------|
+| `config.py` | YAML config (`KB_CONFIG_YAML`) + env secrets: sources, scope rules, LLM, embedding, search |
+| `db.py`, `migrations/` | Connections, numbered SQL migrations under an advisory lock |
+| `archive.py`, `jobs.py` | Lossless append-only raw archive; Postgres job queue (SKIP LOCKED) |
+| `connectors/imap.py` | IMAP; Gmail via `\All` + X-GM-THRID/labels; live + backfill cursors; read-only |
+| `connectors/telegram.py`, `telegram_auth.py` | Telethon user client, read-only, allowlist; QR/code login |
+| `email_parse.py`, `redact.py` | MIME parsing; hard-secret redaction before anything is stored for search |
+| `indexer.py`, `units.py` | Raw → messages → conversation units (email threads, Telegram conversations); `INDEX_VERSION` rebuilds |
+| `scopes.py` | Scope layers (review rules, config rules, chat, source, classifier), unsorted review, archived scopes |
+| `people.py` | Identities (email, Telegram id/username, phone) → people; merge/split/link |
+| `distill.py` | OpenAI summaries (live + Batch API), cache, daily caps, cost estimate |
+| `embed.py`, `rerank.py` | Local e5-large embeddings + cache; local jina multilingual reranker |
+| `idf.py`, `passages.py` | Token rarity; key passages inside long conversations |
+| `search.py` | Exact pinning, full-text, rare-term, vector, RRF, rerank, recency tie-break, context, deep links |
+| `mcp_server.py` | MCP tools: search, search_mail, search_chats, get_item, recent_activity, person, status; token + lockout |
+| `health.py`, `evaluate.py`, `cli.py` | Status (sources, queue, LLM, embeddings, backups), acceptance eval, `kb` CLI |
+| `docker/backup.sh` | Daily pg_dump + automatic restore test → `backup_checks` |
+
+Planned (later changes): metrics warehouse, Telegram bot, automations (digest, follow-ups, CMO
+standups, meeting prep), ops registry, vault metadata push, macOS meeting assistant.
 
 ## Data model (core)
 - `raw_records` — source, scope[], external id, fetched_at, payload (JSON/blob ref), content hash.
@@ -83,9 +90,9 @@ Passwords live in a self-hosted Vaultwarden (Coolify, Tailscale only), never in 
 receives vault metadata pushed from the Mac; see [ADR 0013](decisions/0013-password-vault-and-ops-registry.md).
 
 ## Deployment
-Coolify on a dedicated CPU server (8–16 cores, 64 GB RAM, no GPU), one Docker Compose app:
-Postgres 16+ with pgvector, worker(s), scheduler, MCP server, Telegram bot. Only the MCP/API service
-has a domain; Coolify dashboard, MCP and the Mac app reach the server over Tailscale. Secrets as
+Coolify on a dedicated CPU server (ns31426159), one Docker Compose app: postgres (pgvector), ingest,
+telegram, index, mcp, backup. Only the MCP service has a domain (public HTTPS + bearer token with
+lockout, ADR 0009 amendment); all other services have no ports. Secrets as
 Coolify env vars; Telegram session on its own volume. Backups: Coolify Postgres backups to S3 +
 restic for the raw archive. See [ADR 0009](decisions/0009-deployment-coolify-private.md).
 

@@ -206,6 +206,38 @@ def cmd_people(args: argparse.Namespace) -> None:
             print("linked" + (f" (merged; undo with: kb people split {linked})" if linked else ""))
 
 
+def cmd_eval(args: argparse.Namespace) -> None:
+    """Run acceptance questions; against a live MCP server with --mcp-url (full pipeline)."""
+    from kb import evaluate
+
+    cases = evaluate.load(args.file)
+    if args.mcp_url:
+        token = os.environ.get(args.token_env, "")
+        if not token:
+            raise ConfigError(f"set {args.token_env} to the MCP bearer token")
+        search_fn = evaluate.mcp_search(args.mcp_url, token)
+    else:
+        from kb import embed, rerank
+        from kb.search import search
+
+        config = load_config()
+        embedder = embed.default_embedder(config)
+        reranker = rerank.default_reranker(config)
+        url = database_url()
+
+        def search_fn(q: str, k: int) -> list[dict[str, Any]]:
+            with db.connect(url) as conn:
+                hits = search(
+                    conn, q, limit=k, embedder=embedder, reranker=reranker, settings=config.search
+                )
+            return [h.to_dict() for h in hits]
+
+    result = evaluate.report(evaluate.run(cases, search_fn, args.k), args.k)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if args.min_recall is not None and (result[f"recall@{args.k}"] or 0) < args.min_recall:
+        raise SystemExit(f"recall@{args.k} below {args.min_recall}")
+
+
 def cmd_rebuild(args: argparse.Namespace) -> None:
     with db.connect(database_url()) as conn:
         n = indexer.rebuild(conn, args.source)
@@ -361,6 +393,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("person")
     p.add_argument("identity")
     p.set_defaults(func=cmd_people)
+    p = sub.add_parser("eval", help="acceptance questions: recall@k, MRR, latency, misses")
+    p.add_argument("file", help="YAML question file (see eval/questions.example.yaml)")
+    p.add_argument("--k", type=int, default=10)
+    p.add_argument("--mcp-url", help="evaluate a live server, e.g. https://…/mcp")
+    p.add_argument("--token-env", default="KB_MCP_TOKEN")
+    p.add_argument("--min-recall", type=float, help="exit non-zero below this recall@k")
+    p.set_defaults(func=cmd_eval)
     p = sub.add_parser("rebuild", help="rebuild search data from the archive")
     p.add_argument("--source", help="only this source id (default: all)")
     p.set_defaults(func=cmd_rebuild)

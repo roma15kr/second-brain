@@ -9,7 +9,7 @@ from kb.connectors import imap
 from kb.mcp_server import BearerAuth, build_app, build_server
 from tests.fakes import FakeImap, call, make_email
 
-TOKEN = "test-token"
+TOKEN = "t" * 40
 
 
 async def _ok_app(scope, receive, send):
@@ -88,3 +88,34 @@ def test_mcp_app_wires_the_reranker(pg_url, monkeypatch):
     assert isinstance(captured["reranker"], rerank.FastReranker)
     assert captured["reranker"].model_name == "jinaai/jina-reranker-v2-base-multilingual"
     assert captured["token"] == "tok" and captured["embedder"] is None
+
+
+async def test_lockout_after_repeated_wrong_tokens_and_request_cap():
+    from kb.mcp_server import RateLimiter
+
+    now = [0.0]
+    limiter = RateLimiter(max_failures=3, failure_window=600, max_requests=5, request_window=60)
+    app = BearerAuth(_ok_app, TOKEN, limiter, clock=lambda: now[0])
+    transport = httpx.ASGITransport(app=app)
+    attacker = {"X-Forwarded-For": "203.0.113.9"}
+    me = {"X-Forwarded-For": "198.51.100.1", "Authorization": f"Bearer {TOKEN}"}
+    async with httpx.AsyncClient(transport=transport, base_url="http://kb") as client:
+        for _ in range(3):
+            assert (
+                await client.post("/mcp", headers={**attacker, "Authorization": "Bearer x"})
+            ).status_code == 401
+        # locked out now, even with the right token
+        locked = await client.post("/mcp", headers={**attacker, "Authorization": f"Bearer {TOKEN}"})
+        assert locked.status_code == 429
+        # other clients are unaffected, up to the request cap
+        codes = [(await client.post("/mcp", headers=me)).status_code for _ in range(6)]
+        assert codes == [200] * 5 + [429]
+        now[0] += 601  # windows expire
+        assert (
+            await client.post("/mcp", headers={**attacker, "Authorization": f"Bearer {TOKEN}"})
+        ).status_code == 200
+
+
+def test_short_tokens_are_refused():
+    with pytest.raises(ValueError, match="at least 32"):
+        BearerAuth(_ok_app, "short-token")

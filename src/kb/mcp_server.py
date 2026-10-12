@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import functools
 import hmac
+import time
+from collections import defaultdict, deque
 from collections.abc import Callable
 from datetime import date
 from typing import Any
@@ -231,23 +233,85 @@ def _iso(value: Any) -> str | None:
     return value.isoformat() if value is not None else None
 
 
-class BearerAuth:
-    """Rejects any HTTP request without the expected bearer token."""
+class RateLimiter:
+    """Sliding-window counters per client: failed logins and requests."""
 
-    def __init__(self, app: ASGIApp, token: str) -> None:
+    def __init__(
+        self, max_failures: int, failure_window: float, max_requests: int, request_window: float
+    ) -> None:
+        self.max_failures, self.failure_window = max_failures, failure_window
+        self.max_requests, self.request_window = max_requests, request_window
+        self.failures: dict[str, deque[float]] = defaultdict(deque)
+        self.requests: dict[str, deque[float]] = defaultdict(deque)
+
+    @staticmethod
+    def _trim(q: deque[float], now: float, window: float) -> int:
+        while q and now - q[0] > window:
+            q.popleft()
+        return len(q)
+
+    def locked(self, client: str, now: float) -> bool:
+        return self._trim(self.failures[client], now, self.failure_window) >= self.max_failures
+
+    def failed(self, client: str, now: float) -> None:
+        self.failures[client].append(now)
+
+    def allow_request(self, client: str, now: float) -> bool:
+        q = self.requests[client]
+        if self._trim(q, now, self.request_window) >= self.max_requests:
+            return False
+        q.append(now)
+        return True
+
+
+def client_ip(scope: Scope) -> str:
+    """Behind Coolify's proxy the real client is the first X-Forwarded-For address."""
+    headers = dict(scope.get("headers") or [])
+    forwarded = headers.get(b"x-forwarded-for", b"").decode(errors="ignore")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    client = scope.get("client")
+    return str(client[0]) if client else "unknown"
+
+
+class BearerAuth:
+    """Bearer token on every request (ADR 0009 amendment: public HTTPS + token), with lockout
+    after repeated wrong tokens and a per-client request cap."""
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        token: str,
+        limiter: RateLimiter | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         if not token:
             raise ValueError("KB_MCP_TOKEN must be set")
+        if len(token) < 32:
+            raise ValueError("KB_MCP_TOKEN must be at least 32 characters")
         self.app = app
         self.expected = f"Bearer {token}".encode()
+        self.limiter = limiter or RateLimiter(
+            max_failures=10, failure_window=600, max_requests=120, request_window=60
+        )
+        self.clock = clock
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http":
             if scope.get("path") == "/health":
                 await _respond(send, 200, b"ok")
                 return
+            ip, now = client_ip(scope), self.clock()
+            if self.limiter.locked(ip, now):
+                await _respond(send, 429, b"too many failed attempts; try later")
+                return
             supplied = dict(scope.get("headers") or []).get(b"authorization", b"")
             if not hmac.compare_digest(supplied, self.expected):
+                self.limiter.failed(ip, now)
                 await _respond(send, 401, b"unauthorized")
+                return
+            if not self.limiter.allow_request(ip, now):
+                await _respond(send, 429, b"rate limit exceeded")
                 return
         await self.app(scope, receive, send)
 

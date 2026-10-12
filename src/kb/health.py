@@ -91,6 +91,9 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
         "SELECT count(*) FILTER (WHERE embedding IS NOT NULL) AS done, "
         "count(*) FILTER (WHERE embedding IS NULL) AS missing FROM items WHERE NOT hidden"
     ).fetchone()
+    backup = conn.execute(
+        "SELECT status, detail, created_at FROM backup_checks ORDER BY id DESC LIMIT 1"
+    ).fetchone()
     inflight = conn.execute(
         "SELECT count(*) AS n FROM distill_batches WHERE finished_at IS NULL"
     ).fetchone()
@@ -104,6 +107,12 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
             "recent_errors": [dict(e) for e in errors],
         },
         "items": {r["kind"]: r["n"] for r in counts},
+        "backup": {
+            "last_status": backup["status"] if backup else None,
+            "last_at": backup["created_at"].isoformat() if backup else None,
+            "detail": backup["detail"] if backup else None,
+            "stale": backup is None or (now - backup["created_at"]).total_seconds() > 2 * 86400,
+        },
         "embeddings": {
             "enabled": config.embedding.enabled,
             "model": config.embedding.model,
