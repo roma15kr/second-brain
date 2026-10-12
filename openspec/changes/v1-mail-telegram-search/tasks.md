@@ -57,10 +57,10 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## 10. Operations and acceptance
 
-- [ ] 10.1 Sync health (`kb status` + health in logs; unhealthy after 3× interval or auth failure); verify the expired-credentials scenario with a revoked fixture token
-- [ ] 10.2 Deploy on Coolify per ADR 0009 amendment (owner chose public HTTPS + token): token >= 32 chars, lockout after repeated wrong tokens, per-client request cap; daily pg_dump with an automatic restore test recorded in backup_checks and shown in status; verify lockout/429 live, a backup restores with matching row counts, and status shows the backup
+- [x] 10.1 Sync health (`kb status` + health in logs; unhealthy after 3× interval or auth failure); verify the expired-credentials scenario with a revoked fixture token
+- [x] 10.2 Deploy on Coolify per ADR 0009 amendment (owner chose public HTTPS + token): token >= 32 chars, lockout after repeated wrong tokens, per-client request cap; daily pg_dump with an automatic restore test recorded in backup_checks and shown in status; verify lockout/429 live, a backup restores with matching row counts, and status shows the backup
 - [ ] 10.3 Owner writes `eval/questions.yaml` (30 real questions + expected items); `kb eval` reports recall@10 and latency; verify recall@10 ≥ 0.8 and p50 ≤ 3 s on production data after backfill (tune gap/decay/thresholds if not)
-- [ ] 10.4 Update `docs/architecture.md` (actual modules), `AGENTS.md` (run/test commands, testing traps) and `STATUS.md` (done, next steps, gotchas); verify `openspec validate --all` passes
+- [x] 10.4 Update `docs/architecture.md` (actual modules), `AGENTS.md` (run/test commands, testing traps) and `STATUS.md` (done, next steps, gotchas); verify `openspec validate --all` passes
 
 ## Workflow follow-up
 

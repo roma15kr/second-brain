@@ -2,46 +2,26 @@
 _Last updated: 2026-10-10 by Claude_
 
 ## Current focus
-- Applying `v1-mail-telegram-search`: slice 1 (IMAP → lexical search → MCP) built and deployed to Coolify.
-- Test deployment: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg) on ns31426159, branch `kb-design-v1-plan`;
-  MCP at https://kb.141-94-30-173.sslip.io/mcp (bearer token = Coolify `SERVICE_PASSWORD_64_MCPTOKEN`);
-  registered in Claude Code (user scope) as `second-brain`.
-- Active OpenSpec change: `openspec/changes/v1-mail-telegram-search/`
+- `v1-mail-telegram-search`: 29/30 tasks done. Remaining: **10.3 acceptance** — owner writes ~30 real
+  questions in `eval/questions.yaml` (format: `eval/questions.example.yaml`), then
+  `KB_MCP_TOKEN=… kb eval eval/questions.yaml --mcp-url https://kb.141-94-30-173.sslip.io/mcp --min-recall 0.8`.
+- Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), ns31426159, branch `kb-design-v1-plan`.
+  MCP `https://kb.141-94-30-173.sslip.io/mcp` (public HTTPS + token + lockout, ADR 0009 amendment).
 
-## Done recently
-- AI project template installed (`ai-init`).
-- Design grilling based on the Cerebras knowledge-base article: `docs/research/cerebras-knowledge-base.md`.
-- Architecture in `docs/architecture.md`; decisions in ADRs 0004–0012; roadmap in `docs/product/roadmap.md`.
+## Done recently (2026-10-10 … 10-12)
+- Slices 1–9 verified live: Gmail (IMAP extensions) + 12 Telegram chats; redaction; threads/conversations;
+  scopes; AI summaries (OpenAI gpt-6-luna, ~$0.33 backfill); local e5 embeddings + pgvector; IDF rare terms;
+  exact pinning; jina reranker; passages; people directory; caches make rebuilds free (26 min, no re-embed).
+- Ops: `kb status` / MCP `status` (sources, queue, LLM, embeddings, reranker, backups, DB size);
+  daily backup with automatic restore test (first: 82 MB dump, counts match); MCP lockout verified live.
+- Example eval (5 questions, live): recall@10 1.0, recall@1 0.8, MRR 0.9, p50 1.5 s.
 
 ## Next steps
-1. Slice 1 verified 2026-10-10: digisoftou@gmail.com INBOX (scope digisoft) ingested on Coolify and found via MCP search.
-   Slice 2 verified 2026-10-10: Telegram (owner's account, QR login, 12 allowlisted chats in KB_CONFIG_YAML) — live message
-   searchable, edit replaced text, delete hid it.
-   Slice 3 verified 2026-10-10: secret redaction live (INDEX_VERSION=4 re-indexed the archive); known OTPs and
-   passwords found in real data no longer appear in search.
-   Slice 4 verified 2026-10-10: email threads + Telegram conversations as search units (INDEX_VERSION=5 rebuild,
-   deletions survive rebuild), MCP get_item/recent_activity, clear tool errors over HTTP.
-   Slice 5 verified 2026-10-10: scope layers, `kb unsorted`, `kb scope archive` (INDEX_VERSION=6).
-   Server-side LLM switched to OpenAI (ADR 0005 amendment): gpt-6-luna distill, gpt-6.1-sol digests.
-   Slice 6 verified 2026-10-11: Gmail via IMAP extensions (All Mail, X-GM-THRID threads, labels), folder discovery,
-   live+backfill cursors, `kb rebuild`. Live: 604 email threads, 2133 Telegram conversations, sent mail searchable.
-   Pulled forward from 10.1: `kb status` / MCP `status` (sync health, index queue).
-   OPENAI_API_KEY is set in Coolify (rotate later: it was pasted in chat).
-   Slice 7 verified 2026-10-11: AI summaries (gpt-6-luna) live; backfill batch 2596/2596 ok, ~$0.33
-   (3.04M in / 0.71M out tokens). `llm.enabled: true` set in KB_CONFIG_YAML.
-   Slice 8.1 verified 2026-10-11: local multilingual-e5-large (fastembed) + pgvector + RRF; live cross-language
-   queries work, 0.23-0.42 s end to end. One-time embedding backfill runs ~1 item/s (512-token inputs on CPU).
-   Slice 8.2 verified 2026-10-11: IDF rare-term retrieval, exact pinning (emails/ids/domains/codes), collapse;
-   embeddings complete (2740/2740). Exact-match queries ~1 s (ILIKE scan; add pg_trgm index if it grows).
-   Slices 8.3/8.4 verified 2026-10-11: jina multilingual reranker live (top-1 4/5, top-3 5/5 on spot
-   checks; 1.5-2.2 s per search), recency tie-break, matched-message context, Gmail/t.me deep links,
-   1,249 passages. Embedding + summary caches make rebuilds free.
-   Slice 9 verified 2026-10-12: people directory (exact-match identity linking, merge/split/link, person
-   tool + person filter); full rebuild 26 min with all 3,992 vectors from cache. Next: slice 10.
-1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
-2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
-3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.
-4. Owner adds reserve (off-site) storage: different provider/region; receives nightly encrypted Vaultwarden export and Postgres backups; credentials + export passphrase go in the printed emergency kit; do one test restore (ADR 0013).
+1. Owner: 30 evaluation questions → run `kb eval` → tune if recall@10 < 0.8 (task 10.3), then archive the change.
+2. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key); optionally rotate MCP token.
+3. Owner: add reserve storage → off-site copy of `/backups` (backup service) + Vaultwarden export (ADR 0013).
+4. Merge `kb-design-v1-plan` into `main` (owner), point Coolify at `main`.
+5. Next changes (roadmap): ClickUp/Karakeep/Calendar, metrics warehouse, Telegram bot + automations, meeting app.
 
 ## Open questions
 - Telegram segmentation by silence gap vs topic shift (design: least confident #1).
