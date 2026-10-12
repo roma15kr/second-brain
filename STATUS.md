@@ -35,7 +35,9 @@ _Last updated: 2026-10-10 by Claude_
    embeddings complete (2740/2740). Exact-match queries ~1 s (ILIKE scan; add pg_trgm index if it grows).
    Slices 8.3/8.4 verified 2026-10-11: jina multilingual reranker live (top-1 4/5, top-3 5/5 on spot
    checks; 1.5-2.2 s per search), recency tie-break, matched-message context, Gmail/t.me deep links,
-   1,249 passages. Embedding + summary caches make rebuilds free. Next: slice 9 (people), 10 (ops, eval).
+   1,249 passages. Embedding + summary caches make rebuilds free.
+   Slice 9 verified 2026-10-12: people directory (exact-match identity linking, merge/split/link, person
+   tool + person filter); full rebuild 26 min with all 3,992 vectors from cache. Next: slice 10.
 1a. Owner regenerates the Gmail app password (the current one was pasted into a chat session) and enters it directly in Coolify.
 2. Owner rotates the Coolify API token (part of it leaked into a session log on 2026-10-10).
 3. Start collecting 30 real evaluation questions for `eval/questions.yaml`.

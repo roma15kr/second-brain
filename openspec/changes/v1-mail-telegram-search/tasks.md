@@ -52,8 +52,8 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## 9. People directory
 
-- [ ] 9.1 `migrations/0003_people.sql`; create people from correspondents, auto-link on exact email/phone only; person filter in search; verify `test_link_identities_exact_email_phone_not_name`
-- [ ] 9.2 `kb people merge|split|show` and the `person` MCP tool; verify `test_merge_then_split_restores` and a merged person filter returning both channels
+- [x] 9.1 `migrations/0003_people.sql`; create people from correspondents, auto-link on exact email/phone only; person filter in search; verify `test_link_identities_exact_email_phone_not_name`
+- [x] 9.2 `kb people merge|split|show` and the `person` MCP tool; verify `test_merge_then_split_restores` and a merged person filter returning both channels
 
 ## 10. Operations and acceptance
 
