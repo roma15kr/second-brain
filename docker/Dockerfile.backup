@@ -1,0 +1,3 @@
+FROM pgvector/pgvector:pg16
+COPY docker/backup.sh /backup.sh
+ENTRYPOINT ["sh", "/backup.sh"]

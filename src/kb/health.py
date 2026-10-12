@@ -91,6 +91,7 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
         "SELECT count(*) FILTER (WHERE embedding IS NOT NULL) AS done, "
         "count(*) FILTER (WHERE embedding IS NULL) AS missing FROM items WHERE NOT hidden"
     ).fetchone()
+    size = conn.execute("SELECT pg_database_size(current_database()) AS b").fetchone()
     backup = conn.execute(
         "SELECT status, detail, created_at FROM backup_checks ORDER BY id DESC LIMIT 1"
     ).fetchone()
@@ -107,6 +108,7 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
             "recent_errors": [dict(e) for e in errors],
         },
         "items": {r["kind"]: r["n"] for r in counts},
+        "database_mb": round(size["b"] / 1e6) if size else None,
         "backup": {
             "last_status": backup["status"] if backup else None,
             "last_at": backup["created_at"].isoformat() if backup else None,

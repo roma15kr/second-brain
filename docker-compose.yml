@@ -33,7 +33,9 @@ services:
       retries: 20
 
   backup:
-    image: pgvector/pgvector:pg16
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backup
     restart: unless-stopped
     depends_on:
       postgres:
@@ -43,8 +45,6 @@ services:
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
     volumes:
       - kb-backups:/backups
-      - ./docker/backup.sh:/backup.sh:ro
-    entrypoint: ["sh", "/backup.sh"]
 
   ingest:
     <<: *kb

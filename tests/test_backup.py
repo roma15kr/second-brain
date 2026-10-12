@@ -34,6 +34,8 @@ def test_backup_script_dumps_restores_and_records(conn, pg_url, tmp_path):
     assert run.returncode == 0, run.stderr[-2000:]
     dumps = list(tmp_path.glob("kb-*.dump"))
     assert len(dumps) == 1 and dumps[0].stat().st_size > 0
+    statuses = [r["status"] for r in conn.execute("SELECT status FROM backup_checks ORDER BY id")]
+    assert statuses == ["running", "ok"]
     row = conn.execute("SELECT * FROM backup_checks ORDER BY id DESC LIMIT 1").fetchone()
     assert row["status"] == "ok", row["detail"]
     assert "raw_records=1" in row["detail"]

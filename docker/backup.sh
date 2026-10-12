@@ -27,6 +27,7 @@ until pg_isready -q; do sleep 5; done
 while true; do
   STAMP=$(date -u +%Y%m%dT%H%M%SZ)
   FILE="$DIR/kb-$STAMP.dump"
+  record running "$FILE" "started"
   BEFORE=$(counts "$DB")
   if pg_dump -Fc -f "$FILE.tmp" && mv "$FILE.tmp" "$FILE"; then
     dropdb --if-exists kb_restore_check && createdb kb_restore_check \
