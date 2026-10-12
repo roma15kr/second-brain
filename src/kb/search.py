@@ -26,6 +26,7 @@ class SearchFilters:
     scopes: list[str] | None = None
     sources: list[str] | None = None
     kinds: list[str] | None = None
+    person_keys: list[str] | None = None  # identity keys of one person (see kb.people)
     date_from: date | None = None
     date_to: date | None = None
 
@@ -70,6 +71,10 @@ def _filter_sql(filters: SearchFilters, params: dict[str, Any]) -> list[str]:
     if filters.kinds:
         where.append("kind = ANY(%(kinds)s)")
         params["kinds"] = filters.kinds
+    if filters.person_keys is not None:
+        # passages carry no identities; their conversation is matched instead
+        where.append("identity_keys && %(person_keys)s")
+        params["person_keys"] = filters.person_keys
     if filters.date_from:
         where.append("last_activity_at >= %(date_from)s")
         params["date_from"] = filters.date_from

@@ -13,7 +13,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from kb import health, units
+from kb import health, people, units
 from kb.config import Config
 from kb.db import Conn
 from kb.search import SearchError, SearchFilters, recent, search
@@ -33,7 +33,7 @@ def clear_errors[F: Callable[..., Any]](fn: F) -> F:
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
             return fn(*args, **kwargs)
-        except SearchError as exc:
+        except (SearchError, people.PeopleError) as exc:
             raise ToolError(str(exc)) from None
         except ValueError as exc:  # e.g. date.fromisoformat
             raise ToolError(f"invalid argument: {exc}; dates use YYYY-MM-DD") from None
@@ -57,6 +57,7 @@ def build_server(
         date_from: str | None,
         date_to: str | None,
         limit: int,
+        person: str | None = None,
     ) -> list[dict[str, Any]]:
         filters = SearchFilters(
             scopes=scopes,
@@ -66,6 +67,8 @@ def build_server(
             date_to=date.fromisoformat(date_to) if date_to else None,
         )
         with get_conn() as conn:
+            if person:
+                filters.person_keys = people.keys_of(conn, people.resolve(conn, person))
             hits = search(
                 conn,
                 query,
@@ -86,10 +89,12 @@ def build_server(
         date_from: str | None = None,
         date_to: str | None = None,
         limit: int = 10,
+        person: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Search everything (mail and Telegram). Exact words, names, ids and phrases work best
-        for now. Optional filters: scopes, source ids, date_from/date_to (YYYY-MM-DD)."""
-        return run(query, None, scopes, sources, date_from, date_to, limit)
+        """Search everything (mail and Telegram) by words or meaning, in uk/ru/en. Optional
+        filters: scopes, source ids, date_from/date_to (YYYY-MM-DD), person (id or name — only
+        conversations involving that person; see the `person` tool)."""
+        return run(query, None, scopes, sources, date_from, date_to, limit, person)
 
     @server.tool(name="search_mail")
     @clear_errors
@@ -99,9 +104,10 @@ def build_server(
         date_from: str | None = None,
         date_to: str | None = None,
         limit: int = 10,
+        person: str | None = None,
     ) -> list[dict[str, Any]]:
         """Search email threads only. Same filters as `search`."""
-        return run(query, ["email_thread"], scopes, None, date_from, date_to, limit)
+        return run(query, ["email_thread"], scopes, None, date_from, date_to, limit, person)
 
     @server.tool(name="search_chats")
     @clear_errors
@@ -111,10 +117,10 @@ def build_server(
         date_from: str | None = None,
         date_to: str | None = None,
         limit: int = 10,
+        person: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Search Telegram conversations only (allowlisted chats). Each result is one conversation;
-        its locator links to the first message in Telegram when possible."""
-        return run(query, ["tg_conversation"], scopes, None, date_from, date_to, limit)
+        """Search Telegram conversations only (allowlisted chats). Same filters as `search`."""
+        return run(query, ["tg_conversation"], scopes, None, date_from, date_to, limit, person)
 
     @server.tool(name="get_item")
     @clear_errors
@@ -181,6 +187,26 @@ def build_server(
         )
         with get_conn() as conn:
             return [e.to_dict() for e in recent(conn, filters, limit)]
+
+    @server.tool(name="person")
+    @clear_errors
+    def person(name_or_id: str) -> dict[str, Any]:
+        """Look up a person across email and Telegram: names, identities (emails, Telegram
+        accounts, phones), scopes, first/last interaction and recent conversations. A name that
+        matches several people returns {"candidates": [...]} to choose from (call again by id)."""
+        with get_conn() as conn:
+            if not name_or_id.strip().isdigit():
+                found = people.find(conn, name_or_id)
+                if not found:
+                    raise people.PeopleError(f"no person matches {name_or_id!r}")
+                if len(found) > 1:
+                    return {
+                        "candidates": [
+                            {"person_id": p["id"], "name": p["display_name"]} for p in found
+                        ]
+                    }
+                return people.profile(conn, int(found[0]["id"]))
+            return people.profile(conn, people.resolve(conn, name_or_id))
 
     @server.tool(name="status")
     @clear_errors

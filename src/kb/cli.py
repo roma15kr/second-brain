@@ -182,6 +182,30 @@ def cmd_scope(args: argparse.Namespace) -> None:
         print("archived scopes:", ", ".join(sorted(scopes.archived(conn))) or "none")
 
 
+def cmd_people(args: argparse.Namespace) -> None:
+    from kb import people
+
+    with db.connect(database_url()) as conn:
+        if args.people_command == "show":
+            found = people.find(conn, args.ref) if not args.ref.isdigit() else []
+            if len(found) > 1:
+                for p in found:
+                    print(f"{p['id']:>8}  {p['display_name']}")
+                return
+            pid = people.resolve(conn, args.ref)
+            print(json.dumps(people.profile(conn, pid), ensure_ascii=False, indent=2))
+        elif args.people_command == "merge":
+            keep, other = people.resolve(conn, args.keep), people.resolve(conn, args.other)
+            merge_id = people.merge(conn, keep, other)
+            print(f"merged {other} into {keep}; undo with: kb people split {merge_id}")
+        elif args.people_command == "split":
+            people.split(conn, args.merge_id)
+            print(f"merge {args.merge_id} undone")
+        elif args.people_command == "link":
+            linked = people.link(conn, people.resolve(conn, args.person), args.identity)
+            print("linked" + (f" (merged; undo with: kb people split {linked})" if linked else ""))
+
+
 def cmd_rebuild(args: argparse.Namespace) -> None:
     with db.connect(database_url()) as conn:
         n = indexer.rebuild(conn, args.source)
@@ -321,6 +345,22 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("cost-estimate", help="dry run: what AI summaries would cost now").set_defaults(
         func=cmd_cost_estimate
     )
+    p = sub.add_parser("people", help="people directory: show, merge, split, link")
+    pp = p.add_subparsers(dest="people_command", required=True)
+    p = pp.add_parser("show", help="kb people show <id | name | email>")
+    p.add_argument("ref")
+    p.set_defaults(func=cmd_people)
+    p = pp.add_parser("merge", help="kb people merge <keep> <other>")
+    p.add_argument("keep")
+    p.add_argument("other")
+    p.set_defaults(func=cmd_people)
+    p = pp.add_parser("split", help="kb people split <merge id>  (undo a merge)")
+    p.add_argument("merge_id", type=int)
+    p.set_defaults(func=cmd_people)
+    p = pp.add_parser("link", help="kb people link <person> phone:+380… | email:a@b.c")
+    p.add_argument("person")
+    p.add_argument("identity")
+    p.set_defaults(func=cmd_people)
     p = sub.add_parser("rebuild", help="rebuild search data from the archive")
     p.add_argument("--source", help="only this source id (default: all)")
     p.set_defaults(func=cmd_rebuild)

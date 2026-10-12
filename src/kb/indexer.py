@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
-from kb import archive, email_parse, jobs, scopes, units
+from kb import archive, email_parse, jobs, people, scopes, units
 from kb.config import Config, ConfigError, ImapSource, TelegramSource
 from kb.connectors.base import get_state, set_state
 from kb.db import Conn
@@ -20,7 +21,8 @@ log = logging.getLogger(__name__)
 # 4: values on the next line after the keyword. 5: conversation units (threads, segments).
 # 6: scope layers (rules, review decisions, overrides); folder/chat username kept for rules.
 # 7: Gmail thread ids and labels. 8: Gmail web deep links per message.
-INDEX_VERSION = 8
+# 9: people identities on messages and items.
+INDEX_VERSION = 9
 
 
 def index_raw(conn: Conn, config: Config, raw_id: int) -> int | None:
@@ -78,6 +80,10 @@ def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) ->
             "gm_thrid": payload.get("gm_thrid"),
         },
     )
+    keys = [people.email_key(a) for a in parsed.participants]
+    for addr, key in zip(parsed.participants, keys, strict=True):
+        people.register(conn, [key], parsed.names.get(addr))
+    m.identity_keys = keys
     unit = units.assign_email_unit(conn, m)
     units.save(conn, m, unit)
     return units.rebuild(conn, m.source_id, unit)
@@ -156,6 +162,9 @@ def index_tg_message(conn: Conn, config: Config, raw: dict[str, Any]) -> int | N
             max_messages, max_hours = source.max_unit_messages, source.max_unit_hours
     except ConfigError:
         pass
+    keys = people.tg_keys(p.get("sender_id"), p.get("sender_name"), p.get("sender_phone"))
+    people.register(conn, keys, re.sub(r"\s*\(@[^)]*\)", "", sender).strip() or None)
+    m.identity_keys = keys
     unit = units.assign_tg_unit(
         conn, m, timedelta(minutes=gap), max_messages, timedelta(hours=max_hours)
     )

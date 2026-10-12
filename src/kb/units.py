@@ -61,6 +61,7 @@ class Message:
     version: str = ""
     locator: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    identity_keys: list[str] = field(default_factory=list)
 
 
 def existing_unit(conn: Conn, source_id: str, message_key: str) -> str | None:
@@ -78,13 +79,14 @@ def save(conn: Conn, m: Message, unit_key: str) -> bool:
         """
         INSERT INTO messages (source_id, message_key, kind, unit_key, scopes, chat_id, msg_id,
             topic_id, reply_to, refs, subject, subject_norm, author, participants, sent_at, body,
-            version, locator, metadata)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            version, locator, metadata, identity_keys)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (source_id, message_key) DO UPDATE SET
             scopes = EXCLUDED.scopes, body = EXCLUDED.body, version = EXCLUDED.version,
             author = EXCLUDED.author, participants = EXCLUDED.participants,
             subject = EXCLUDED.subject, subject_norm = EXCLUDED.subject_norm,
-            locator = EXCLUDED.locator, metadata = EXCLUDED.metadata
+            locator = EXCLUDED.locator, metadata = EXCLUDED.metadata,
+            identity_keys = EXCLUDED.identity_keys
         WHERE messages.version <= EXCLUDED.version
         RETURNING id
         """,
@@ -108,6 +110,7 @@ def save(conn: Conn, m: Message, unit_key: str) -> bool:
             m.version,
             m.locator,
             json.dumps(m.metadata, default=str),
+            m.identity_keys,
         ),
     ).fetchone()
     return row is not None
@@ -256,7 +259,11 @@ def rebuild(conn: Conn, source_id: str, unit_key: str) -> int | None:
     text = "\n\n".join(parts) if is_email else "\n".join(parts)
     participants: list[str] = []
     scopes: list[str] = []
+    identity_keys: list[str] = []
     for msg in msgs:
+        for k in msg["identity_keys"] or []:
+            if k not in identity_keys:
+                identity_keys.append(k)
         for p in msg["participants"]:
             if p and p not in participants:
                 participants.append(p)
@@ -287,14 +294,15 @@ def rebuild(conn: Conn, source_id: str, unit_key: str) -> int | None:
         """
         INSERT INTO items (source_id, source_item_key, kind, scopes, title, raw_text,
                            participants, occurred_at, last_activity_at, locator, metadata,
-                           content_hash)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                           content_hash, identity_keys)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (source_id, source_item_key) DO UPDATE SET
             kind = EXCLUDED.kind, scopes = EXCLUDED.scopes, title = EXCLUDED.title,
             raw_text = EXCLUDED.raw_text, participants = EXCLUDED.participants,
             occurred_at = EXCLUDED.occurred_at, last_activity_at = EXCLUDED.last_activity_at,
             locator = EXCLUDED.locator, metadata = EXCLUDED.metadata, hidden = false,
-            content_hash = EXCLUDED.content_hash, updated_at = now()
+            content_hash = EXCLUDED.content_hash, identity_keys = EXCLUDED.identity_keys,
+            updated_at = now()
         RETURNING id
         """,
         (
@@ -310,6 +318,7 @@ def rebuild(conn: Conn, source_id: str, unit_key: str) -> int | None:
             first["locator"],
             json.dumps(metadata),
             chash,
+            identity_keys,
         ),
     ).fetchone()
     assert row is not None

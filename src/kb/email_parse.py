@@ -23,6 +23,7 @@ class ParsedEmail:
     attachments: list[str] = field(default_factory=list)
     in_reply_to: str | None = None
     references: list[str] = field(default_factory=list)
+    names: dict[str, str] = field(default_factory=dict)  # address -> display name
 
     @property
     def participants(self) -> list[str]:
@@ -97,6 +98,11 @@ def parse(raw: bytes) -> ParsedEmail:
     senders = _addresses([str(msg["From"] or "")])
     recipients = _addresses([str(msg[h]) for h in ("To", "Cc") if msg[h]])
     refs = str(msg["References"] or "").split()
+    names = {
+        addr.lower(): name.strip()
+        for name, addr in getaddresses([str(msg[h]) for h in ("From", "To", "Cc") if msg[h]])
+        if addr and name.strip()
+    }
     return ParsedEmail(
         message_id=str(msg["Message-ID"]).strip() if msg["Message-ID"] else None,
         subject=str(msg["Subject"] or "").strip(),
@@ -107,4 +113,5 @@ def parse(raw: bytes) -> ParsedEmail:
         attachments=attachments,
         in_reply_to=str(msg["In-Reply-To"]).strip() if msg["In-Reply-To"] else None,
         references=refs,
+        names=names,
     )

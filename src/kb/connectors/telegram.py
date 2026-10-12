@@ -104,6 +104,7 @@ def message_record(source_id: str, chat: ChatInfo, msg: Any) -> RawRecord:
             "edit_date": edit_date.isoformat() if edit_date else None,
             "sender_id": getattr(msg, "sender_id", None),
             "sender_name": _sender_name(msg),
+            "sender_phone": getattr(getattr(msg, "sender", None), "phone", None),
             "text": getattr(msg, "message", None) or "",
             "reply_to_msg_id": getattr(reply_to, "reply_to_msg_id", None),
             "topic_id": getattr(reply_to, "reply_to_top_id", None),
