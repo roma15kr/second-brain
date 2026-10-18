@@ -136,20 +136,20 @@ def scope_page(conn: Db, scope: str) -> dict[str, Any]:
     week_ago, month_ago = now - timedelta(days=7), now - timedelta(days=30)
     days = conn.execute(
         "SELECT (last_activity_at AT TIME ZONE 'Europe/Kyiv')::date AS d, kind, count(*) AS n"
-        " FROM items WHERE NOT hidden AND kind <> 'passage' AND %s = ANY(scopes)"
-        " AND last_activity_at > %s GROUP BY d, kind ORDER BY d",
+        " FROM items WHERE NOT hidden AND kind IN ('email_thread', 'tg_conversation')"
+        " AND %s = ANY(scopes) AND last_activity_at > %s GROUP BY d, kind ORDER BY d",
         (scope, week_ago),
     ).fetchall()
     key_people = conn.execute(
         "SELECT p, count(*) AS n FROM items, unnest(participants) p WHERE NOT hidden"
-        " AND kind <> 'passage' AND %s = ANY(scopes) AND last_activity_at > %s"
-        " GROUP BY p ORDER BY n DESC LIMIT 8",
+        " AND kind IN ('email_thread', 'tg_conversation') AND %s = ANY(scopes)"
+        " AND last_activity_at > %s GROUP BY p ORDER BY n DESC LIMIT 8",
         (scope, month_ago),
     ).fetchall()
     decisions = conn.execute(
         "SELECT id, title, outcome, last_activity_at, locator FROM items WHERE NOT hidden"
-        " AND kind <> 'passage' AND %s = ANY(scopes) AND outcome IS NOT NULL AND outcome <> ''"
-        " ORDER BY last_activity_at DESC LIMIT 10",
+        " AND kind IN ('email_thread', 'tg_conversation') AND %s = ANY(scopes)"
+        " AND outcome IS NOT NULL AND outcome <> '' ORDER BY last_activity_at DESC LIMIT 10",
         (scope,),
     ).fetchall()
     return {

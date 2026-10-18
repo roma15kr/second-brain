@@ -120,7 +120,7 @@ def recent(conn: Conn, filters: SearchFilters | None = None, limit: int = 20) ->
     if not 1 <= limit <= MAX_LIMIT:
         raise SearchError(f"limit must be between 1 and {MAX_LIMIT}")
     params: dict[str, Any] = {"limit": limit}
-    where = [*_filter_sql(filters, params), "kind <> 'passage'"]
+    where = [*_filter_sql(filters, params), "kind NOT IN ('passage', 'document', 'doc_section')"]
     rows = conn.execute(
         f"""
         SELECT id, source_id, kind, scopes, title, participants, occurred_at, last_activity_at,

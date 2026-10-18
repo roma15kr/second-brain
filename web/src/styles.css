@@ -501,3 +501,21 @@ fieldset.plain {
 .small {
   font-size: 12px;
 }
+.drop {
+  display: block;
+  border: 2px dashed var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  text-align: center;
+  color: var(--muted);
+  cursor: pointer;
+}
+.doc-text {
+  white-space: pre-wrap;
+  font: inherit;
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--bg);
+  padding: 10px;
+  border-radius: 8px;
+}
