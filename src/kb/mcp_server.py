@@ -60,11 +60,13 @@ def make_search(
         date_to: str | None,
         limit: int,
         person: str | None = None,
+        include_private: bool = False,
     ) -> list[dict[str, Any]]:
         filters = SearchFilters(
             scopes=scopes,
             sources=sources,
             kinds=kinds,
+            include_private=include_private,
             date_from=date.fromisoformat(date_from) if date_from else None,
             date_to=date.fromisoformat(date_to) if date_to else None,
         )
@@ -153,6 +155,8 @@ def build_server(
                     f"no item with item_id {item_id}; use an item_id returned by a search tool"
                 ) from None
         item = page["item"]
+        if (item["metadata"] or {}).get("private"):
+            raise SearchError(f"item {item_id} is private (AI may not read it)")
         return {
             "item_id": item["id"],
             "kind": item["kind"],
@@ -343,6 +347,7 @@ def internal_search(run: Callable[..., list[dict[str, Any]]]) -> Callable[..., A
                 body.get("date_to"),
                 int(body.get("limit", 10)),
                 body.get("person"),
+                bool(body.get("include_private", False)),  # only the web OS asks for these
             )
         except (SearchError, people.PeopleError, ValueError) as e:
             return JSONResponse({"detail": str(e)}, status_code=400)
