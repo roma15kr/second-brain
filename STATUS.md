@@ -11,6 +11,10 @@ _Last updated: 2026-10-18 by Claude_
   Web OS https://os.zhukovsky.biz (passkeys) · MCP https://kb.zhukovsky.biz/mcp (token + lockout) · Cloudflare-proxied.
 
 ## Done recently (2026-10-18)
+- ClickUp notifications (11.3): pushes for tasks/comments assigned to or mentioning the owner or the DTC
+  group (immediately, quiet hours respected), followed tasks/comments/chat channels (≤1 push per 15 min);
+  "ClickUp for you" page `/clickup`; group name on the ClickUp connector page. Re-marking a list re-labels its
+  tasks and comment chunks; the ClickUp login email counts as the owner's (People no longer lists it).
 - web-os-v1 live, PRs #5–#15:
   - slice 1–2: React PWA, passkeys, Today brief, Kyiv scheduler, Web Push (verified on iPhone), domains;
   - slice 3–4: AI morning/evening briefs (gpt-6.1-sol, refs validated, budget → data-only), Briefs pages,

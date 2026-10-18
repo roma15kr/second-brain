@@ -45,3 +45,18 @@ Sync SHALL stay within ClickUp's per-token rate limit and back off when told to 
 #### Scenario: Limit reached
 - **WHEN** ClickUp answers "too many requests"
 - **THEN** sync pauses for the indicated time and resumes from where it stopped
+
+### Requirement: Items for the owner are pushed right away
+The system SHALL notify the owner by push, as soon as the next sync sees it, when a ClickUp task is assigned to the owner or to the owner's team group (default "DTC"), or a comment assigns, @mentions the owner or @mentions that group; the owner's own comments and items from before connecting SHALL NOT notify. Each item SHALL notify once, respect quiet hours, and appear in the next morning brief or evening wrap under "For you in ClickUp".
+
+#### Scenario: Mentioned in a comment
+- **WHEN** a teammate writes "@Owner can you approve the banners?" on a Quokka task
+- **THEN** within minutes the owner's phone shows "ClickUp: Олена mentioned you", and tapping it opens the task in the web OS
+
+#### Scenario: DTC team assigned
+- **WHEN** a task is assigned to the DTC group
+- **THEN** the owner gets one push, and a later edit of the same task does not push again
+
+#### Scenario: Quiet hours
+- **WHEN** a mention arrives at 23:30
+- **THEN** no push is sent and the mention is listed in the 08:00 morning brief

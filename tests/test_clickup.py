@@ -1,5 +1,5 @@
 import argparse
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -42,6 +42,7 @@ class FakeClickUp:
         self.fail_comments_times = 1
         self.omit_last_page = False
         self.replies: dict[str, list[dict]] = {}
+        self.groups: list[dict] = [{"id": "G9", "name": "DTC"}]
         self.oldest_first = False
         self.created = []
 
@@ -54,6 +55,8 @@ class FakeClickUp:
             return httpx.Response(200, json={"user": {"id": 1, "email": "me@example.com"}})
         if path == "/team":
             return httpx.Response(200, json={"teams": [{"id": "T1", "name": "Quokka"}]})
+        if path == "/group":
+            return httpx.Response(200, json={"groups": self.groups})
         if path == "/team/T1/space":
             return httpx.Response(200, json={"spaces": [{"id": "S1", "name": "Quokka"}]})
         if path == "/space/S1/folder":
@@ -467,6 +470,19 @@ def test_all_comments_with_replies_are_stored_oldest_first_and_chunked(conn, fak
     assert len(chunks) > 1 and all(c["metadata"]["parent_item_id"] == item["id"] for c in chunks)
 
 
+def test_re_marking_a_list_relabels_its_tasks_and_comment_chunks(client, conn, fake, account):
+    fake.tasks["L1"] = [task("a", 1000)]
+    fake.comments["a"] = [comment(f"c{i}", 1000 + i, "detail " * 30) for i in range(20)]
+    clickup.sync_account(conn, fake.client(), account)
+    r = client.post("/api/connectors/clickup/lists/L1", json={"scopes": ["digisoft"]}, headers=CSRF)
+    assert r.json() == {"relabelled_tasks": 1}
+    kinds = conn.execute(
+        "SELECT DISTINCT kind, scopes FROM items WHERE kind LIKE 'clickup%%'"
+    ).fetchall()
+    assert {k["kind"] for k in kinds} == {"clickup_task", "clickup_comments"}
+    assert all(k["scopes"] == ["digisoft"] for k in kinds)
+
+
 def test_newest_tasks_come_first_whatever_the_api_default(conn, fake, account):
     fake.oldest_first = True
     fake.tasks["L1"] = [task(f"t{i}", 1000 + i) for i in range(5)]
@@ -512,3 +528,158 @@ def test_migration_resets_for_a_full_comment_reread(conn):
     conn.execute(sql)
     meta = conn.execute("SELECT metadata FROM items").fetchone()["metadata"]
     assert "date_updated" not in meta and meta["list"] == "L"
+
+
+# --- items for the owner (11.3) -------------------------------------------------------------
+
+OWNER = {"id": 1, "username": "Owner", "email": "me@example.com"}
+OLENA = {"id": 7, "username": "Олена", "email": "olena@quokka.example"}
+
+
+@pytest.fixture
+def watched(conn, fake, account):
+    """Notifications start now; the owner is user 1, the DTC group is G9."""
+    clickup.ensure_identity(conn, fake.client(), account, datetime.now(UTC) - timedelta(hours=1))
+    return account
+
+
+def now_ms(minutes=0):
+    return int((datetime.now(UTC) + timedelta(minutes=minutes)).timestamp() * 1000)
+
+
+def notes(conn):
+    return [
+        (r["kind"], r["actor"])
+        for r in conn.execute("SELECT * FROM clickup_notifications ORDER BY key")
+    ]
+
+
+def test_mention_of_owner_notifies_once(conn, fake, watched):
+    fake.tasks["L1"] = [task("a", now_ms())]
+    fake.comments["a"] = [
+        {
+            **comment("c1", now_ms(), "@Owner can you approve the banners?"),
+            "comment": [{"text": "can you approve "}, {"type": "tag", "user": OWNER}],
+        }
+    ]
+    clickup.sync_account(conn, fake.client(), watched)
+    clickup.refresh_recent_comments(conn, fake.client(), watched)  # seeing it again
+    fake.tasks["L1"] = [task("a", now_ms(1))]
+    clickup.sync_account(conn, fake.client(), watched)
+    assert notes(conn) == [("mentioned", "Олена")]
+
+
+def test_group_assignment_notifies(conn, fake, watched):
+    fake.tasks["L1"] = [{**task("b", now_ms()), "group_assignees": [{"id": "G9", "name": "DTC"}]}]
+    clickup.sync_account(conn, fake.client(), watched)
+    fake.tasks["L1"] = [{**task("b", now_ms(2)), "group_assignees": [{"id": "G9", "name": "DTC"}]}]
+    clickup.sync_account(conn, fake.client(), watched)
+    assert notes(conn) == [("group_assigned", "")]
+
+
+def test_own_comments_and_old_items_do_not_notify(conn, fake, watched):
+    old = int((datetime.now(UTC) - timedelta(days=3)).timestamp() * 1000)
+    fake.tasks["L1"] = [
+        {**task("old", old, assignee="me@example.com"), "assignees": [OWNER]},
+        {**task("mine", now_ms()), "watchers": [OWNER]},
+    ]
+    fake.comments["mine"] = [{**comment("c9", now_ms(), "done"), "user": OWNER}]
+    clickup.sync_account(conn, fake.client(), watched)
+    assert notes(conn) == []
+
+
+def test_followed_tasks_new_task_and_comments(conn, fake, watched):
+    fake.tasks["L1"] = [
+        {
+            **task("f", now_ms()),
+            "watchers": [OWNER, OLENA],
+            "date_created": str(now_ms()),
+            "creator": OLENA,
+        }
+    ]
+    fake.comments["f"] = [comment("c5", now_ms(), "photos uploaded")]
+    clickup.sync_account(conn, fake.client(), watched)
+    assert sorted(notes(conn)) == [("followed_comment", "Олена"), ("followed_new_task", "")]
+
+
+def test_pending_notifications_pushed_by_routines(conn, fake, watched, monkeypatch):
+    from kb import push
+    from kb.routines import KYIV
+
+    sent = []
+
+    def fake_send(c, routine, headline, url, now, **k):
+        sent.append((routine, headline, url))
+        return 1
+
+    monkeypatch.setattr(push, "send", fake_send)
+    fake.tasks["L1"] = [{**task("a", now_ms()), "watchers": [OWNER]}]
+    fake.comments["a"] = [
+        {**comment("c1", now_ms(), "hi"), "comment": [{"type": "tag", "user": OWNER}]},
+        comment("c2", now_ms(), "follow-up"),
+        comment("c3", now_ms(), "another"),
+    ]
+    clickup.sync_account(conn, fake.client(), watched)
+    item = conn.execute("SELECT id FROM items WHERE source_item_key = 'a'").fetchone()["id"]
+    night = datetime(2026, 10, 20, 23, 30, tzinfo=KYIV)
+    assert clickup.push_pending(conn, night) == 0 and sent == []  # held for the brief
+    conn.execute("UPDATE clickup_notifications SET handled_at = NULL")
+    day = datetime(2026, 10, 21, 10, 0, tzinfo=KYIV)
+    clickup.push_pending(conn, day)
+    assert sent[0] == ("clickup", "ClickUp: Олена mentioned you", f"/c/{item}")
+    assert sent[1] == ("clickup", "ClickUp: 2 task updates you follow", f"/c/{item}")
+    fake.comments["a"].append(comment("c4", now_ms(), "more"))
+    clickup.refresh_recent_comments(conn, fake.client(), watched)
+    clickup.push_pending(conn, day + timedelta(minutes=5))
+    assert len(sent) == 2  # followed activity waits for the 15-minute window
+    clickup.push_pending(conn, day + timedelta(minutes=16))
+    assert len(sent) == 3
+
+
+def test_followed_chat_channels_are_searchable_and_notify(conn, fake, watched):
+    msgs = [
+        {
+            "id": "m1",
+            "content": "Rozetka banners are live",
+            "date": now_ms(),
+            "user_id": "7",
+            "type": "message",
+        },
+        {"id": "m2", "content": "thanks", "date": now_ms(1), "user_id": "1", "type": "message"},
+    ]
+    original = fake.handler
+
+    def v3(request):
+        p = request.url.path
+        if p.endswith("/chat/channels"):
+            assert request.url.params["is_follower"] == "true"
+            return httpx.Response(
+                200, json={"data": [{"id": "CH1", "name": "marketing"}], "next_cursor": ""}
+            )
+        if p.endswith("/chat/channels/CH1/messages"):
+            return httpx.Response(200, json={"data": list(reversed(msgs)), "next_cursor": ""})
+        if p == "/api/v2/team":
+            return httpx.Response(
+                200,
+                json={
+                    "teams": [
+                        {
+                            "id": "T1",
+                            "name": "Quokka",
+                            "members": [{"user": OLENA}, {"user": OWNER}],
+                        }
+                    ]
+                },
+            )
+        return original(request)
+
+    fake.handler = v3
+    clickup.ensure_identity(
+        conn, fake.client(), watched, datetime.now(UTC) - timedelta(hours=1), refresh_group=True
+    )
+    assert clickup.sync_chat(conn, fake.client(), watched, datetime.now(UTC)) == 2
+    item = conn.execute("SELECT * FROM items WHERE kind = 'clickup_chat'").fetchone()
+    assert "Олена: Rozetka banners are live" in item["raw_text"] and item["scopes"] == ["quokka"]
+    assert item["title"].startswith("#marketing")
+    assert notes(conn) == [("followed_chat", "Олена")]  # the owner's own message is not
+    assert clickup.sync_chat(conn, fake.client(), watched, datetime.now(UTC)) == 0  # cursor kept

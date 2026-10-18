@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from kb import db, health, idf, indexer, scopes
@@ -88,12 +89,27 @@ def _sync_clickup(last_run: dict[str, float]) -> None:
         client = clickup.ClickUpClient(acc.token)
         try:
             with db.connect(database_url()) as conn:
-                if now - last_run.get(f"{sid}:lists", -1e9) >= CLICKUP_LISTS_EVERY:
+                hourly = now - last_run.get(f"{sid}:lists", -1e9) >= CLICKUP_LISTS_EVERY
+                try:  # notifications need it; syncing must not wait on it
+                    clickup.ensure_identity(
+                        conn, client, acc, datetime.now(UTC), refresh_group=hourly
+                    )
+                except clickup.RateLimited:
+                    raise
+                except Exception:
+                    log.exception("%s: cannot read the ClickUp user or groups", sid)
+                if hourly:
                     clickup.refresh_lists(conn, client, acc)
                     last_run[f"{sid}:lists"] = now
                 n, finished = clickup.sync_account_for(conn, client, acc, CLICKUP_SLICE_SECONDS)
                 if not finished:  # a big first pass: continue soon, mail sync runs in between
                     last_run[sid] = now - CLICKUP_EVERY + 10
+                try:  # followed chat channels (ClickUp Chat API v3)
+                    n += clickup.sync_chat(conn, client, acc, datetime.now(UTC))
+                except clickup.RateLimited:
+                    raise
+                except Exception:
+                    log.exception("%s: chat sync failed", sid)
                 if (
                     finished
                     and now - last_run.get(f"{sid}:comments", -1e9) >= CLICKUP_COMMENTS_EVERY
@@ -446,6 +462,11 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
     llm = briefs.default_llm(config)
 
+    def push_clickup(conn: db.Conn, now: datetime) -> int:
+        from kb.connectors import clickup
+
+        return clickup.push_pending(conn, now)
+
     def propose_goals(conn: db.Conn, now: datetime) -> int:
         from kb import goals
 
@@ -461,7 +482,13 @@ def cmd_routines(args: argparse.Namespace) -> None:
         lambda: db.connect(url),
         runners,
         notify=push.notify_brief,
-        maintenance=[close_answered_loops, loops.wake_snoozed, detect_loops, propose_goals],
+        maintenance=[
+            close_answered_loops,
+            loops.wake_snoozed,
+            push_clickup,
+            detect_loops,
+            propose_goals,
+        ],
     )
 
 

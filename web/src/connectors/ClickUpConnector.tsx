@@ -16,7 +16,15 @@ type ListRow = {
   tasks: number;
 };
 type Overview = {
-  accounts: { id: number; label: string; team: string | null; state: string }[];
+  accounts: {
+    id: number;
+    label: string;
+    team: string | null;
+    state: string;
+    owner?: string | null;
+    group_name?: string;
+    group_found?: boolean;
+  }[];
   lists: ListRow[];
   members: {
     email: string;
@@ -87,6 +95,43 @@ function Connect({ onDone }: { onDone: () => void }) {
   );
 }
 
+function AccountRow({ a, onChanged }: { a: Overview["accounts"][number]; onChanged: () => void }) {
+  const [group, setGroup] = useState(a.group_name ?? "DTC");
+  const save = useMutation({
+    mutationFn: () =>
+      api(`/api/connectors/clickup/accounts/${a.id}`, {
+        method: "POST",
+        body: { group_name: group },
+      }),
+    onSuccess: onChanged,
+  });
+  return (
+    <div>
+      <p>
+        <span className="state ok">connected</span> {a.team ?? a.label}
+        {a.owner && <span className="muted"> · you are {a.owner}</span>}
+      </p>
+      <div className="row">
+        <label>
+          Notify me for my team group{" "}
+          <input
+            aria-label="Team group"
+            className="btn"
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+          />
+        </label>
+        <button className="btn" onClick={() => save.mutate()}>
+          Save
+        </button>
+        <span className="muted">
+          {a.group_found ? "found in ClickUp" : "not found yet (checked hourly)"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // Connectors › ClickUp: choose and mark lists, default list for task drafts, team ↔ people.
 export function ClickUpConnector() {
   const queryClient = useQueryClient();
@@ -122,9 +167,7 @@ export function ClickUpConnector() {
           approve · never edits or deletes.
         </p>
         {d?.accounts.map((a) => (
-          <p key={a.id}>
-            <span className="state ok">connected</span> {a.team ?? a.label}
-          </p>
+          <AccountRow key={a.id} a={a} onChanged={refresh} />
         ))}
         <Connect onDone={refresh} />
       </section>

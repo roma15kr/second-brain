@@ -71,7 +71,7 @@ def put_settings(conn: Db, app: Annotated[dict[str, Any], Body(embed=True)]) -> 
 
 # --- push per device ------------------------------------------------------------------------
 
-ROUTINE_NAMES = ["morning", "revision", "evening", "weekly_review", "weekly_plan"]
+ROUTINE_NAMES = ["morning", "revision", "evening", "weekly_review", "weekly_plan", "clickup"]
 
 
 @router.get("/api/settings/push")

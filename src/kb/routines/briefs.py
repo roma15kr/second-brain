@@ -31,6 +31,7 @@ KIND_WORDS = {
     "email_thread": ("email thread", "email threads"),
     "tg_conversation": ("chat", "chats"),
     "clickup_task": ("ClickUp task", "ClickUp tasks"),
+    "clickup_chat": ("ClickUp chat day", "ClickUp chat days"),
 }
 TITLES = {
     "morning": "Morning brief",
@@ -415,6 +416,11 @@ def write_brief(
         text = "\n".join(f"{n}. {p['title']}" for n, p in enumerate(pack.priorities, 1))
         sections.append(Section("This week's priorities", text, kind="note"))
     sections.extend(loop_sections(pack))
+    if pack.routine in ("morning", "evening"):
+        from kb.connectors import clickup
+
+        if for_me := clickup.for_brief(conn, pack.window):
+            sections.append(Section("For you in ClickUp", "", for_me, kind="group"))
     if pack.routine == "morning":
         from kb import loops
 
