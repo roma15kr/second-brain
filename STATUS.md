@@ -1,5 +1,5 @@
 # Status
-_Last updated: 2026-10-10 by Claude_
+_Last updated: 2026-10-18 by Claude_
 
 ## Current focus
 - `v1-mail-telegram-search`: 29/30 tasks done. Remaining: **10.3 acceptance** — owner writes ~30 real
@@ -8,7 +8,16 @@ _Last updated: 2026-10-10 by Claude_
 - Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), ns31426159, branch `kb-design-v1-plan`.
   MCP `https://kb.141-94-30-173.sslip.io/mcp` (public HTTPS + token + lockout, ADR 0009 amendment).
 
-## Done recently (2026-10-10 … 10-12)
+## Done recently (2026-10-18)
+- Baseline OpenSpec specs for the built v1 system in `openspec/specs/` (9 capabilities: source-ingestion,
+  secret-redaction, conversation-indexing, scope-assignment, people-directory, knowledge-search,
+  mcp-interface, system-health, retrieval-evaluation) — branch `change/v1-baseline-specs`. They differ from
+  the v1 deltas where the build differs: public MCP + token + lockout, `status` tool, Gmail via IMAP,
+  no AI scope classifier (unmatched → unsorted), enrichment cost controls, backups, eval.
+  Archive v1 with `--skip-specs`.
+- Proposal `web-os-v1` (routines, open loops, web dashboard, passkeys, push) — branch `change/web-os-v1`, awaiting review.
+
+## Done earlier (2026-10-10 … 10-12)
 - Slices 1–9 verified live: Gmail (IMAP extensions) + 12 Telegram chats; redaction; threads/conversations;
   scopes; AI summaries (OpenAI gpt-6-luna, ~$0.33 backfill); local e5 embeddings + pgvector; IDF rare terms;
   exact pinning; jina reranker; passages; people directory; caches make rebuilds free (26 min, no re-embed).
@@ -24,6 +33,7 @@ _Last updated: 2026-10-10 by Claude_
 5. Next changes (roadmap): ClickUp/Karakeep/Calendar, metrics warehouse, Telegram bot + automations, meeting app.
 
 ## Open questions
+- AI scope classifier (planned in v1 design, never wired): build it, or keep rules + unsorted review?
 - Telegram segmentation by silence gap vs topic shift (design: least confident #1).
 - Age decay for personal knowledge (design: least confident #4).
 - Is Proton Mail in use (needs Proton Bridge)?
