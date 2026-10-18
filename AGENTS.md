@@ -10,7 +10,8 @@
 ## Project
 - Name: second-brain
 - Purpose: A personal knowledge base and research repository for organizing, storing, and referencing insights from across the web.
-- Stack: Python (uv) core on Postgres + pgvector, deployed with Coolify; Swift macOS meeting app (ADR 0011, proposed)
+- Stack: Python (uv) core + JSON API on Postgres + pgvector, deployed with Coolify; web OS as a React +
+  TypeScript SPA/PWA (ADR 0015); native macOS + iOS apps for dictation and call/meeting transcription (ADR 0014)
 
 ## Verification (how every change is checked)
 - **Main gate: `make check`** (typecheck + lint + test). It must pass before you say a task is done.
@@ -56,8 +57,15 @@
 - While applying, tick tasks in `tasks.md`; if the plan turns out wrong, update the change first.
 - Validate with `openspec validate --all` before archiving.
 
+## Git workflow (one change = one branch)
+- Every OpenSpec change gets its own branch `change/<change-name>`, created from `main`
+  (or from the branch of the change it depends on, stated in its proposal). Small fixes: `fix/<topic>`.
+- One task = one commit on that branch; push the branch (allowed); open a PR to `main`.
+- Only the human merges PRs and archives changes; never commit directly to `main`.
+- Coolify deploys from the branch it is pointed at; production follows `main` once merged.
+
 ## Review and roles
-- Never merge, push or archive yourself; the human does that.
+- Never merge PRs or archive changes yourself; the human does that.
 - When asked to review, do not edit code; report BLOCKING/SUGGESTION findings.
 - (Optional) If a prompt starts with "# Role: ...", act strictly within that role (`docs/ai/roles/`).
 
