@@ -47,10 +47,40 @@ branch `change/web-os-v1`.
 - [ ] 8.2 Recovery codes, devices list, sign out one/everywhere, lockout after 10 failures; verify `test_recovery_code_single_use`, `test_sign_out_everywhere`, `test_login_lockout_after_10_failures`
 - [ ] 8.3 Status page (sync health, routine runs, queue, backups, AI spend, 28-day usefulness metric) and offline read-only mode; verify `test_usefulness_metric_28_days`, `offline.test.tsx`
 
-## 9. Deploy and acceptance
+## 9. Connectors hub and marks
 
-- [ ] 9.1 Deploy `web` and `routines` on Coolify with VAPID env vars and the `os.` domain; register passkeys on phone and laptop, install the app, enable push; verify one full day of routines arrives on the phone at the scheduled times
-- [ ] 9.2 Update `docs/architecture.md`, `docs/external/README.md` and `STATUS.md` (done, next steps, open questions, gotchas)
+- [ ] 9.1 `scopes` table (add/rename/archive projects), `secrets.py` (AES-GCM, `KB_SECRET_KEY`), `connector_accounts`; connect an IMAP mailbox from the web (credentials tested, default mark, picked up without restart); verify `test_add_project_scope`, `test_secret_roundtrip_and_never_returned_by_api`, `test_wrong_imap_password_not_saved`, `test_new_account_ingested_without_restart`
+- [ ] 9.2 Telegram dialogs in `tg_dialogs` (read-only listing), include/ignore and mark from the web with backfill, "to mark" list, QR login from the web; config allowlist imported once; verify `test_new_dialog_not_ingested_until_included`, `test_mark_change_rescopes_items`, `test_telegram_wrapper_has_no_write_methods`
+- [ ] 9.3 Connectors hub page (states, counts, catalog with planned and WhatsApp "not possible"), mail rules and "senders to mark", disconnect keep/remove; verify `test_disconnect_keep_vs_remove`, `connectors.test.tsx`
+
+## 10. Personal base (Library)
+
+- [ ] 10.1 Owner approves new dependencies (`pypdf`, `python-docx`); documents and notes with required mark, versions, text extraction, indexed for web search and MCP; verify `test_extract_md_pdf_docx`, `test_document_requires_mark`, `test_versions_latest_indexed`, `library.test.tsx`
+- [ ] 10.2 "AI may read" switch enforced in every prompt builder; goals proposed from core documents and confirmed by the owner; Library page per mockup; verify `test_ai_disallowed_document_never_in_prompt`, `test_goals_proposed_need_confirmation`
+
+## 11. ClickUp
+
+- [ ] 11.1 Connect with a personal token, choose and mark spaces/lists, sync tasks and comments with cursors and 429 back-off, link members to people; verify `test_sync_list_incremental_cursor`, `test_429_backoff_resumes` (recorded fixtures) and Quokka tasks searchable on production
+- [ ] 11.2 Task suggestions executor (created only after approval, idempotent, linked to source); closed tasks close linked loops; due tasks in the morning brief; verify `test_task_created_only_from_approved`, `test_create_task_idempotent_retry`, `test_closed_task_closes_loop`
+
+## 12. Proactive assistant
+
+- [ ] 12.1 Tracer: `suggestions` queue, Assistant page (approve / edit / discard), Gmail draft executor (IMAP APPEND, threaded) and draft skipping in ingest; verify `test_draft_saved_to_drafts_not_sent`, `test_draft_not_ingested_and_loop_stays_open`, `assistant.test.tsx`, and one approved draft appears in the real Gmail thread unsent
+- [ ] 12.2 Eisenhower priority with reasons (goal link, person, money, deadline, waiting) in Inbox and morning brief; two-minute "do now" group; verify `test_priority_goal_linked_first_with_reason`
+- [ ] 12.3 Reply drafts with tone examples and cited context (email → Gmail Drafts; Telegram → copy and open chat), daily cap; verify draft refs validated and the cap respected (stubbed LLM)
+- [ ] 12.4 Nudges for overdue promises to the owner, delegation suggestions by teammate area, decline suggestions on overloaded weeks; learning from discards; acceptance rates on Status; verify `test_nudge_for_overdue_owed_to_me`, `test_delegate_matches_teammate_area`, `test_discard_rate_lowers_frequency`
+
+## 13. Calendar and meetings
+
+- [ ] 13.1 Owner approves `icalendar` + `recurring-ical-events`; connect calendars by secret address and mark them, sync events, Meetings page, reminders before meetings; verify `test_ics_recurring_expanded_kyiv`, `test_declined_and_all_day_not_reminded`, `meeting.test.tsx`
+- [ ] 13.2 Meeting prep at T-30 (or in the morning brief before 10:00) with people, history, loops, ClickUp tasks, goals and agenda; verify `test_prep_and_reminder_times` and a real prep on the owner's phone
+- [ ] 13.3 Meeting notes import (paste, .txt/.md/.vtt/.srt/.docx, forwarded `[meeting]` email) → summary, decisions, owner's loops, team task drafts; verify `test_notes_to_loops_and_task_drafts`
+- [ ] 13.4 Focus blocks and meeting-load warning in briefs; attention audit, neglected goals and decision log in weekly routines; verify `test_focus_blocks_and_meeting_load_warning`, `test_neglected_goal_in_weekly_review`
+
+## 14. Deploy and acceptance
+
+- [ ] 14.1 Deploy `web` and `routines` on Coolify with VAPID env vars, `KB_SECRET_KEY` and the `os.` domain; register passkeys on phone and laptop, install the app, enable push; connect ClickUp and calendars, upload the constitution and 2026 plans, confirm goals; verify one full day of routines, a meeting reminder with prep, and an approved reply draft in Gmail
+- [ ] 14.2 Update `docs/architecture.md`, `docs/external/README.md` and `STATUS.md` (done, next steps, open questions, gotchas)
 
 ## Workflow follow-up
 

@@ -25,6 +25,12 @@ _Last updated: 2026-10-18 by Claude_
   daily backup with automatic restore test (first: 82 MB dump, counts match); MCP lockout verified live.
 - Example eval (5 questions, live): recall@10 1.0, recall@1 0.8, MRR 0.9, p50 1.5 s.
 
+- `web-os-v1` proposal extended (2026-10-18): connectors hub (mail, Telegram dialogs, ClickUp, calendar,
+  Library for constitution/plans), meetings (reminders, prep, notes → task drafts), proactive assistant
+  with approval queue (priority, reply drafts to Gmail Drafts, nudges, delegation, focus, goals);
+  research: `docs/research/react-vs-svelte.md` (React kept), `docs/research/proactive-assistance.md`.
+  Branch merged with `change/v1-baseline-specs` (PR #3 now also contains PR #2's commits).
+
 ## Next steps
 1. Owner: 30 evaluation questions → run `kb eval` → tune if recall@10 < 0.8 (task 10.3), then archive the change.
 2. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key); optionally rotate MCP token.
@@ -33,6 +39,8 @@ _Last updated: 2026-10-18 by Claude_
 5. Next changes (roadmap): ClickUp/Karakeep/Calendar, metrics warehouse, Telegram bot + automations, meeting app.
 
 ## Open questions
+- web-os-v1: approve new dependencies `pypdf`, `python-docx`, `icalendar`, `recurring-ical-events`?
+- web-os-v1: which meeting-notes app is in use (for notes import)?
 - AI scope classifier (planned in v1 design, never wired): build it, or keep rules + unsorted review?
 - Telegram segmentation by silence gap vs topic shift (design: least confident #1).
 - Age decay for personal knowledge (design: least confident #4).

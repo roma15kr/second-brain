@@ -3,7 +3,7 @@ Things outside this repository that agents need to know exist. NAMES only, never
 
 - Environment variables (set in Coolify for the `kb` app):
   - `DATABASE_URL` — Postgres connection string
-  - `KB_SECRET_KEY` — encrypts stored OAuth refresh tokens and IMAP passwords
+  - `KB_SECRET_KEY` — encrypts credentials entered in the web OS (IMAP app passwords, ClickUp token, calendar secret addresses); losing it means re-entering them
   - `KB_MCP_TOKEN` — bearer token MCP clients must send
   - `OPENAI_API_KEY` — server-side LLM: distillation, scope classification, digests (set in Coolify, never in chat)
   - `KB_DISTILL_MODEL` — model id for distillation (default `gpt-6-luna`)
@@ -22,6 +22,8 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - Google Cloud project — Gmail API OAuth client (must be Internal or In production, not Testing)
   - my.telegram.org — Telegram API app credentials
   - OpenAI Platform — API key, usage and monthly spend limit for the server-side LLM
+  - ClickUp API v2 — personal API token (Settings → Apps); 100 requests/min per token on Free–Business plans; reads tasks/comments, creates tasks only after approval (web-os-v1)
+  - Google Calendar secret iCal address — read-only calendar feed, no OAuth (Settings → Integrate calendar); resetting it in Google breaks sync until replaced
   - Web Push services (Apple, Google, Mozilla push endpoints) — deliver notifications to subscribed devices; no content in payloads
   - Reserve storage (S3-compatible, different provider/region than the server; provider TBD) — Coolify Postgres backups and nightly encrypted Vaultwarden export; its credentials are in the printed emergency kit, not only in the vault
 - Test accounts: none yet.

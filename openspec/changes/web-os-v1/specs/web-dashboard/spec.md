@@ -9,7 +9,7 @@ system health, on desktop and phone (mockups in `mockups/`).
 ## ADDED Requirements
 
 ### Requirement: OS shell
-Every page SHALL show a dock of apps (Today, Inbox, Briefs, Week, Loops, Search, People, Scopes, Status, Settings), a command palette (⌘K / Ctrl+K, or a search button on phones) that finds people, conversations, briefs and commands, and a notification center with unread routine notifications. On narrow screens the dock SHALL become a bottom bar.
+Every page SHALL show a dock of apps (Today, Inbox, Assistant, Meetings, Loops, Briefs, Week, Search, People, Library, Connectors, Status, Settings; scope pages open from any scope tag and the palette), a command palette (⌘K / Ctrl+K, or a search button on phones) that finds people, conversations, briefs and commands, and a notification center with unread routine notifications. On narrow screens the dock SHALL become a bottom bar with Today, Inbox, Assistant, Meetings and More.
 
 #### Scenario: Jump to a person
 - **WHEN** the owner presses ⌘K and types "Вячеслав"
@@ -74,3 +74,15 @@ The app SHALL record when a brief is opened and when an item is acted on (open s
 #### Scenario: Opening from a push
 - **WHEN** the owner opens a brief from a notification
 - **THEN** the brief is recorded as opened
+
+### Requirement: Assistant, Meetings, Library and Connectors pages
+Assistant SHALL show the approval queue; Meetings SHALL list upcoming and past meetings with prep, notes, summary and actions; Library SHALL show documents and notes by mark and kind with versions, the "AI may read" switch and the goals to confirm; Connectors SHALL show the connector hub and each connector's settings and marks.
+
+#### Scenario: From reminder to prep
+- **WHEN** the owner taps a meeting reminder
+- **THEN** the meeting page opens with the prep (attendees, history, open loops, agenda)
+
+#### Scenario: Marking dialogs
+- **WHEN** the owner opens the Telegram connector
+- **THEN** included dialogs with their marks and the "to mark" list of new dialogs are shown
+

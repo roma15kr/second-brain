@@ -34,7 +34,7 @@ Every item in a brief SHALL link to the conversation it came from (opening the c
 - **THEN** the conversation it came from opens
 
 ### Requirement: Morning brief content
-The morning brief SHALL contain: activity since the last evening wrap per scope; conversations that need the owner's reply; promises due today or overdue (by and to the owner); a suggested focus of at most 3 items; and the times of the next routines.
+The morning brief SHALL contain: today's meetings with links to their prep; activity since the last evening wrap per scope; conversations that need the owner's reply, in priority order; promises and ClickUp tasks due today or overdue (by and to the owner); suggestions waiting for approval; free focus blocks with a suggested focus of at most 3 items tied to the week's priorities; and the times of the next routines.
 
 #### Scenario: Busy night in one scope
 - **WHEN** 13 RDIM chat conversations and 1 Quokka email arrived overnight
@@ -59,21 +59,21 @@ The owner SHALL be able to mark a sender as noise or important; later passes SHA
 - **THEN** that sender's next emails are classified as noise without needing review
 
 ### Requirement: Evening wrap content
-The evening wrap SHALL contain: decisions and outcomes from today's conversations, open loops opened and closed today, still-unanswered needs-reply items, and carry-overs for tomorrow.
+The evening wrap SHALL contain: decisions and outcomes from today's conversations and meetings, open loops opened and closed today, still-unanswered needs-reply items, suggestions still waiting for approval, tomorrow's meetings and meeting load, and carry-overs for tomorrow.
 
 #### Scenario: Closing the day
 - **WHEN** two loops were closed and one new promise was made today
 - **THEN** the wrap lists both closed loops and the new promise with its due date
 
 ### Requirement: Weekly review content (Friday)
-The weekly review SHALL summarize the week per scope (key conversations, decisions, people most interacted with), list open loops by age, and show numbers (threads, chat conversations, decisions, loops opened/closed).
+The weekly review SHALL summarize the week per scope (key conversations, meetings, decisions, people most interacted with), list open loops by age, show progress against confirmed goals and where attention went, and show numbers (threads, chat conversations, meetings, tasks, decisions, loops opened/closed).
 
 #### Scenario: Week across scopes
 - **WHEN** the weekly review runs on Friday 19:00
 - **THEN** it has a section for each scope with activity that week and omits scopes without activity
 
 ### Requirement: Weekly plan content (Monday)
-The weekly plan SHALL recap the previous Monday–Sunday week and propose a plan for the coming week: loops due this week, aging loops to chase, and up to 5 suggested priorities with reasons and sources. The owner SHALL be able to accept or edit the plan; accepted priorities SHALL be referenced by the next morning briefs.
+The weekly plan SHALL recap the previous Monday–Sunday week and propose a plan for the coming week: the week's meetings, loops and ClickUp tasks due this week, aging loops to chase, and up to 5 suggested priorities drawn from confirmed goals, each with the goal, reason and sources. The owner SHALL be able to accept or edit the plan; accepted priorities SHALL be referenced by the next morning briefs.
 
 #### Scenario: Accepting the plan
 - **WHEN** the owner accepts the Monday plan

@@ -1,0 +1,50 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Second brain — Connectors</title><style>
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:#1d2330;background:#f4f5f8}
+a{color:#2f5bd3;text-decoration:none}.shell{display:grid;grid-template-columns:72px 1fr;min-height:100vh}
+.dock{background:#1d2330;color:#cfd5e3;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0}
+.dock a{color:#cfd5e3;width:56px;text-align:center;font-size:11px;padding:6px 0;border-radius:8px}
+.dock a.on{background:#33405c;color:#fff}.dock .i{display:block;font-size:20px}
+.top{display:flex;align-items:center;gap:12px;padding:10px 20px;background:#fff;border-bottom:1px solid #e3e6ee}
+.top .cmd{flex:1;max-width:520px;padding:7px 12px;border:1px solid #d6dbe7;border-radius:8px;color:#8a93a6}
+.top .bell{margin-left:auto}.main{padding:20px;display:grid;gap:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.card{background:#fff;border:1px solid #e3e6ee;border-radius:12px;padding:14px 16px}
+.card h2{margin:0 0 8px;font-size:15px}.muted{color:#6b7488;font-size:12px}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;margin-right:4px;background:#eef1f7}
+.personal{background:#e7f6ec}.digisoft{background:#e8efff}.quokka{background:#fff3df}.rdim{background:#fde8ec}
+ul.list{list-style:none;margin:0;padding:0}ul.list li{padding:8px 0;border-top:1px solid #f0f1f5}ul.list li:first-child{border-top:0}
+.row{display:flex;gap:8px;align-items:center}.btn{font-size:12px;padding:3px 9px;border:1px solid #d6dbe7;border-radius:6px;background:#fff}
+.btn.primary{background:#2f5bd3;color:#fff;border-color:#2f5bd3}.kpi{font-size:22px;font-weight:600}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px 4px;border-top:1px solid #f0f1f5;font-size:13px}
+.note{background:#fffbe6;border:1px dashed #e0c870;border-radius:8px;padding:8px 12px;font-size:12px}
+@media (max-width:700px){.shell{grid-template-columns:1fr}.dock{flex-direction:row;position:fixed;bottom:0;left:0;right:0;justify-content:space-around;padding:6px;z-index:2}.main{padding-bottom:90px}}
+
+.sw{display:inline-block;width:30px;height:17px;border-radius:9px;background:#cfd5e3;position:relative;vertical-align:middle}.sw:after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:#fff}.sw.on{background:#2f9e5b}.sw.on:after{left:15px}
+.state{font-size:11px;padding:1px 7px;border-radius:10px}.ok{background:#e7f6ec;color:#1c6b3a}.warn{background:#fde8ec;color:#a3243b}.plan{background:#eef1f7;color:#59627a}.no{background:#f4f4f4;color:#888}
+.draft{white-space:pre-wrap;background:#f8f9fc;border:1px solid #e3e6ee;border-radius:8px;padding:10px;font-size:13px}
+.drop{border:2px dashed #c8cfdf;border-radius:12px;padding:18px;text-align:center;color:#6b7488}
+</style></head><body><div class="shell"><nav class="dock"><a href="today.html" class=""><span class="i">☀</span>Today</a><a href="inbox.html" class=""><span class="i">✉</span>Inbox</a><a href="assistant.html" class=""><span class="i">✦</span>Assistant</a><a href="meeting.html" class=""><span class="i">🗓</span>Meetings</a><a href="loops.html" class=""><span class="i">↺</span>Loops</a><a href="briefs.html" class=""><span class="i">🗞</span>Briefs</a><a href="week.html" class=""><span class="i">📅</span>Week</a><a href="search.html" class=""><span class="i">🔎</span>Search</a><a href="people.html" class=""><span class="i">👥</span>People</a><a href="library.html" class=""><span class="i">📚</span>Library</a><a href="connectors.html" class="on"><span class="i">🔌</span>Connectors</a><a href="status.html" class=""><span class="i">❤</span>Status</a><a href="settings.html" class=""><span class="i">⚙</span>Settings</a></nav><div>
+<header class="top"><strong>Connectors</strong><span class="cmd">⌘K  Search or jump to… (people, chats, briefs, commands)</span><span class="bell">🔔 <span class="tag">3</span></span><span class="muted">Sun 18 Oct · Kyiv 08:02</span></header>
+<main class="main">
+<div class="note">Everything the second brain knows comes from here. Each source is marked <b>Personal</b> or a <b>project</b>; new dialogs, lists and calendars wait under “to mark” until you decide.</div>
+<div class="card"><h2>Connected</h2><table><tr><th>Connector</th><th>State</th><th>Last sync</th><th>Marks</th><th>Items</th><th></th></tr>
+<tr><td>✉ <b>Gmail</b> digisoftou@gmail.com</td><td><span class="state ok">healthy</span></td><td>2 min ago</td><td>default <span class="tag digisoft">digisoft</span> + 6 rules</td><td>625 threads</td><td><a class="btn" href="connector-mail.html">Settings</a></td></tr>
+<tr><td>✈ <b>Telegram</b> owner account</td><td><span class="state ok">healthy</span></td><td>1 min ago</td><td>12 dialogs marked · <b>4 to mark</b></td><td>2,207 conversations</td><td><a class="btn" href="connector-telegram.html">Settings</a></td></tr>
+<tr><td>☑ <b>ClickUp</b> Quokka workspace</td><td><span class="state ok">healthy</span></td><td>4 min ago</td><td>3 lists <span class="tag quokka">quokka</span> · 1 to mark</td><td>418 tasks</td><td><a class="btn" href="connector-clickup.html">Settings</a></td></tr>
+<tr><td>🗓 <b>Calendar</b> Google (secret address)</td><td><span class="state warn">needs attention</span></td><td>3 h ago</td><td>2 calendars: <span class="tag personal">personal</span><span class="tag rdim">rdim</span></td><td>36 upcoming</td><td><span class="btn primary">Replace address</span></td></tr>
+<tr><td>📚 <b>Library</b> files &amp; notes</td><td><span class="state ok">ok</span></td><td>—</td><td>4 core documents</td><td>23 documents</td><td><a class="btn" href="library.html">Open</a></td></tr>
+<tr><td>🎙 <b>Meeting notes</b> import (paste, file, forwarded email)</td><td><span class="state ok">ok</span></td><td>yesterday</td><td>by meeting's calendar</td><td>9 meetings</td><td><a class="btn" href="meeting.html">Meetings</a></td></tr></table>
+<p class="muted">Calendar error: “403 — secret address was reset”. Fix: copy the new secret address from Google Calendar → Settings → Integrate calendar.</p></div>
+<div class="grid">
+<div class="card"><h2>Add</h2><ul class="list"><li>✉ Another mailbox (Gmail, Workspace, Zoho, own domain) — app password</li><li>🗓 Another calendar — secret iCal address</li><li>☑ Another ClickUp workspace — personal API token</li></ul></div>
+<div class="card"><h2>Planned</h2><ul class="list">
+<li><span class="state plan">planned</span> <b>GitHub</b> — code, issues, PRs (Digisoft, RDIM B2B)</li>
+<li><span class="state plan">planned</span> <b>Karakeep</b> — saved links and web clips</li>
+<li><span class="state plan">planned</span> <b>Google Drive</b> — keep Library documents in sync</li>
+<li><span class="state plan">planned</span> <b>GA4 · Meta Ads · Google Ads · TikTok Ads</b> — metrics in CMO standups</li>
+<li><span class="state plan">planned</span> <b>Marketplaces · Shopify · Stripe</b> — sales and payments</li>
+<li><span class="state plan">planned</span> <b>Vault &amp; ops</b> — domain expiry, failed payments</li>
+<li><span class="state no">not possible live</span> <b>WhatsApp</b> — no official API for personal accounts; chat-export import planned</li></ul></div></div>
+
+</main></div></div></body></html>
