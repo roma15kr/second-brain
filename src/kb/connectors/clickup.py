@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -24,6 +24,7 @@ from kb.redact import redact_text
 log = logging.getLogger(__name__)
 
 API = "https://api.clickup.com/api/v2"
+API3 = "https://api.clickup.com/api/v3"  # Chat (channels, messages)
 PAGE_SIZE = 100  # ClickUp returns up to 100 tasks per page
 PAGE_LIMIT = 50  # safety bound on pages per list per walk
 MIN_INTERVAL = 0.65  # seconds between requests: stays under 100 requests/minute
@@ -152,6 +153,51 @@ class ClickUpClient:
     def create_task(self, list_id: str, body: dict[str, Any]) -> dict[str, Any]:
         return dict(self._req("POST", f"/list/{list_id}/task", json=body))
 
+    def team_members(self, team_id: str) -> dict[str, dict[str, Any]]:
+        """user id → {username, email} for the workspace (chat messages carry only ids)."""
+        for t in self.teams():
+            if str(t["id"]) == str(team_id):
+                return {
+                    str((m.get("user") or {}).get("id")): {
+                        "username": (m.get("user") or {}).get("username") or "",
+                        "email": ((m.get("user") or {}).get("email") or "").lower(),
+                    }
+                    for m in t.get("members") or []
+                }
+        return {}
+
+    def followed_channels(self, team_id: str) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        params: dict[str, str] = {"is_follower": "true", "limit": "100"}
+        for _ in range(10):
+            data = self._req("GET", f"{API3}/workspaces/{team_id}/chat/channels", params=params)
+            out.extend(data.get("data") or [])
+            if not data.get("next_cursor"):
+                break
+            params = {**params, "cursor": str(data["next_cursor"])}
+        return out
+
+    def chat_messages(self, team_id: str, channel_id: str, since_ms: int) -> list[dict[str, Any]]:
+        """Top-level messages newer than since_ms (the API returns newest first)."""
+        out: list[dict[str, Any]] = []
+        params: dict[str, str] = {"limit": "100", "content_format": "text/plain"}
+        for _ in range(5):
+            data = self._req(
+                "GET",
+                f"{API3}/workspaces/{team_id}/chat/channels/{channel_id}/messages",
+                params=params,
+            )
+            page = list(data.get("data") or [])
+            newer = [m for m in page if int(m.get("date") or 0) > since_ms]
+            out.extend(newer)
+            if len(newer) < len(page) or not data.get("next_cursor"):
+                break
+            params = {**params, "cursor": str(data["next_cursor"])}
+        return sorted(out, key=lambda m: int(m.get("date") or 0))
+
+    def groups(self, team_id: str) -> list[dict[str, Any]]:
+        return list(self._req("GET", "/group", params={"team_id": team_id}).get("groups") or [])
+
     def list_members(self, list_id: str) -> list[dict[str, Any]]:
         return list(self._req("GET", f"/list/{list_id}/member").get("members") or [])
 
@@ -172,6 +218,10 @@ class Account:
     id: int
     token: str
     team_id: str
+    settings: dict[str, Any] | None = None
+
+
+DEFAULT_GROUP = "DTC"
 
 
 def accounts(conn: Conn) -> list[Account]:
@@ -251,6 +301,7 @@ def upsert_task(
     task: dict[str, Any],
     comments: list[dict[str, Any]],
     scopes: list[str],
+    account: Account | None = None,
 ) -> int:
     sid = source_id(account_id)
     archive.put(
@@ -329,6 +380,8 @@ def upsert_task(
     )
     if status.get("type") in CLOSED_TYPES:
         close_task_loops(conn, str(task["id"]))
+    if account is not None:
+        detect_for_owner(conn, account, int(row["id"]), task, comments)
     return int(row["id"])
 
 
@@ -426,7 +479,12 @@ def refresh_recent_comments(
         if client.newest_comment_id(r["task_id"]) == r["newest"]:
             continue
         upsert_task(
-            conn, account.id, r["payload"]["task"], client.comments(r["task_id"]), list(r["scopes"])
+            conn,
+            account.id,
+            r["payload"]["task"],
+            client.comments(r["task_id"]),
+            list(r["scopes"]),
+            account,
         )
         updated += 1
     return updated
@@ -447,6 +505,7 @@ def sync_list(
     account_id: int,
     list_row: dict[str, Any],
     deadline: float | None = None,
+    account: Account | None = None,
 ) -> tuple[int, bool]:
     """Walks every page of tasks updated after the list's cursor. Tasks already stored unchanged
     are skipped without further requests, so a walk interrupted by the rate limit resumes almost
@@ -469,7 +528,12 @@ def sync_list(
             if deadline is not None and time.monotonic() > deadline:
                 return synced, False
             upsert_task(
-                conn, account_id, t, client.comments(str(t["id"])), list(list_row["scopes"])
+                conn,
+                account_id,
+                t,
+                client.comments(str(t["id"])),
+                list(list_row["scopes"]),
+                account,
             )
             synced += 1
         if last or not tasks:
@@ -499,9 +563,346 @@ def sync_account_for(
     ).fetchall()
     total, finished = 0, True
     for r in rows:
-        n, done = sync_list(conn, client, account.id, dict(r), deadline)
+        n, done = sync_list(conn, client, account.id, dict(r), deadline, account)
         total += n
         if not done:
             finished = False
             break
     return total, finished
+
+
+# --- items for the owner (pushed right away) ---------------------------------------------------
+
+
+def ensure_identity(
+    conn: Conn, client: ClickUpClient, account: Account, now: datetime, refresh_group: bool = False
+) -> dict[str, Any]:
+    """The owner's ClickUp user id, the team group to watch (default DTC) and the moment
+    notifications start (nothing older ever notifies)."""
+    row = conn.execute(
+        "SELECT settings FROM connector_accounts WHERE id = %s", (account.id,)
+    ).fetchone()
+    settings = {**(account.settings or {}), **(row["settings"] if row else {})}
+    changed = False
+    if not settings.get("owner_user_id"):
+        user = client.user()
+        settings["owner_user_id"] = str(user.get("id"))
+        settings["owner_email"] = (user.get("email") or "").lower()
+        changed = True
+    if not settings.get("notify_since"):
+        settings["notify_since"] = now.isoformat()
+        changed = True
+    if refresh_group or "group_id" not in settings:
+        name = (settings.get("group_name") or DEFAULT_GROUP).lower()
+        found = next(
+            (g for g in client.groups(account.team_id) if (g.get("name") or "").lower() == name),
+            None,
+        )
+        settings["group_id"] = str(found["id"]) if found else None
+        changed = True
+    if refresh_group or "members" not in settings:
+        settings["members"] = client.team_members(account.team_id)
+        changed = True
+    if changed:
+        conn.execute(
+            "UPDATE connector_accounts SET settings = %s WHERE id = %s",
+            (Jsonb(settings), account.id),
+        )
+        account.settings = settings
+    return settings
+
+
+def _ids(users: list[dict[str, Any]] | None) -> set[str]:
+    return {str(u.get("id")) for u in users or [] if u.get("id") is not None}
+
+
+def detect_for_owner(
+    conn: Conn, account: Account, item_id: int, task: dict[str, Any], comments: list[dict[str, Any]]
+) -> int:
+    """Records events that concern the owner or the team group (each once)."""
+    s = account.settings or {}
+    owner, group = s.get("owner_user_id"), s.get("group_id")
+    group_name = (s.get("group_name") or DEFAULT_GROUP).lower()
+    since = datetime.fromisoformat(s["notify_since"]) if s.get("notify_since") else None
+    if not owner or since is None:
+        return 0
+    events: list[tuple[str, str, str, datetime | None]] = []
+    updated = _ms(task.get("date_updated"))
+    followed = owner in _ids(task.get("watchers"))
+    created = _ms(task.get("date_created"))
+    creator = str((task.get("creator") or {}).get("id"))
+    if followed and created and created > since and creator != owner:
+        events.append((f"task:{task['id']}:new", "followed_new_task", "", created))
+    if updated and updated > since:
+        if owner in _ids(task.get("assignees")):
+            events.append((f"task:{task['id']}:assigned:{owner}", "assigned", "", updated))
+        if group and group in _ids(task.get("group_assignees")):
+            events.append((f"task:{task['id']}:group:{group}", "group_assigned", "", updated))
+    flat = [r for top in comments for r in [top, *(top.get("replies") or [])]]
+    for c in flat:
+        when = _ms(c.get("date"))
+        author = c.get("user") or {}
+        if when is None or when <= since or str(author.get("id")) == owner:
+            continue
+        actor = author.get("username") or ""
+        cid = c.get("id")
+        if str((c.get("assignee") or {}).get("id")) == owner:
+            events.append((f"comment:{cid}:assigned", "comment_assigned", actor, when))
+        parts = c.get("comment") or []
+        mentions_owner = any(
+            p.get("type") == "tag" and str((p.get("user") or {}).get("id")) == owner for p in parts
+        )
+        mentions_group = bool(group) and any(
+            str((p.get("group") or p.get("user_group") or {}).get("id")) == group for p in parts
+        )
+        mentions_group = mentions_group or f"@{group_name}" in (c.get("comment_text") or "").lower()
+        if group and str((c.get("group_assignee") or {}).get("id")) == group:
+            mentions_group = True
+        if mentions_owner:
+            events.append((f"comment:{cid}:mentioned", "mentioned", actor, when))
+        if mentions_group:
+            events.append((f"comment:{cid}:group", "group_mentioned", actor, when))
+        if followed and not (mentions_owner or mentions_group):
+            events.append((f"comment:{cid}:followed", "followed_comment", actor, when))
+    n = 0
+    for key, kind, actor, when in events:
+        row = conn.execute(
+            "INSERT INTO clickup_notifications (key, account_id, item_id, kind, actor, event_at)"
+            " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (key) DO NOTHING RETURNING key",
+            (key, account.id, item_id, kind, actor, when),
+        ).fetchone()
+        n += 1 if row else 0
+    return n
+
+
+FOLLOWED = ("followed_new_task", "followed_comment", "followed_chat")
+FOLLOWED_PUSH_EVERY = timedelta(
+    minutes=15
+)  # followed activity: one summary push at most this often
+
+HEADLINES = {
+    "followed_new_task": "ClickUp: new task you follow",
+    "followed_comment": "ClickUp: {actor} commented on a task you follow",
+    "followed_chat": "ClickUp chat: {actor} wrote in a channel you follow",
+    "assigned": "ClickUp: a task was assigned to you",
+    "group_assigned": "ClickUp: a task was assigned to {group}",
+    "mentioned": "ClickUp: {actor} mentioned you",
+    "group_mentioned": "ClickUp: {actor} mentioned {group}",
+    "comment_assigned": "ClickUp: {actor} assigned you a comment",
+}
+
+
+def push_pending(conn: Conn, now: datetime) -> int:
+    """Routines service. Items for the owner (assigned, mentioned) push one by one; followed
+    activity is summed up in one push at most every 15 minutes. During quiet hours nothing is
+    pushed: the items are held for the next brief instead (no late-night buzz, no duplicate)."""
+    from kb import loops, push, settings_store
+
+    quiet = settings_store.load(conn).quiet_hours
+    pending = conn.execute(
+        "SELECT n.*, a.settings FROM clickup_notifications n"
+        " JOIN connector_accounts a ON a.id = n.account_id"
+        " WHERE n.handled_at IS NULL ORDER BY n.created_at"
+    ).fetchall()
+    if not pending:
+        return 0
+    if push.in_quiet_hours(now, quiet.start, quiet.end):
+        conn.execute(
+            "UPDATE clickup_notifications SET handled_at = %s WHERE key = ANY(%s)",
+            (now, [r["key"] for r in pending]),
+        )
+        return 0
+    sent = 0
+    for r in [r for r in pending if r["kind"] not in FOLLOWED][:20]:
+        group = (r["settings"] or {}).get("group_name") or DEFAULT_GROUP
+        headline = HEADLINES[r["kind"]].format(actor=r["actor"] or "Someone", group=group)
+        url = f"/c/{r['item_id']}" if r["item_id"] else "/clickup"
+        n = push.send(conn, "clickup", headline, url, now)
+        conn.execute(
+            "UPDATE clickup_notifications SET handled_at = %s, pushed = %s WHERE key = %s",
+            (now, n > 0, r["key"]),
+        )
+        sent += n
+    followed = [r for r in pending if r["kind"] in FOLLOWED]
+    last = loops.get_setting(conn, "clickup_followed_pushed_at", None)
+    if followed and (last is None or now - datetime.fromisoformat(last) >= FOLLOWED_PUSH_EVERY):
+        items = {r["item_id"] for r in followed}
+        chats = sum(1 for r in followed if r["kind"] == "followed_chat")
+        parts = [
+            f"{len(followed) - chats} task updates" if len(followed) > chats else "",
+            f"{chats} chat messages" if chats else "",
+        ]
+        headline = "ClickUp: " + " and ".join(p for p in parts if p) + " you follow"
+        url = f"/c/{next(iter(items))}" if len(items) == 1 and None not in items else "/clickup"
+        n = push.send(conn, "clickup", headline, url, now)
+        conn.execute(
+            "UPDATE clickup_notifications SET handled_at = %s, pushed = %s WHERE key = ANY(%s)",
+            (now, n > 0, [r["key"] for r in followed]),
+        )
+        loops.set_setting(conn, "clickup_followed_pushed_at", now.isoformat())
+        sent += n
+    return sent
+
+
+# --- chat channels the owner follows ------------------------------------------------------------
+
+
+def chat_scopes(conn: Conn, account_id: int) -> list[str]:
+    """Chat channels are marked like most of the account's synced lists."""
+    row = conn.execute(
+        "SELECT s, count(*) AS n FROM clickup_lists, unnest(scopes) s WHERE account_id = %s"
+        " AND sync GROUP BY s ORDER BY n DESC LIMIT 1",
+        (account_id,),
+    ).fetchone()
+    return [row["s"]] if row else ["unsorted"]
+
+
+def sync_chat(conn: Conn, client: ClickUpClient, account: Account, now: datetime) -> int:
+    """New messages in followed channels: archived, indexed per channel per day (searchable),
+    and noted for the owner when written by someone else."""
+    from kb.connectors.base import get_state, set_state
+
+    sid = source_id(account.id)
+    s = account.settings or {}
+    members: dict[str, dict[str, Any]] = s.get("members") or {}
+    owner = s.get("owner_user_id")
+    since_notify = datetime.fromisoformat(s["notify_since"]) if s.get("notify_since") else now
+    scopes = chat_scopes(conn, account.id)
+    stored = 0
+    for ch in client.followed_channels(account.team_id):
+        cid = str(ch["id"])
+        state = get_state(conn, sid, f"chat:{cid}") or {}
+        since_ms = int(state.get("since_ms") or int((now - timedelta(days=30)).timestamp() * 1000))
+        messages = client.chat_messages(account.team_id, cid, since_ms)
+        days: set[str] = set()
+        for m in messages:
+            archive.put(
+                conn,
+                archive.RawRecord(
+                    source_id=sid,
+                    external_id=f"chat:{m['id']}",
+                    kind="clickup_chat_message",
+                    occurred_at=_ms(m.get("date")),
+                    payload={"channel": {"id": cid, "name": ch.get("name")}, "message": m},
+                ),
+            )
+            when = _ms(m.get("date"))
+            if when is None:
+                continue
+            days.add(when.date().isoformat())
+            since_ms = max(since_ms, int(m.get("date") or 0))
+            stored += 1
+        item_ids = {d: _index_chat_day(conn, sid, ch, d, members, scopes) for d in sorted(days)}
+        for m in messages:
+            when = _ms(m.get("date"))
+            author = str(m.get("user_id") or "")
+            if when is None or when <= since_notify or author == owner:
+                continue
+            conn.execute(
+                "INSERT INTO clickup_notifications (key, account_id, item_id, kind, actor,"
+                " event_at) VALUES (%s, %s, %s, 'followed_chat', %s, %s)"
+                " ON CONFLICT (key) DO NOTHING",
+                (
+                    f"chat:{m['id']}",
+                    account.id,
+                    item_ids.get(when.date().isoformat()),
+                    (members.get(author) or {}).get("username") or "",
+                    when,
+                ),
+            )
+        set_state(conn, sid, f"chat:{cid}", {"since_ms": since_ms})
+    return stored
+
+
+def _index_chat_day(
+    conn: Conn,
+    sid: str,
+    channel: dict[str, Any],
+    day: str,
+    members: dict[str, dict[str, Any]],
+    scopes: list[str],
+) -> int:
+    rows = conn.execute(
+        "SELECT payload FROM raw_records WHERE source_id = %s AND kind = 'clickup_chat_message'"
+        " AND payload->'channel'->>'id' = %s"
+        " AND (to_timestamp((payload->'message'->>'date')::bigint / 1000.0) AT TIME ZONE 'UTC')"
+        "::date = %s::date",
+        (sid, str(channel["id"]), day),
+    ).fetchall()
+    msgs = sorted((r["payload"]["message"] for r in rows), key=lambda m: int(m.get("date") or 0))
+    seen: set[str] = set()
+    lines, keys, people_ = [], [], []
+    for m in msgs:
+        if m["id"] in seen:
+            continue
+        seen.add(m["id"])
+        user = members.get(str(m.get("user_id"))) or {}
+        who = user.get("username") or "?"
+        lines.append(f"{who}: {m.get('content') or ''}")
+        if user.get("email"):
+            keys.append(people.email_key(user["email"]))
+            people_.append(who)
+    last = _ms(msgs[-1].get("date")) if msgs else None
+    text = redact_text("\n".join(lines))
+    title = f"#{channel.get('name') or 'chat'} · {day}"
+    row = conn.execute(
+        """
+        INSERT INTO items (source_id, source_item_key, kind, scopes, title, raw_text, participants,
+                           occurred_at, last_activity_at, identity_keys, metadata, content_hash)
+        VALUES (%s, %s, 'clickup_chat', %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (source_id, source_item_key) DO UPDATE SET raw_text = EXCLUDED.raw_text,
+            participants = EXCLUDED.participants, last_activity_at = EXCLUDED.last_activity_at,
+            identity_keys = EXCLUDED.identity_keys, content_hash = EXCLUDED.content_hash,
+            updated_at = now()
+        RETURNING id
+        """,
+        (
+            sid,
+            f"chat:{channel['id']}:{day}",
+            scopes,
+            title,
+            text,
+            sorted(set(people_)),
+            _ms(msgs[0].get("date")) if msgs else None,
+            last,
+            sorted(set(keys)),
+            Jsonb({"channel_id": str(channel["id"]), "channel": channel.get("name"), "day": day}),
+            distill.content_hash(title, text),
+        ),
+    ).fetchone()
+    assert row is not None
+    return int(row["id"])
+
+
+def for_brief(conn: Conn, window: tuple[datetime, datetime]) -> list[dict[str, Any]]:
+    """ClickUp items for the owner in a brief's window, one row per task."""
+    rows = conn.execute(
+        """
+        SELECT DISTINCT ON (n.item_id) n.item_id, n.kind, n.actor, n.created_at, i.title,
+               i.locator, i.scopes, a.settings
+        FROM clickup_notifications n JOIN items i ON i.id = n.item_id
+        JOIN connector_accounts a ON a.id = n.account_id
+        WHERE n.created_at > %s AND n.created_at <= %s
+        ORDER BY n.item_id, n.created_at DESC
+        """,
+        window,
+    ).fetchall()
+    out = []
+    for r in rows:
+        group = (r["settings"] or {}).get("group_name") or DEFAULT_GROUP
+        why = HEADLINES[r["kind"]].format(actor=r["actor"] or "Someone", group=group)
+        out.append(
+            {
+                "ref": f"item:{r['item_id']}",
+                "id": r["item_id"],
+                "kind": "clickup_task",
+                "title": r["title"],
+                "summary": why.removeprefix("ClickUp: "),
+                "outcome": None,
+                "link": r["locator"],
+                "last_activity_at": r["created_at"].isoformat(),
+                "scopes": list(r["scopes"]),
+                "participants": [r["actor"]] if r["actor"] else [],
+            }
+        )
+    return out

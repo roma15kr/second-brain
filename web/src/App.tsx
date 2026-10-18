@@ -10,6 +10,7 @@ import { SignIn } from "./auth/SignIn";
 import { useMe } from "./auth/useMe";
 import { BriefPage } from "./pages/BriefPage";
 import { Briefs } from "./pages/Briefs";
+import { ClickUpUpdates } from "./pages/ClickUpUpdates";
 import { Conversation } from "./pages/Conversation";
 import { Goals } from "./pages/Goals";
 import { Inbox } from "./pages/Inbox";
@@ -53,6 +54,7 @@ function Routed({ needsPasskey }: { needsPasskey: boolean }) {
         <Route path="/scopes/:scope" element={<Scope />} />
         <Route path="/settings" element={<Settings security={<Security />} />} />
         <Route path="/status" element={<Status />} />
+        <Route path="/clickup" element={<ClickUpUpdates />} />
         <Route path="/library" element={<Library goals={<Goals />} />} />
         <Route path="/library/:id" element={<LibraryDoc />} />
         <Route path="/connectors" element={<Connectors />} />

@@ -35,6 +35,7 @@ const ROUTINE_LABELS: Record<string, string> = {
   evening: "Evening wrap",
   weekly_review: "Weekly review",
   weekly_plan: "Weekly plan",
+  clickup: "ClickUp for me",
 };
 const hm = (t: string) => t.slice(0, 5);
 

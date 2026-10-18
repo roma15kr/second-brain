@@ -25,7 +25,7 @@ NOT_DRAFT = "NOT (coalesce(m.metadata->'labels', '[]'::jsonb) ? '\\Draft')"
 
 
 def owner_emails(conn: Conn, config: Config) -> set[str]:
-    """Connected mailboxes plus addresses the owner added in Settings."""
+    """Connected mailboxes, the owner's ClickUp login, plus addresses added in Settings."""
     from kb.connectors import accounts
 
     out: set[str] = set()
@@ -36,6 +36,13 @@ def owner_emails(conn: Conn, config: Config) -> set[str]:
             except Exception:  # mailbox credentials not available in this process
                 continue
     out.update(a.lower() for a in get_setting(conn, "owner_emails", []))
+    out.update(
+        r["e"]
+        for r in conn.execute(
+            "SELECT lower(settings->>'owner_email') AS e FROM connector_accounts"
+            " WHERE kind = 'clickup' AND state = 'active' AND settings->>'owner_email' <> ''"
+        ).fetchall()
+    )
     return out
 
 

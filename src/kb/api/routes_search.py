@@ -5,7 +5,7 @@ it (tests, local runs) the same search runs here with words only. Briefs are sea
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
 import httpx
@@ -135,6 +135,27 @@ def item(
     except KeyError:
         raise HTTPException(404, f"no conversation {item_id}") from None
     it = page["item"]
+    messages = [
+        {
+            "key": m["message_key"],
+            "author": m["author"],
+            "sent_at": m["sent_at"].isoformat(),
+            "text": m["body"],
+            "locator": m["locator"],
+        }
+        for m in page["messages"]
+    ]
+    if not messages and it["raw_text"]:  # ClickUp tasks, documents: their text as one block
+        when = it["last_activity_at"] or it["occurred_at"] or datetime.now(UTC)
+        messages = [
+            {
+                "key": "text",
+                "author": "",
+                "sent_at": when.isoformat(),
+                "text": it["raw_text"],
+                "locator": it["locator"],
+            }
+        ]
     loops = conn.execute(
         "SELECT id, kind, title, status, due_date FROM loops WHERE item_id = %s ORDER BY id DESC",
         (item_id,),
@@ -153,16 +174,7 @@ def item(
         "total": page["total"],
         "offset": offset,
         "next_offset": page["next_offset"],
-        "messages": [
-            {
-                "key": m["message_key"],
-                "author": m["author"],
-                "sent_at": m["sent_at"].isoformat(),
-                "text": m["body"],
-                "locator": m["locator"],
-            }
-            for m in page["messages"]
-        ],
+        "messages": messages,
         "loops": [
             {
                 "id": lp["id"],

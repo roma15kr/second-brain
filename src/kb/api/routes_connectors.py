@@ -481,6 +481,9 @@ def clickup_overview(conn: Db) -> dict[str, Any]:
                 "label": a["label"],
                 "team": a["settings"].get("team_name"),
                 "state": a["state"],
+                "owner": a["settings"].get("owner_email"),
+                "group_name": a["settings"].get("group_name") or "DTC",
+                "group_found": bool(a["settings"].get("group_id")),
             }
             for a in accounts_
         ],
@@ -535,8 +538,67 @@ def clickup_list(
         relabelled = len(
             conn.execute(
                 "UPDATE items SET scopes = %s WHERE kind = 'clickup_task'"
-                " AND metadata->>'list_id' = %s RETURNING 1",
+                " AND metadata->>'list_id' = %s RETURNING id",
                 (scopes_, list_id),
             ).fetchall()
         )
+        conn.execute(  # long comment threads are also indexed in chunks under the task
+            "UPDATE items c SET scopes = %s FROM items t WHERE c.kind = 'clickup_comments'"
+            " AND (c.metadata->>'parent_item_id')::bigint = t.id AND t.kind = 'clickup_task'"
+            " AND t.metadata->>'list_id' = %s",
+            (scopes_, list_id),
+        )
     return {"relabelled_tasks": relabelled}
+
+
+@router.get("/api/clickup/updates")
+def clickup_updates(conn: Db, days: int = 3) -> dict[str, Any]:
+    """ClickUp items for the owner (assigned, mentioned, followed) of the last days."""
+    from kb.connectors import clickup
+
+    rows = conn.execute(
+        """
+        SELECT n.kind, n.actor, n.created_at, n.event_at, n.pushed, n.item_id, i.title,
+               i.locator, i.kind AS item_kind, a.settings
+        FROM clickup_notifications n LEFT JOIN items i ON i.id = n.item_id
+        JOIN connector_accounts a ON a.id = n.account_id
+        WHERE n.created_at > now() - make_interval(days => %s)
+        ORDER BY coalesce(n.event_at, n.created_at) DESC LIMIT 200
+        """,
+        (max(1, min(days, 30)),),
+    ).fetchall()
+    return {
+        "updates": [
+            {
+                "kind": r["kind"],
+                "direct": r["kind"] not in clickup.FOLLOWED,
+                "text": clickup.HEADLINES[r["kind"]]
+                .format(
+                    actor=r["actor"] or "Someone",
+                    group=(r["settings"] or {}).get("group_name") or clickup.DEFAULT_GROUP,
+                )
+                .removeprefix("ClickUp: ")
+                .removeprefix("ClickUp chat: "),
+                "title": r["title"],
+                "item_id": r["item_id"],
+                "link": r["locator"],
+                "at": (r["event_at"] or r["created_at"]).isoformat(),
+                "pushed": r["pushed"],
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.post("/api/connectors/clickup/accounts/{account_id}")
+def clickup_account_settings(
+    conn: Db, account_id: int, group_name: Annotated[str, Body(embed=True)]
+) -> dict[str, bool]:
+    row = conn.execute(
+        "UPDATE connector_accounts SET settings = settings || %s - 'group_id'"
+        " WHERE id = %s AND kind = 'clickup' RETURNING id",
+        (Jsonb({"group_name": group_name.strip() or "DTC"}), account_id),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(404, f"no ClickUp account {account_id}")
+    return {"ok": True}

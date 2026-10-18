@@ -144,6 +144,7 @@ def test_kb_routines_starts_scheduler_with_morning_runner(argv, monkeypatch):
     assert [t.__name__ for t in seen["maintenance"]] == [
         "close_answered_loops",
         "wake_snoozed",
+        "push_clickup",
         "detect_loops",
         "propose_goals",
     ]

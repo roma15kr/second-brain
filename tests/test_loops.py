@@ -103,3 +103,14 @@ def test_reply_by_someone_else_does_not_close(conn, config):
 def test_owner_emails_include_settings(conn, config):
     loops.set_setting(conn, "owner_emails", ["Work@Digisoft.example"])
     assert loops.owner_emails(conn, config) == {"me@example.com", "work@digisoft.example"}
+
+
+def test_owner_emails_include_the_clickup_login(conn, config):
+    from psycopg.types.json import Jsonb
+
+    conn.execute(
+        "INSERT INTO connector_accounts (kind, label, settings, secret)"
+        " VALUES ('clickup', 'Adducate', %s, '')",
+        (Jsonb({"team_id": "T1", "owner_email": "Owner.Login@Gmail.example"}),),
+    )
+    assert "owner.login@gmail.example" in loops.owner_emails(conn, config)
