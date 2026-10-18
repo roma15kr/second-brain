@@ -60,7 +60,7 @@ branch `change/web-os-v1`.
 
 ## 11. ClickUp
 
-- [ ] 11.1 Connect with a personal token, choose and mark spaces/lists, sync tasks and comments with cursors and 429 back-off, link members to people; verify `test_sync_list_incremental_cursor`, `test_429_backoff_resumes` (recorded fixtures) and Quokka tasks searchable on production
+- [x] 11.1 Connect with a personal token, choose and mark spaces/lists, sync tasks and comments with cursors and 429 back-off, link members to people; verify `test_sync_list_incremental_cursor`, `test_429_backoff_resumes` (recorded fixtures) and Quokka tasks searchable on production
 - [x] 11.2 Task suggestions executor (created only after approval, idempotent, linked to source); closed tasks close linked loops; due tasks in the morning brief; verify `test_task_created_only_from_approved`, `test_create_task_idempotent_retry`, `test_closed_task_closes_loop`
 
 ## 12. Proactive assistant
