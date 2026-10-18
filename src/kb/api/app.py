@@ -19,7 +19,7 @@ from fastapi import Body, FastAPI, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from kb.api import auth, routes_today
+from kb.api import auth, routes_push, routes_today
 from kb.db import Conn
 
 PUBLIC_API = {
@@ -32,6 +32,7 @@ PUBLIC_API = {
 }
 CSRF_HEADER = "x-kb-request"
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+NO_CACHE = {"sw.js", "registerSW.js"}  # the service worker must update promptly
 
 Connect = Callable[[], Conn]
 Credential = Annotated[dict[str, Any], Body(embed=True)]
@@ -193,6 +194,7 @@ def build_app(
         return out
 
     app.include_router(routes_today.router)
+    app.include_router(routes_push.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:
@@ -205,6 +207,10 @@ def build_app(
         root = dist.resolve()
         candidate = (root / path).resolve()
         if path and candidate.is_relative_to(root) and candidate.is_file():
+            if candidate.suffix == ".webmanifest":
+                return FileResponse(candidate, media_type="application/manifest+json")
+            if candidate.name in NO_CACHE:
+                return FileResponse(candidate, headers={"Cache-Control": "no-cache"})
             return FileResponse(candidate)
         # index.html must never be cached: it names the current hashed assets.
         return FileResponse(root / "index.html", headers={"Cache-Control": "no-cache"})

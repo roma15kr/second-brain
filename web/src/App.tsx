@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SignIn } from "./auth/SignIn";
 import { useMe } from "./auth/useMe";
 import { Today } from "./pages/Today";
+import { Notifications } from "./push/Notifications";
 
 function Gate() {
   const me = useMe();
@@ -12,6 +13,7 @@ function Gate() {
   return (
     <main className="page">
       <h1>Today</h1>
+      <Notifications />
       <Today />
     </main>
   );

@@ -49,3 +49,12 @@ def test_kb_web_entry_point_serves_built_spa(dist, monkeypatch):
     args = cli.build_parser().parse_args(["web"])
     assert args.func is cli.cmd_web and args.port == 8001
     assert "<div id=root>" in TestClient(cli.build_web_app()).get("/today").text
+
+
+def test_pwa_files_served_with_right_headers(dist):
+    (dist / "sw.js").write_text("self.addEventListener('push', () => {})")
+    (dist / "manifest.webmanifest").write_text('{"name": "Second brain"}')
+    client = TestClient(build_app(dist))
+    assert client.get("/sw.js").headers["cache-control"] == "no-cache"
+    r = client.get("/manifest.webmanifest")
+    assert r.headers["content-type"].startswith("application/manifest+json")

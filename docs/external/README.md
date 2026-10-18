@@ -10,7 +10,7 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` — Gmail API OAuth client
   - `IMAP_PASSWORD_<MAILBOX>` — app password per IMAP mailbox (or stored encrypted via `kb auth imap`)
   - `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` — from my.telegram.org; session file on the `telegram` volume
-  - `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` — Web Push (web-os-v1)
+  - `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` — Web Push (web-os-v1); generate with `kb web vapid-keys`; subject is a `mailto:` contact for push services
   - `KB_WEB_ORIGIN` — public origin of the web OS (passkey relying party), e.g. https://os.141-94-30-173.sslip.io
   - `KB_WEB_DIST` — built SPA directory, set by the Docker image (`/app/web/dist`)
 - Third-party services and dashboards:

@@ -36,6 +36,10 @@ _Last updated: 2026-10-18 by Claude_
   Meeting/call audio stored in the KB for 12 months (ADR 0010 amendment); transcripts forever.
   Branch merged with `change/v1-baseline-specs` (PR #3 now also contains PR #2's commits).
 
+- web-os-v1 slice 1 live (2026-10-18, PR #5): https://os.141-94-30-173.sslip.io — passkey sign-in
+  (owner enrolled), Today page with a data-only morning brief (`kb routines run morning`). `make check`
+  covers python + ts (~10 min). Coolify `web` service, domain set via API after the first deploy.
+
 ## Next steps
 1. Owner: 30 evaluation questions → run `kb eval` → tune if recall@10 < 0.8 (task 10.3), then archive the change.
 2. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key); optionally rotate MCP token.
@@ -51,6 +55,8 @@ _Last updated: 2026-10-18 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
+- Coolify compose domains for a NEW service can only be set after one deploy has loaded the new compose file.
+- First passkey: `kb web setup-code` in the Coolify terminal (web container); codes expire in 1 h.
 - Embedding cost scales with input length: ~1 unit/s on the server CPU at 2,000 chars; a full re-embed of ~3k units takes ~50 min.
 - Workspace has no `bc`; use `curl -w %{time_total}` for timings.
 - After an INDEX_VERSION bump, new mail/messages wait behind the full rebuild in the job queue (minutes); `status` shows the queue.
