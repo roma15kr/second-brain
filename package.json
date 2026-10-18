@@ -1,0 +1,12 @@
+{
+  "name": "second-brain",
+  "private": true,
+  "workspaces": ["web"],
+  "scripts": {
+    "typecheck": "npm run typecheck -w web",
+    "lint": "npm run lint -w web",
+    "test": "npm run test -w web",
+    "format": "npm run format -w web",
+    "build": "npm run build -w web"
+  }
+}

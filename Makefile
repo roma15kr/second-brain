@@ -1,6 +1,6 @@
 # Verification gate for humans, AI agents and CI. Run `make help` to see the targets.
 # STACKS: which stacks this project uses (any of: php python ts). Set by ai-init; edit if needed.
-STACKS := python
+STACKS := python ts
 
 include make/stack.mk
 
