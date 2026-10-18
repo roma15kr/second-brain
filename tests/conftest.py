@@ -20,11 +20,35 @@ def pg_url() -> Iterator[str]:
     yield srv.get_uri("kb_test")
 
 
-@pytest.fixture
-def conn(pg_url: str) -> Iterator[db.Conn]:
+@pytest.fixture(scope="session")
+def migrated(pg_url: str) -> str:
+    """Schema built once per test session; each test then starts from empty tables."""
     with db.connect(pg_url) as c:
         c.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
         db.migrate(c)
+    return pg_url
+
+
+@pytest.fixture
+def conn(migrated: str) -> Iterator[db.Conn]:
+    with db.connect(migrated) as c:
+        tables = [
+            r["tablename"]
+            for r in c.execute(
+                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+                " AND tablename <> 'schema_migrations'"
+            )
+        ]
+        # DELETE is ~100x faster than TRUNCATE on these small tables; FK checks are off while
+        # emptying, and sequences restart so every test sees the same ids.
+        c.execute("SET session_replication_role = replica")
+        for table in tables:
+            c.execute(f"DELETE FROM {table}")
+        c.execute("SET session_replication_role = DEFAULT")
+        for r in c.execute(
+            "SELECT sequencename FROM pg_sequences WHERE schemaname = 'public'"
+        ).fetchall():
+            c.execute(f"ALTER SEQUENCE {r['sequencename']} RESTART")
         yield c
 
 
