@@ -126,7 +126,7 @@ def build_app(
     def me(request: Request) -> dict[str, Any]:
         session = request.state.session
         with db() as conn:
-            passkeys = auth.has_passkeys(conn)
+            passkeys = auth.has_passkeys(conn, rp.rp_id if rp else "")
         return {
             "signed_in": session is not None,
             "has_passkeys": passkeys,

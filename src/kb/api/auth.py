@@ -96,8 +96,10 @@ def _valid_setup_code(conn: Conn, code: str | None, now: datetime) -> bytes | No
     return code_hash if row else None
 
 
-def has_passkeys(conn: Conn) -> bool:
-    return conn.execute("SELECT 1 FROM webauthn_credentials LIMIT 1").fetchone() is not None
+def has_passkeys(conn: Conn, rp_id: str) -> bool:
+    """Whether a passkey exists for this domain (passkeys of an earlier domain cannot sign in)."""
+    row = conn.execute("SELECT 1 FROM webauthn_credentials WHERE rp_id = %s LIMIT 1", (rp_id,))
+    return row.fetchone() is not None
 
 
 # --- sessions -------------------------------------------------------------------------------
@@ -172,7 +174,7 @@ def begin_registration(
 ) -> tuple[str, str]:
     """Returns (challenge id, options JSON for navigator.credentials.create)."""
     code_hash = None
-    if has_passkeys(conn):
+    if has_passkeys(conn, rp.rp_id):
         if not signed_in:
             raise AuthError(403, "Sign in with an existing passkey to add another one.")
     else:
@@ -181,7 +183,7 @@ def begin_registration(
             raise AuthError(403, "A valid setup code is required for the first passkey.")
     existing = [
         PublicKeyCredentialDescriptor(id=bytes(r["id"]))
-        for r in conn.execute("SELECT id FROM webauthn_credentials")
+        for r in conn.execute("SELECT id FROM webauthn_credentials WHERE rp_id = %s", (rp.rp_id,))
     ]
     options = generate_registration_options(
         rp_id=rp.rp_id,
@@ -217,7 +219,7 @@ def finish_registration(
             " AND expires_at > %s",
             (code_hash, now),
         ).fetchone()
-        if not still_valid or has_passkeys(conn):
+        if not still_valid or has_passkeys(conn, rp.rp_id):
             raise AuthError(403, "The setup code was already used or expired.")
     elif not signed_in:
         raise AuthError(403, "Sign in with an existing passkey to add another one.")
@@ -231,14 +233,15 @@ def finish_registration(
     except Exception as e:  # the library raises several exception types for bad responses
         raise AuthError(400, f"The passkey could not be verified: {e}") from e
     conn.execute(
-        "INSERT INTO webauthn_credentials (id, public_key, sign_count, transports, device)"
-        " VALUES (%s, %s, %s, %s, %s)",
+        "INSERT INTO webauthn_credentials (id, public_key, sign_count, transports, device, rp_id)"
+        " VALUES (%s, %s, %s, %s, %s, %s)",
         (
             verified.credential_id,
             verified.credential_public_key,
             verified.sign_count,
             list(credential.get("response", {}).get("transports") or []),
             device[:200],
+            rp.rp_id,
         ),
     )
     if code_hash is not None:
@@ -268,7 +271,8 @@ def finish_login(
     except ValueError as e:
         raise AuthError(400, "Malformed passkey response.") from e
     stored = conn.execute(
-        "SELECT public_key, sign_count FROM webauthn_credentials WHERE id = %s", (cred_id,)
+        "SELECT public_key, sign_count FROM webauthn_credentials WHERE id = %s AND rp_id = %s",
+        (cred_id, rp.rp_id),
     ).fetchone()
     if stored is None:
         raise AuthError(401, "This passkey is not registered here.")
