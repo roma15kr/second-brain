@@ -19,7 +19,7 @@ from fastapi import Body, FastAPI, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from kb.api import auth
+from kb.api import auth, routes_today
 from kb.db import Conn
 
 PUBLIC_API = {
@@ -191,6 +191,8 @@ def build_app(
         out = JSONResponse({"ok": True})
         out.delete_cookie(auth.SESSION_COOKIE, path="/")
         return out
+
+    app.include_router(routes_today.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:

@@ -523,6 +523,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "qrcode" },
     { name = "telethon" },
+    { name = "tzdata" },
     { name = "uvicorn" },
     { name = "webauthn" },
 ]
@@ -550,6 +551,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "qrcode", specifier = ">=7.4" },
     { name = "telethon", specifier = ">=1.36" },
+    { name = "tzdata", specifier = ">=2026.5" },
     { name = "uvicorn", specifier = ">=0.30" },
     { name = "webauthn", specifier = ">=3.0.1" },
 ]

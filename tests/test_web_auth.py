@@ -40,7 +40,7 @@ def test_all_routes_require_session(app, client):
         (method, route.path)
         for route in app.routes
         if isinstance(route, APIRoute) and route.path.startswith("/api/")
-        for method in route.methods
+        for method in route.methods or ()
         if route.path not in PUBLIC_API
     ]
     assert ("POST", "/api/auth/logout") in protected
@@ -138,5 +138,7 @@ def test_kb_web_setup_code_command(pg_url, conn, monkeypatch, capsys):
 
     monkeypatch.setenv("DATABASE_URL", pg_url)
     cli.main(["web", "setup-code"])
-    code = re.search(r"setup code: (\S+)", capsys.readouterr().out).group(1)
+    found = re.search(r"setup code: (\S+)", capsys.readouterr().out)
+    assert found is not None
+    code = found.group(1)
     assert auth._valid_setup_code(conn, code, datetime.now(UTC)) is not None

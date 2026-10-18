@@ -102,3 +102,52 @@ a {
   background: var(--bg);
   color: var(--text);
 }
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.brief h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+.brief h3 {
+  font-size: 14px;
+  margin: 16px 0 6px;
+}
+ul.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+ul.list li {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+ul.list li:first-child {
+  border-top: 0;
+}
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--line);
+  color: var(--text);
+}
+.tag.personal {
+  background: #e7f6ec;
+  color: #1d2330;
+}
+.tag.digisoft {
+  background: #e8efff;
+  color: #1d2330;
+}
+.tag.quokka {
+  background: #fff3df;
+  color: #1d2330;
+}
+.tag.rdim {
+  background: #fde8ec;
+  color: #1d2330;
+}
