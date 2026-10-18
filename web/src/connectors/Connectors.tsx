@@ -27,8 +27,18 @@ type Tg = {
   to_mark: number;
   items: number;
 };
+type ClickUpRow = {
+  source_id: string;
+  label: string;
+  lists: number;
+  healthy: boolean;
+  last_ok: string | null;
+  last_error: string | null;
+  items: number;
+};
 type Hub = {
   mail: Mail[];
+  clickup?: ClickUpRow[];
   telegram: Tg[];
   catalog: { key: string; name: string; state: string; adds: string }[];
 };
@@ -166,11 +176,32 @@ export function Connectors() {
                 </td>
               </tr>
             ))}
+            {(h.clickup ?? []).map((c) => (
+              <tr key={c.source_id}>
+                <td>
+                  ☑ <b>ClickUp</b> <span className="muted">{c.label}</span>
+                </td>
+                <td>
+                  <State healthy={c.healthy} error={c.last_error} />
+                </td>
+                <td className="muted">{since(c.last_ok)}</td>
+                <td>{c.lists} lists synced</td>
+                <td>{c.items}</td>
+                <td>
+                  <Link className="btn" to="/connectors/clickup">
+                    Settings
+                  </Link>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
         <p className="row actions">
           <Link className="btn primary" to="/connectors/mail">
             + Add a mailbox (Gmail or IMAP/SMTP)
+          </Link>
+          <Link className="btn" to="/connectors/clickup">
+            {(h.clickup ?? []).length ? "ClickUp settings" : "+ Connect ClickUp"}
           </Link>
         </p>
       </section>

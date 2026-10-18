@@ -1,7 +1,12 @@
 import { ScopeTag } from "../shell/ScopeTag";
 import type { Brief, BriefItem, BriefSection } from "../api/types";
 
-const KIND_ICON: Record<string, string> = { email_thread: "✉", tg_conversation: "✈", loop: "↺" };
+const KIND_ICON: Record<string, string> = {
+  email_thread: "✉",
+  tg_conversation: "✈",
+  loop: "↺",
+  clickup_task: "☑",
+};
 export const kyivTime = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Kyiv",
   weekday: "short",
