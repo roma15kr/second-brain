@@ -30,6 +30,7 @@ MAX_FOCUS = 3
 KIND_WORDS = {
     "email_thread": ("email thread", "email threads"),
     "tg_conversation": ("chat", "chats"),
+    "clickup_task": ("ClickUp task", "ClickUp tasks"),
 }
 TITLES = {
     "morning": "Morning brief",

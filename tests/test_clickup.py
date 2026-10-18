@@ -39,6 +39,10 @@ class FakeClickUp:
         self.comments = {}
         self.requests = []
         self.fail_comments_for = None
+        self.fail_comments_times = 1
+        self.omit_last_page = False
+        self.replies: dict[str, list[dict]] = {}
+        self.oldest_first = False
         self.created = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -70,9 +74,16 @@ class FakeClickUp:
             gt = int(q["date_updated_gt"])
             found = sorted(
                 (t for t in self.tasks["L1"] if int(t["date_updated"]) > gt),
-                key=lambda t: -int(t["date_updated"]),
+                key=lambda t: -int(t["date_updated"]),  # newest first, like ClickUp's default
             )
-            return httpx.Response(200, json={"tasks": found, "last_page": True})
+            if self.oldest_first != (q.get("reverse") == "true"):  # the server's own default
+                found.reverse()
+            page = int(q.get("page", "0"))
+            chunk = found[page * 100 : (page + 1) * 100]
+            body: dict[str, object] = {"tasks": chunk}
+            if not self.omit_last_page:
+                body["last_page"] = (page + 1) * 100 >= len(found)
+            return httpx.Response(200, json=body)
         if path == "/list/L1/task" and request.method == "POST":
             body = __import__("json").loads(request.content)
             t = {
@@ -84,11 +95,18 @@ class FakeClickUp:
             return httpx.Response(200, json=t)
         if path.startswith("/task/") and path.endswith("/comment"):
             tid = path.split("/")[2]
-            if self.fail_comments_for == tid:
+            if self.fail_comments_for == tid and self.fail_comments_times > 0:
+                self.fail_comments_times -= 1
                 return httpx.Response(
                     429, headers={"X-RateLimit-Reset": "1760000060"}, json={"err": "Rate limit"}
                 )
-            return httpx.Response(200, json={"comments": self.comments.get(tid, [])})
+            # newest first, 25 per page; older pages via start/start_id (ClickUp API v2)
+            allc = sorted(self.comments.get(tid, []), key=lambda c: -int(c.get("date", 0)))
+            if "start" in q:
+                allc = [c for c in allc if int(c.get("date", 0)) < int(q["start"])]
+            return httpx.Response(200, json={"comments": allc[:25]})
+        if path.startswith("/comment/") and path.endswith("/reply"):
+            return httpx.Response(200, json={"comments": self.replies.get(path.split("/")[2], [])})
         return httpx.Response(404, json={"err": path})
 
     def client(self, token="pk_test"):
@@ -388,3 +406,109 @@ def test_status_reports_clickup_feed(conn, fake, account):
     conn.execute("UPDATE clickup_lists SET sync = false")
     [s] = health.clickup_status(conn)
     assert s["note"] == "no list is marked and set to sync yet"
+
+
+def test_large_list_newest_first_without_last_page_flag_resumes_cheaply(conn, fake, account):
+    fake.tasks["L1"] = [task(f"t{i}", 1000 + i) for i in range(250)]
+    fake.omit_last_page = True
+    fake.fail_comments_for = "t100"  # rate limit in the middle of the second page, twice
+    fake.fail_comments_times = 2
+    for _ in range(2):
+        with pytest.raises(clickup.RateLimited):
+            clickup.sync_account(conn, fake.client(), account)
+    assert conn.execute("SELECT cursor_ms FROM clickup_lists").fetchone()["cursor_ms"] == 0
+    before = sum(1 for m, p, _ in fake.requests if p.endswith("/comment"))
+    clickup.sync_account(conn, fake.client(), account)
+    comment_calls = sum(1 for m, p, _ in fake.requests if p.endswith("/comment")) - before
+    assert len(tasks_in_db(conn)) == 250  # nothing skipped, whatever the order
+    assert comment_calls == 250 - 149  # tasks stored before the interruption are not refetched
+    assert conn.execute("SELECT cursor_ms FROM clickup_lists").fetchone()["cursor_ms"] == 1249
+
+
+def test_client_throttles_under_the_rate_limit():
+    import time
+
+    c = clickup.ClickUpClient(
+        "pk",
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"user": {}})),
+        min_interval=0.05,
+    )
+    start = time.monotonic()
+    for _ in range(4):
+        c.user()
+    assert time.monotonic() - start >= 0.15
+
+
+def comment(cid, when, text, who="Олена", replies=0):
+    return {
+        "id": cid,
+        "date": str(when),
+        "comment_text": text,
+        "user": {"username": who, "email": "olena@quokka.example"},
+        "reply_count": replies,
+    }
+
+
+def test_all_comments_with_replies_are_stored_oldest_first_and_chunked(conn, fake, account):
+    fake.tasks["L1"] = [task("a", 1000)]
+    fake.comments["a"] = [
+        comment(f"c{i}", 1000 + i, f"comment number {i} " + "detail " * 20) for i in range(60)
+    ]
+    fake.comments["a"][3]["reply_count"] = 1
+    fake.replies["c3"] = [comment("r1", 1003, "the customs broker number is 4417", who="Макс")]
+    clickup.sync_account(conn, fake.client(), account)
+    item = tasks_in_db(conn)["a"]
+    text = item["raw_text"]
+    assert text.index("comment number 0 ") < text.index("comment number 59 ")  # chronological
+    assert "↳" in text and "customs broker number is 4417" in text  # threaded reply
+    assert item["metadata"]["comments"] == 61 and item["metadata"]["newest_comment_id"] == "c59"
+    assert item["content_hash"]  # summaries know when the task changed
+    chunks = conn.execute("SELECT metadata FROM items WHERE kind = 'clickup_comments'").fetchall()
+    assert len(chunks) > 1 and all(c["metadata"]["parent_item_id"] == item["id"] for c in chunks)
+
+
+def test_newest_tasks_come_first_whatever_the_api_default(conn, fake, account):
+    fake.oldest_first = True
+    fake.tasks["L1"] = [task(f"t{i}", 1000 + i) for i in range(5)]
+    c = fake.client()
+    clickup.sync_account(conn, c, account)
+    first = [r for m, p, r in fake.requests if p == "/list/L1/task"][-1]
+    assert first.get("reverse") == "true" and c.reverse_for_newest is True
+    stored = conn.execute(
+        "SELECT source_item_key FROM items WHERE kind = 'clickup_task' ORDER BY id"
+    ).fetchall()
+    assert [r["source_item_key"] for r in stored] == ["t4", "t3", "t2", "t1", "t0"]
+
+
+def test_new_comment_without_task_update_is_picked_up(conn, fake, account):
+    recent = int(datetime.now(UTC).timestamp() * 1000)
+    fake.tasks["L1"] = [task("a", recent)]
+    fake.comments["a"] = [comment("c1", recent, "first")]
+    clickup.sync_account(conn, fake.client(), account)
+    fake.comments["a"].append(comment("c2", recent + 1, "customs papers arrived"))
+    assert clickup.sync_account(conn, fake.client(), account) == 0  # task itself unchanged
+    assert clickup.refresh_recent_comments(conn, fake.client(), account) == 1
+    assert "customs papers arrived" in tasks_in_db(conn)["a"]["raw_text"]
+    assert clickup.refresh_recent_comments(conn, fake.client(), account) == 0
+
+
+def test_sync_in_time_slices_continues_where_it_stopped(conn, fake, account):
+    fake.tasks["L1"] = [task(f"t{i}", 1000 + i) for i in range(30)]
+    n, finished = clickup.sync_account_for(conn, fake.client(), account, seconds=0)
+    assert finished is False and n == 0
+    assert conn.execute("SELECT cursor_ms FROM clickup_lists").fetchone()["cursor_ms"] == 0
+    n, finished = clickup.sync_account_for(conn, fake.client(), account, seconds=None)
+    assert finished is True and n == 30
+
+
+def test_migration_resets_for_a_full_comment_reread(conn):
+    from kb import db as dbmod
+
+    sql = next(s for name, s in dbmod.migration_files() if name.startswith("0027"))
+    conn.execute(
+        "INSERT INTO items (source_id, source_item_key, kind, metadata) VALUES"
+        " ('clickup-1', 'x', 'clickup_task', '{\"date_updated\": \"5\", \"list\": \"L\"}')"
+    )
+    conn.execute(sql)
+    meta = conn.execute("SELECT metadata FROM items").fetchone()["metadata"]
+    assert "date_updated" not in meta and meta["list"] == "L"
