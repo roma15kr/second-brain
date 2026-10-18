@@ -98,9 +98,13 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
     inflight = conn.execute(
         "SELECT count(*) AS n FROM distill_batches WHERE finished_at IS NULL"
     ).fetchone()
+    clickup = clickup_status(conn)
     return {
-        "healthy": all(s["healthy"] for s in sources) and q["failed"] == 0,
+        "healthy": all(s["healthy"] for s in sources)
+        and all(c["healthy"] for c in clickup)
+        and q["failed"] == 0,
         "sources": sources,
+        "clickup": clickup,
         "index_queue": {
             "pending": q["pending"],
             "failed": q["failed"],
@@ -135,3 +139,49 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
             for r in archive
         },
     }
+
+
+CLICKUP_STALE = timedelta(minutes=30)  # synced every 5 minutes
+
+
+def clickup_status(conn: Conn, now: datetime | None = None) -> list[dict[str, Any]]:
+    """ClickUp accounts connected in the web OS: lists chosen/synced, tasks, last sync, error."""
+    now = now or _now()
+    out = []
+    for a in conn.execute(
+        """
+        SELECT a.id, a.label,
+               count(l.list_id) AS lists, count(l.list_id) FILTER (WHERE l.sync) AS syncing
+        FROM connector_accounts a LEFT JOIN clickup_lists l ON l.account_id = a.id
+        WHERE a.kind = 'clickup' AND a.state = 'active' GROUP BY a.id ORDER BY a.id
+        """
+    ).fetchall():
+        sid = f"clickup-{a['id']}"
+        h = get_state(conn, sid, KEY) or {}
+        last_ok = datetime.fromisoformat(h["last_ok"]) if h.get("last_ok") else None
+        err_at = datetime.fromisoformat(h["last_error_at"]) if h.get("last_error_at") else None
+        failing = err_at is not None and (last_ok is None or err_at > last_ok)
+        tasks = conn.execute(
+            "SELECT count(*) AS n, max(last_activity_at) AS newest FROM items"
+            " WHERE source_id = %s AND NOT hidden",
+            (sid,),
+        ).fetchone()
+        syncing = int(a["syncing"])
+        stale = syncing > 0 and (last_ok is None or now - last_ok > CLICKUP_STALE)
+        out.append(
+            {
+                "source": sid,
+                "label": a["label"],
+                "lists": int(a["lists"]),
+                "lists_syncing": syncing,
+                "tasks": int(tasks["n"]) if tasks else 0,
+                "newest_task_update": tasks["newest"].isoformat()
+                if tasks and tasks["newest"]
+                else None,
+                "last_ok": h.get("last_ok"),
+                "last_error": h.get("last_error") if failing else None,
+                "healthy": not failing and not stale,
+                "note": None if syncing else "no list is marked and set to sync yet",
+            }
+        )
+    return out
