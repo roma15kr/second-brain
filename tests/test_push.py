@@ -46,7 +46,7 @@ def test_push_payload_has_no_content(conn, monkeypatch):
     assert data == {
         "title": "Second brain",
         "body": "Morning brief: 3 need your reply",
-        "url": f"/briefs/{bid}",
+        "url": f"/briefs/{bid}?via=push",
     }
     assert "contract" not in rec.calls[0]["data"]
 

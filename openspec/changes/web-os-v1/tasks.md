@@ -18,7 +18,7 @@ branch `change/web-os-v1`.
 ## 3. AI briefs
 
 - [x] 3.1 AI sections for morning brief and evening wrap (`gpt-6.1-sol`, structured output), ref validation, data-only fallback on budget cap, cost recorded per run; verify `test_brief_refs_validated_unknown_ids_dropped`, `test_data_only_brief_when_budget_reached`
-- [ ] 3.2 Briefs list and brief page with rating, `app_events` brief_opened/rating; verify `briefs.test.tsx` and that opening a brief from a push records `brief_opened`
+- [x] 3.2 Briefs list and brief page with rating, `app_events` brief_opened/rating; verify `briefs.test.tsx` and that opening a brief from a push records `brief_opened`
 
 ## 4. Mail revision (Inbox)
 
