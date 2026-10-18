@@ -26,6 +26,7 @@ WEEKLY_CATCH_UP = timedelta(hours=24)
 
 Runner = Callable[[Conn, datetime], int]  # returns the brief id
 Notify = Callable[[Conn, int, datetime], object]  # pushes a stored brief
+Maintenance = Callable[[Conn, datetime], object]  # cheap upkeep run every cycle
 
 
 @dataclass(frozen=True)
@@ -141,6 +142,7 @@ def serve(
     interval: float = 30.0,
     clock: Callable[[], datetime] | None = None,
     notify: Notify | None = None,
+    maintenance: list[Maintenance] | None = None,
 ) -> None:
     from datetime import UTC
 
@@ -149,7 +151,10 @@ def serve(
     while True:
         try:
             with connect() as conn:
-                run_due(conn, runners, clock(), notify=notify)
+                now = clock()
+                run_due(conn, runners, now, notify=notify)
+                for task in maintenance or []:
+                    task(conn, now)
         except Exception:
             log.exception("scheduler cycle failed; retrying")
         _time.sleep(interval)

@@ -1,4 +1,5 @@
 from datetime import datetime, time, timedelta
+from typing import Any
 
 import pytest
 
@@ -132,9 +133,16 @@ def test_kb_routines_starts_scheduler_with_morning_runner(argv, monkeypatch):
     from kb import cli
     from kb.routines import scheduler
 
-    seen = {}
+    seen: dict[str, Any] = {}
     monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
     monkeypatch.setenv("KB_CONFIG_YAML", "sources: []")
-    monkeypatch.setattr(scheduler, "serve", lambda connect, runners, notify: seen.update(runners))
+    monkeypatch.setattr(
+        scheduler, "serve", lambda connect, runners, **kw: seen.update(runners, **kw)
+    )
     cli.main(argv)
     assert "morning" in seen
+    assert [t.__name__ for t in seen["maintenance"]] == [
+        "close_answered_loops",
+        "wake_snoozed",
+        "detect_loops",
+    ]

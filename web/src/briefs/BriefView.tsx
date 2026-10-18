@@ -1,6 +1,6 @@
 import type { Brief, BriefItem, BriefSection } from "../api/types";
 
-const KIND_ICON: Record<string, string> = { email_thread: "✉", tg_conversation: "✈" };
+const KIND_ICON: Record<string, string> = { email_thread: "✉", tg_conversation: "✈", loop: "↺" };
 export const kyivTime = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Kyiv",
   weekday: "short",

@@ -2,6 +2,7 @@
 export type BriefItem = {
   ref: string;
   reason?: string;
+  overdue?: boolean;
   id: number;
   kind: string;
   title: string;

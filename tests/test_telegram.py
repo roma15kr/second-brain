@@ -67,7 +67,7 @@ def test_telegram_wrapper_has_no_write_methods():
     names = {n for n in dir(ReadOnlyClient) if not n.startswith("_ReadOnlyClient__")}
     assert not (names & FORBIDDEN)
     public = {n for n in names if not n.startswith("_")}
-    assert public == {"iter_messages", "iter_dialogs", "get_entity"}
+    assert public == {"iter_messages", "iter_dialogs", "get_entity", "get_me"}
 
 
 def test_not_allowlisted_chat_stores_nothing(conn, tg_source):
@@ -215,3 +215,13 @@ def test_session_snapshot_requires_login(tmp_path):
 
     with pytest.raises(ConfigError, match="kb auth telegram"):
         telegram.session_snapshot(str(tmp_path / "missing.session"))
+
+
+def test_owner_telegram_id_recorded_once(conn):
+    from types import SimpleNamespace
+
+    from kb import loops
+
+    telegram.record_self(conn, SimpleNamespace(id=507325261))
+    telegram.record_self(conn, SimpleNamespace(id=507325261))
+    assert loops.owner_telegram_ids(conn) == {"507325261"}

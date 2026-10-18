@@ -203,3 +203,14 @@ li.unread a strong::before {
   font-size: 12px;
   padding: 3px 8px;
 }
+li.overdue {
+  border-left: 3px solid var(--error);
+  padding-left: 8px;
+}
+.add-loop {
+  margin-bottom: 12px;
+}
+.add-loop input {
+  flex: 1;
+  min-width: 200px;
+}

@@ -72,8 +72,8 @@ SCHEMA: dict[str, Any] = {
 _COMMON = """You are the owner's personal assistant writing a short brief in English from a fact
 pack of their own email threads and Telegram chats. Rules:
 - Use only facts from the pack. Never invent people, numbers, dates or decisions.
-- Every section must cite the conversations it is about in `refs`, exactly as written in the pack
-  (e.g. "item:123"). A section without refs will be discarded.
+- Every section must cite the conversations or loops it is about in `refs`, exactly as written in
+  the pack (e.g. "item:123", "loop:45"). A section without refs will be discarded.
 - Be concrete and brief: 1-3 sentences per section, names and amounts where the pack has them.
 - Skip small talk, newsletters and notifications unless they need the owner.
 - Group by project/area (scope) when useful; scopes: personal, digisoft, quokka, rdim, unsorted."""
@@ -142,13 +142,72 @@ def data_only(pack: FactPack) -> list[Section]:
 def headline(pack: FactPack) -> str:
     total = sum(pack.counts.values())
     title = TITLES[pack.routine]
+    needs = []
+    if n := len(pack.loops.get("needs_reply", [])):
+        needs.append(f"{n} need{'s' if n == 1 else ''} your reply")
+    if n := len(pack.loops.get("due", [])):
+        needs.append(f"{n} due")
+    prefix = ", ".join(needs)
     if total == 0:
-        return f"{title}: nothing new"
+        return f"{title}: {prefix}" if prefix else f"{title}: nothing new"
     scopes = len(pack.by_scope)
-    return (
-        f"{title}: {total} conversation{'s' if total != 1 else ''}"
+    activity = (
+        f"{total} conversation{'s' if total != 1 else ''}"
         f" across {scopes} scope{'s' if scopes != 1 else ''}"
     )
+    return f"{title}: {prefix} · {activity}" if prefix else f"{title}: {activity}"
+
+
+DIRECTION = {
+    "needs_reply": "Reply to",
+    "i_owe": "You owe",
+    "owed_to_me": "Owed to you by",
+    "manual": "Your task",
+}
+
+
+def loop_item(lp: dict[str, Any]) -> dict[str, Any]:
+    """A loop rendered like a brief item (links to its source message)."""
+    who = f"{DIRECTION.get(lp['kind'], '')} {lp['counterpart']}".strip()
+    when = ""
+    if lp["overdue"]:
+        when = f" · overdue since {lp['due_date']}"
+    elif lp["due_date"]:
+        when = f" · due {lp['due_date']}"
+    elif lp.get("age_days"):
+        when = f" · {lp['age_days']} days open"
+    return {
+        "ref": lp["ref"],
+        "id": lp["id"],
+        "kind": "loop",
+        "title": lp["title"],
+        "summary": who + when,
+        "outcome": None,
+        "link": lp["link"],
+        "last_activity_at": lp["opened_at"] or "",
+        "scopes": lp["scopes"],
+        "participants": [lp["counterpart"]] if lp["counterpart"] else [],
+        "overdue": lp["overdue"],
+    }
+
+
+LOOP_SECTIONS = {
+    "morning": [("due", "Due today & overdue"), ("needs_reply", "Waiting for your reply")],
+    "evening": [
+        ("closed", "Closed today"),
+        ("opened", "Opened today"),
+        ("due", "Due today & overdue"),
+        ("needs_reply", "Still waiting for your reply"),
+    ],
+}
+
+
+def loop_sections(pack: FactPack) -> list[Section]:
+    out = []
+    for key, title in LOOP_SECTIONS.get(pack.routine, []):
+        if rows := pack.loops.get(key):
+            out.append(Section(title, "", [loop_item(lp) for lp in rows], kind="group"))
+    return out
 
 
 def coming_up(now: datetime) -> Section | None:
@@ -190,6 +249,10 @@ def pack_text(pack: FactPack) -> str:
         f"Window: {pack.window[0].astimezone(KYIV):%a %d %b %H:%M} to "
         f"{pack.window[1].astimezone(KYIV):%a %d %b %H:%M} (Kyiv)",
     ]
+    for key, title in LOOP_SECTIONS.get(pack.routine, []):
+        if rows := pack.loops.get(key):
+            lines.append(f"\n## {title}")
+            lines += [f"[{lp['ref']}] {loop_item(lp)['summary']}: {lp['title']}" for lp in rows]
     seen: set[str] = set()
     for scope, facts in pack.by_scope.items():
         lines.append(f"\n## {scope}")
@@ -201,13 +264,16 @@ def pack_text(pack: FactPack) -> str:
 
 def validate_refs(data: dict[str, Any], pack: FactPack) -> list[Section]:
     """AI sections and focus with only refs that exist in the pack; unsupported ones dropped."""
-    facts = {f.ref: f for items in pack.by_scope.values() for f in items}
+    facts: dict[str, dict[str, Any]] = {
+        f.ref: f.to_dict() for items in pack.by_scope.values() for f in items
+    }
+    facts.update({lp["ref"]: loop_item(lp) for rows in pack.loops.values() for lp in rows})
     out: list[Section] = []
     focus_items: list[dict[str, Any]] = []
     for entry in data.get("focus") or []:
         ref = entry.get("ref")
         if ref in facts and ref not in {i["ref"] for i in focus_items}:
-            focus_items.append({**facts[ref].to_dict(), "reason": str(entry.get("reason", ""))})
+            focus_items.append({**facts[ref], "reason": str(entry.get("reason", ""))})
     if focus_items:
         out.append(Section("Focus", "", focus_items[:MAX_FOCUS], kind="focus"))
     for s in data.get("sections") or []:
@@ -219,7 +285,7 @@ def validate_refs(data: dict[str, Any], pack: FactPack) -> list[Section]:
             Section(
                 str(s.get("title", "")),
                 str(s.get("text", "")),
-                [facts[r].to_dict() for r in refs],
+                [facts[r] for r in refs],
                 kind="ai",
             )
         )
@@ -262,9 +328,12 @@ def write_brief(
     config: Config,
 ) -> int:
     """AI sections (when allowed) + all activity per scope from data, then stored."""
+    from kb import loops
+
+    pack.loops = loops.for_brief(conn, pack.routine, pack.window, now)
     sections: list[Section] = []
     mode, cost = "data", 0.0
-    has_activity = bool(pack.by_scope)
+    has_activity = bool(pack.by_scope) or any(pack.loops.values())
     if has_activity and llm is not None:
         spent = distill.month_spend_usd(conn, now.date())
         if spent >= config.llm.monthly_budget_usd:
@@ -291,6 +360,7 @@ def write_brief(
                 if ai_sections:
                     sections.extend(ai_sections)
                     mode = "ai"
+    sections.extend(loop_sections(pack))
     if pack.routine == "morning" and (upcoming := coming_up(now)):
         sections.append(upcoming)
     sections.extend(data_only(pack))
