@@ -16,8 +16,8 @@ from typing import Any, Literal
 
 from psycopg.types.json import Jsonb
 
-from kb import distill
-from kb.config import Config, ImapSource
+from kb import distill, loops
+from kb.config import Config
 from kb.db import Conn
 from kb.distill import StructuredLlm
 from kb.routines.briefs import AI_SOURCE, Section
@@ -106,18 +106,10 @@ class Decision:
 
 
 def owner_addresses(conn: Conn, config: Config) -> set[str]:
-    """The owner's own email addresses: connected mailboxes plus owner identities (settings)."""
-    out: set[str] = set()
-    for s in config.sources:
-        if isinstance(s, ImapSource):
-            try:
-                out.add(s.username().lower())
-            except Exception:  # a mailbox without credentials in this process
-                continue
-    row = conn.execute("SELECT value FROM app_settings WHERE key = 'owner_emails'").fetchone()
-    if row:
-        out.update(str(a).lower() for a in row["value"])
-    return out
+    """The owner's own email addresses (mailboxes + Settings)."""
+    from kb import loops
+
+    return loops.owner_emails(conn, config)
 
 
 def _address(author: str | None) -> str:
@@ -142,6 +134,7 @@ def candidates(conn: Conn, since: datetime, until: datetime) -> list[Candidate]:
         JOIN LATERAL (
             SELECT author, body FROM messages
             WHERE source_id = i.source_id AND unit_key = i.source_item_key AND NOT hidden
+              AND NOT (coalesce(metadata->'labels', '[]'::jsonb) ? '\\Draft')
             ORDER BY sent_at DESC LIMIT 1
         ) m ON true
         WHERE i.kind = 'email_thread' AND NOT i.hidden
@@ -304,4 +297,6 @@ def run_pass(conn: Conn, now: datetime, llm: StructuredLlm | None, config: Confi
             " VALUES (%s, %s, %s, %s, %s, %s)",
             (brief_id, c.item_id, d.cls, d.action, d.reason, c.sender),
         )
+        if d.cls == "needs_reply":
+            loops.open_needs_reply(conn, c.item_id, d.action or f"Reply: {c.title}", now)
     return brief_id

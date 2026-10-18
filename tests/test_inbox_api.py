@@ -96,3 +96,30 @@ def test_unknown_item_is_404(client):
 
 def test_empty_inbox(client):
     assert client.get("/api/inbox").json()["pass"] is None
+
+
+def test_done_in_inbox_closes_the_related_loop(client, conn, triaged):
+    q, _ = triaged
+    assert (
+        conn.execute("SELECT status FROM loops WHERE item_id = %s", (q,)).fetchone()["status"]
+        == "open"
+    )
+    client.post(f"/api/inbox/{q}/done", headers=CSRF)
+    loop = conn.execute("SELECT status FROM loops WHERE item_id = %s", (q,)).fetchone()
+    assert loop["status"] == "done"
+
+
+def test_owner_identities_settings(client):
+    r = client.put(
+        "/api/settings/owner",
+        json={"emails": ["Me@Personal.example", " "], "telegram_ids": ["507325261"]},
+        headers=CSRF,
+    )
+    assert r.status_code == 200
+    data = client.get("/api/settings/owner").json()
+    assert "me@personal.example" in data["emails"] and "me@example.com" in data["emails"]
+    assert data["telegram_ids"] == ["507325261"]
+    bad = client.put(
+        "/api/settings/owner", json={"emails": ["nope"], "telegram_ids": []}, headers=CSRF
+    )
+    assert bad.status_code == 400

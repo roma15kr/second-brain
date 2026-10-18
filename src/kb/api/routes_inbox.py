@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
-from kb import scopes
+from kb import loops, scopes
 from kb.api.deps import get_conn
 from kb.db import Conn
 from kb.routines import triage
@@ -75,6 +75,7 @@ def done(conn: Db, item_id: int) -> dict[str, bool]:
     conn.execute(
         "UPDATE triage SET done_at = %s WHERE item_id = %s AND done_at IS NULL", (_now(), item_id)
     )
+    loops.close_for_item(conn, item_id, _now())
     return {"ok": True}
 
 

@@ -377,9 +377,17 @@ def cmd_routines(args: argparse.Namespace) -> None:
         print(f"brief {brief_id}: {brief['headline'] if brief else ''}")
         return
     url = database_url()
-    from kb import push
+    from kb import loops, push
 
-    scheduler.serve(lambda: db.connect(url), runners, notify=push.notify_brief)
+    def close_answered_loops(conn: db.Conn, now: datetime) -> int:
+        return loops.close_answered(conn, loops.owner_emails(conn, config), now)
+
+    scheduler.serve(
+        lambda: db.connect(url),
+        runners,
+        notify=push.notify_brief,
+        maintenance=[close_answered_loops],
+    )
 
 
 def cmd_mcp(args: argparse.Namespace) -> None:
