@@ -31,12 +31,15 @@ class ImapSource(BaseModel):
     poll_seconds: int = 60
     backfill_days: int = 365
     backfill_batch: int = 200  # messages per folder per cycle while backfilling
+    # Mailboxes connected in the web OS carry their (decrypted) credentials in memory only.
+    inline_username: str | None = Field(default=None, exclude=True)
+    inline_password: str | None = Field(default=None, exclude=True, repr=False)
 
     def username(self) -> str:
-        return _require_env(self.username_env, self.id)
+        return self.inline_username or _require_env(self.username_env, self.id)
 
     def password(self) -> str:
-        return _require_env(self.password_env, self.id)
+        return self.inline_password or _require_env(self.password_env, self.id)
 
 
 class TelegramChat(BaseModel):

@@ -8,7 +8,7 @@ from collections.abc import Iterator
 import pytest
 
 from kb import db
-from kb.config import Config, ImapSource
+from kb.config import Config, ImapSource, TelegramChat, TelegramSource
 
 
 @pytest.fixture(scope="session")
@@ -70,3 +70,18 @@ def source(monkeypatch: pytest.MonkeyPatch) -> ImapSource:
 @pytest.fixture
 def config(source: ImapSource) -> Config:
     return Config(sources=[source])
+
+
+@pytest.fixture
+def tg_source() -> TelegramSource:
+    return TelegramSource(
+        id="tg",
+        type="telegram",
+        scopes=["personal"],
+        chats=[TelegramChat(chat=-1001234, scopes=["quokka"]), TelegramChat(chat="@oleh_q")],
+    )
+
+
+@pytest.fixture
+def tg_config(tg_source: TelegramSource) -> Config:
+    return Config(sources=[tg_source])

@@ -23,6 +23,7 @@ from starlette.concurrency import run_in_threadpool
 from kb.api import (
     auth,
     routes_briefs,
+    routes_connectors,
     routes_inbox,
     routes_loops,
     routes_people,
@@ -287,6 +288,7 @@ def build_app(
     app.include_router(routes_search.router)
     app.include_router(routes_people.router)
     app.include_router(routes_status.router)
+    app.include_router(routes_connectors.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:

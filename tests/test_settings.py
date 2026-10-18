@@ -135,8 +135,11 @@ def test_scope_rule_rescopes_and_unsorted_list(client, conn):
         headers=CSRF,
     )
     assert r.status_code == 200
+    again = {"kind": "domain", "value": "quokka.ua", "scopes": ["rdim"]}
+    assert client.post("/api/settings/rules", json=again, headers=CSRF).status_code == 200
     rules = client.get("/api/settings/rules").json()["rules"]
-    assert rules[0]["value"] == "quokka.ua" and rules[0]["scopes"] == ["quokka"]
+    assert len(rules) == 1  # replaced, not duplicated
+    assert rules[0]["value"] == "quokka.ua" and rules[0]["scopes"] == ["rdim"]
     bad = client.post(
         "/api/settings/rules",
         json={"kind": "domain", "value": "x", "scopes": ["acme"]},

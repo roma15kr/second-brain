@@ -470,3 +470,34 @@ fieldset.plain {
 .kpi.bad {
   color: var(--error);
 }
+.qr svg {
+  width: 220px;
+  height: 220px;
+  background: #fff;
+  padding: 8px;
+  border-radius: 8px;
+}
+.state {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+.state.ok {
+  background: #e7f6ec;
+  color: #1c6b3a;
+}
+.state.warn {
+  background: #fde8ec;
+  color: #a3243b;
+}
+.state.plan {
+  background: var(--line);
+  color: var(--muted);
+}
+.state.no {
+  background: var(--bg);
+  color: var(--muted);
+}
+.small {
+  font-size: 12px;
+}

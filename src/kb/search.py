@@ -30,10 +30,10 @@ class SearchFilters:
     date_from: date | None = None
     date_to: date | None = None
 
-    def validate(self) -> None:
+    def validate(self, valid: tuple[str, ...] = VALID_SCOPES) -> None:
         for s in self.scopes or []:
-            if s not in VALID_SCOPES:
-                raise SearchError(f"unknown scope {s!r}; valid scopes: {', '.join(VALID_SCOPES)}")
+            if s not in valid:
+                raise SearchError(f"unknown scope {s!r}; valid scopes: {', '.join(valid)}")
 
 
 @dataclass
@@ -107,10 +107,16 @@ def _evidence(r: dict[str, Any], excerpt: str, score: float) -> Evidence:
     )
 
 
+def _valid_scopes(conn: Conn) -> tuple[str, ...]:
+    from kb.scopes import known
+
+    return (*known(conn), "unsorted")
+
+
 def recent(conn: Conn, filters: SearchFilters | None = None, limit: int = 20) -> list[Evidence]:
     """Most recently active items, newest first."""
     filters = filters or SearchFilters()
-    filters.validate()
+    filters.validate(_valid_scopes(conn))
     if not 1 <= limit <= MAX_LIMIT:
         raise SearchError(f"limit must be between 1 and {MAX_LIMIT}")
     params: dict[str, Any] = {"limit": limit}
@@ -407,7 +413,7 @@ def search(
 
     cfg = settings or SearchConfig()
     filters = filters or SearchFilters()
-    filters.validate()
+    filters.validate(_valid_scopes(conn))
     if not query.strip():
         raise SearchError("query must not be empty")
     if not 1 <= limit <= MAX_LIMIT:

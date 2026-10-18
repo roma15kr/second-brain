@@ -11,7 +11,7 @@ from typing import Any
 
 from kb import db, health, idf, indexer, scopes
 from kb.config import Config, ConfigError, TelegramSource, database_url, load_config
-from kb.connectors import imap
+from kb.connectors import accounts, imap
 
 log = logging.getLogger("kb")
 
@@ -32,7 +32,13 @@ def cmd_ingest(args: argparse.Namespace) -> None:
         except Exception:
             log.exception("cannot read archived scopes")
             archived_set = set()
-        for source in config.imap_sources():
+        try:  # mailboxes connected in the web OS are re-read every cycle (no restart)
+            with db.connect(database_url()) as conn:
+                connected = accounts.imap_sources(conn)
+        except Exception:
+            log.exception("cannot read connected mailboxes")
+            connected = []
+        for source in [*config.imap_sources(), *connected]:
             if time.monotonic() - last_run.get(source.id, -1e9) < source.poll_seconds:
                 continue
             if scopes.imap_source_archived(source, archived_set):

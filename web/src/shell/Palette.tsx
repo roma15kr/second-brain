@@ -1,3 +1,4 @@
+import { useProjects } from "./useProjects";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
@@ -20,6 +21,7 @@ function useDebounced(value: string, ms = 250) {
 // ⌘K command palette: pages, people, conversations and briefs (web-dashboard spec).
 export function Palette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
+  const projectNames = useProjects();
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -51,7 +53,7 @@ export function Palette({ onClose }: { onClose: () => void }) {
       hint: "page",
       go: go(a.path),
     }));
-    const scopes = ["personal", "digisoft", "quokka", "rdim"]
+    const scopes = projectNames
       .filter((sc) => lower && sc.includes(lower))
       .map((sc) => ({
         key: `scope-${sc}`,
@@ -82,7 +84,7 @@ export function Palette({ onClose }: { onClose: () => void }) {
         ]
       : [];
     return [...ppl, ...pages, ...scopes, ...hits, ...searchAll];
-  }, [q, people.data, search.data, navigate, onClose]);
+  }, [q, people.data, search.data, navigate, onClose, projectNames]);
 
   function onKey(e: KeyboardEvent) {
     if (e.key === "Escape") onClose();
