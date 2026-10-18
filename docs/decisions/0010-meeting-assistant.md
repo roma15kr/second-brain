@@ -17,3 +17,12 @@ Live transcription quality is lower than batch, especially with uk/ru/en code-sw
 ## Consequences
 A separate product (Swift) built after the core KB exists, since the live assistant queries it.
 Streaming STT cost scales with call hours; budget target <= $100/month total for cloud AI.
+
+## Amendment 2026-10-18 — audio kept 12 months in the knowledge base
+Owner decision: meeting and call audio is saved to the knowledge base and kept **12 months**
+(was 30 days), then deleted automatically; transcripts, summaries and decisions are kept forever.
+Audio (separate tracks: owner / others) is uploaded by the recorder apps, played back on the
+meeting page in sync with the transcript, can be deleted earlier per recording or per scope, and is
+included in backups. Storage estimate: Opus 15–30 MB per hour, ≈ 8–15 GB per year at ~10 h/week.
+Implemented in `web-os-v1` (storage, upload, playback, retention); recording itself in `voice-apps-v1`.
+

@@ -8,6 +8,7 @@
 - `v1-mail-telegram-search` — mail + Telegram ingestion, hybrid search, MCP tools (evidence: docs/research/cerebras-knowledge-base.md, design grilling 2026-10-10)
 
 ## Next (planned)
+- `web-os-v1` (proposal, branch `change/web-os-v1`): web OS with routines, open loops, connectors hub (mail, Telegram, ClickUp, calendar, Library), meetings and proactive assistant with approvals
 - GitHub: code (CocoIndex), issues, PRs, reviews, commits
 - ClickUp (Quokka) + Karakeep + Google Calendar
 - People registry UI/merge flow; Telegram bot Q&A; daily digest; follow-up tracker

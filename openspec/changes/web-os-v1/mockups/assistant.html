@@ -1,0 +1,51 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Second brain — Assistant — waiting for your approval (5)</title><style>
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:#1d2330;background:#f4f5f8}
+a{color:#2f5bd3;text-decoration:none}.shell{display:grid;grid-template-columns:72px 1fr;min-height:100vh}
+.dock{background:#1d2330;color:#cfd5e3;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0}
+.dock a{color:#cfd5e3;width:56px;text-align:center;font-size:11px;padding:6px 0;border-radius:8px}
+.dock a.on{background:#33405c;color:#fff}.dock .i{display:block;font-size:20px}
+.top{display:flex;align-items:center;gap:12px;padding:10px 20px;background:#fff;border-bottom:1px solid #e3e6ee}
+.top .cmd{flex:1;max-width:520px;padding:7px 12px;border:1px solid #d6dbe7;border-radius:8px;color:#8a93a6}
+.top .bell{margin-left:auto}.main{padding:20px;display:grid;gap:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.card{background:#fff;border:1px solid #e3e6ee;border-radius:12px;padding:14px 16px}
+.card h2{margin:0 0 8px;font-size:15px}.muted{color:#6b7488;font-size:12px}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;margin-right:4px;background:#eef1f7}
+.personal{background:#e7f6ec}.digisoft{background:#e8efff}.quokka{background:#fff3df}.rdim{background:#fde8ec}
+ul.list{list-style:none;margin:0;padding:0}ul.list li{padding:8px 0;border-top:1px solid #f0f1f5}ul.list li:first-child{border-top:0}
+.row{display:flex;gap:8px;align-items:center}.btn{font-size:12px;padding:3px 9px;border:1px solid #d6dbe7;border-radius:6px;background:#fff}
+.btn.primary{background:#2f5bd3;color:#fff;border-color:#2f5bd3}.kpi{font-size:22px;font-weight:600}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:6px 4px;border-top:1px solid #f0f1f5;font-size:13px}
+.note{background:#fffbe6;border:1px dashed #e0c870;border-radius:8px;padding:8px 12px;font-size:12px}
+@media (max-width:700px){.shell{grid-template-columns:1fr}.dock{flex-direction:row;position:fixed;bottom:0;left:0;right:0;justify-content:space-around;padding:6px;z-index:2}.main{padding-bottom:90px}}
+
+.sw{display:inline-block;width:30px;height:17px;border-radius:9px;background:#cfd5e3;position:relative;vertical-align:middle}.sw:after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:#fff}.sw.on{background:#2f9e5b}.sw.on:after{left:15px}
+.state{font-size:11px;padding:1px 7px;border-radius:10px}.ok{background:#e7f6ec;color:#1c6b3a}.warn{background:#fde8ec;color:#a3243b}.plan{background:#eef1f7;color:#59627a}.no{background:#f4f4f4;color:#888}
+.draft{white-space:pre-wrap;background:#f8f9fc;border:1px solid #e3e6ee;border-radius:8px;padding:10px;font-size:13px}
+.drop{border:2px dashed #c8cfdf;border-radius:12px;padding:18px;text-align:center;color:#6b7488}
+</style></head><body><div class="shell"><nav class="dock"><a href="today.html" class=""><span class="i">☀</span>Today</a><a href="inbox.html" class=""><span class="i">✉</span>Inbox</a><a href="assistant.html" class="on"><span class="i">✦</span>Assistant</a><a href="meeting.html" class=""><span class="i">🗓</span>Meetings</a><a href="loops.html" class=""><span class="i">↺</span>Loops</a><a href="briefs.html" class=""><span class="i">🗞</span>Briefs</a><a href="week.html" class=""><span class="i">📅</span>Week</a><a href="search.html" class=""><span class="i">🔎</span>Search</a><a href="people.html" class=""><span class="i">👥</span>People</a><a href="library.html" class=""><span class="i">📚</span>Library</a><a href="connectors.html" class=""><span class="i">🔌</span>Connectors</a><a href="status.html" class=""><span class="i">❤</span>Status</a><a href="settings.html" class=""><span class="i">⚙</span>Settings</a></nav><div>
+<header class="top"><strong>Assistant — waiting for your approval (5)</strong><span class="cmd">⌘K  Search or jump to… (people, chats, briefs, commands)</span><span class="bell">🔔 <span class="tag">3</span></span><span class="muted">Sun 18 Oct · Kyiv 08:02</span></header>
+<main class="main">
+<div class="note">The assistant proposes; you decide. Nothing goes out on its own: a reply is saved to Drafts or sent only when you tap Send (10 s undo); approved tasks are created in ClickUp.</div>
+<div class="card"><div class="row"><span class="tag">✉ Reply draft</span><span class="tag rdim">rdim</span><span class="muted">Do now · important + waiting 2 days · goal: “RDIM dealer network +5”</span></div>
+<p><b>Re: Delivery terms for November</b> — olga@dealer-west.com</p>
+<div class="draft">Добрий день, Ольго!
+Умови як погодили 3 вересня: доставка за наш рахунок від 40 000 грн, 5 робочих днів. Оновлений прайс надішлю сьогодні до 17:00.
+З повагою</div>
+<p class="muted">Sources: <a href="conversation.html">thread 3 Sep “Умови співпраці”</a> · <a href="conversation.html">chat Вячеслав 16 Oct</a> · tone: 12 of your replies to dealers</p>
+<div class="row"><span class="btn primary">Send</span><span class="btn">Save to Drafts</span><span class="btn">Edit</span><span class="btn">Discard…</span></div></div>
+<div class="grid">
+<div class="card"><div class="row"><span class="tag">☑ Task draft</span><span class="tag quokka">quokka</span><span class="muted">from meeting “Quokka sync” 17 Oct</span></div>
+<p><b>Update listings with new photos</b><br>Assignee: Олена · due Fri 23 Oct · list: Marketplaces</p><p class="muted">“Олена will update the listings by Friday” (transcript 14:32)</p>
+<div class="row"><span class="btn primary">Create in ClickUp</span><span class="btn">Edit</span><span class="btn">Discard</span></div></div>
+<div class="card"><div class="row"><span class="tag">↺ Nudge</span><span class="tag quokka">quokka</span><span class="muted">waiting for · 2 days overdue</span></div>
+<p><b>To Олена (Telegram):</b> customs documents</p><div class="draft">Олено, привіт! Нагадую про митні документи — чи вдасться сьогодні?</div>
+<div class="row"><span class="btn primary">Copy &amp; open Telegram</span><span class="btn">Snooze</span><span class="btn">Discard</span></div></div>
+<div class="card"><div class="row"><span class="tag">→ Delegate</span><span class="tag quokka">quokka</span></div>
+<p>Email “Need new banners for Rozetka” → suggest task for <b>Максим</b> (area: ads)</p><div class="row"><span class="btn primary">Make task draft</span><span class="btn">I'll do it</span></div></div>
+<div class="card"><div class="row"><span class="tag">✋ Decline?</span><span class="tag personal">personal</span><span class="muted">week is 82% booked · serves no confirmed goal</span></div>
+<p>Invitation “Crypto meetup Thursday 19:00”</p><div class="row"><span class="btn">Decline draft</span><span class="btn">Keep</span></div></div></div>
+<div class="card"><h2>Acceptance (last 4 weeks)</h2><table><tr><td>Reply drafts</td><td>71% approved (38% edited)</td></tr><tr><td>Task drafts</td><td>83%</td></tr><tr><td>Nudges</td><td>64%</td></tr><tr><td>Decline suggestions</td><td>20% — shown less often</td></tr></table></div>
+
+</main></div></div></body></html>

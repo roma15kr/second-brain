@@ -1,0 +1,27 @@
+// API shapes (hand-written until the OpenAPI → TypeScript generation lands with more routes).
+export type BriefItem = {
+  ref: string;
+  id: number;
+  kind: string;
+  title: string;
+  summary: string;
+  outcome: string | null;
+  link: string | null;
+  last_activity_at: string;
+  scopes: string[];
+  participants: string[];
+};
+
+export type BriefSection = { title: string; text: string; refs: string[]; items: BriefItem[] };
+
+export type Brief = {
+  id: number;
+  routine: string;
+  title: string;
+  headline: string;
+  window_start: string;
+  window_end: string;
+  mode: "ai" | "data";
+  sections: BriefSection[];
+  created_at: string;
+};

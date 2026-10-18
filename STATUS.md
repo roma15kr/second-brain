@@ -25,6 +25,17 @@ _Last updated: 2026-10-18 by Claude_
   daily backup with automatic restore test (first: 82 MB dump, counts match); MCP lockout verified live.
 - Example eval (5 questions, live): recall@10 1.0, recall@1 0.8, MRR 0.9, p50 1.5 s.
 
+- `web-os-v1` proposal extended (2026-10-18): connectors hub (mail, Telegram dialogs, ClickUp, calendar,
+  Library for constitution/plans), meetings (reminders, prep, notes → task drafts), proactive assistant
+  with approval queue (priority, reply drafts to Gmail Drafts, nudges, delegation, focus, goals);
+  research: `docs/research/react-vs-svelte.md` (React kept), `docs/research/proactive-assistance.md`.
+  Owner decisions: React confirmed; dependencies `pypdf`, `python-docx`, `icalendar`,
+  `recurring-ical-events` approved; email = Gmail + any IMAP/SMTP with send on tap (10 s undo);
+  calendars = Google secret address + Apple iCloud/CalDAV; meeting notes come from our own recorder
+  apps (`voice-apps-v1`, next change) via the device API defined here.
+  Meeting/call audio stored in the KB for 12 months (ADR 0010 amendment); transcripts forever.
+  Branch merged with `change/v1-baseline-specs` (PR #3 now also contains PR #2's commits).
+
 ## Next steps
 1. Owner: 30 evaluation questions → run `kb eval` → tune if recall@10 < 0.8 (task 10.3), then archive the change.
 2. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key); optionally rotate MCP token.

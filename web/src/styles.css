@@ -1,0 +1,153 @@
+/* Design tokens from the mockups; dark mode follows the system. */
+:root {
+  --bg: #f4f5f8;
+  --card: #fff;
+  --text: #1d2330;
+  --muted: #6b7488;
+  --line: #e3e6ee;
+  --accent: #2f5bd3;
+  --dock: #1d2330;
+  --error: #a3243b;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151c;
+    --card: #1b2029;
+    --text: #e6e9f0;
+    --muted: #9aa3b5;
+    --line: #2a3140;
+    --accent: #6b8ff0;
+    --dock: #0c0f14;
+    --error: #f07b8f;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font:
+    14px/1.45 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+.error {
+  color: var(--error);
+}
+.center {
+  text-align: center;
+  margin-top: 30vh;
+}
+.btn {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.signin {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 16px;
+}
+.signin .card {
+  width: min(380px, 100%);
+  display: grid;
+  gap: 12px;
+}
+.signin form {
+  display: grid;
+  gap: 10px;
+}
+.signin label {
+  display: grid;
+  gap: 4px;
+}
+.signin input {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.brief h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+.brief h3 {
+  font-size: 14px;
+  margin: 16px 0 6px;
+}
+ul.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+ul.list li {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+ul.list li:first-child {
+  border-top: 0;
+}
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--line);
+  color: var(--text);
+}
+.tag.personal {
+  background: #e7f6ec;
+  color: #1d2330;
+}
+.tag.digisoft {
+  background: #e8efff;
+  color: #1d2330;
+}
+.tag.quokka {
+  background: #fff3df;
+  color: #1d2330;
+}
+.tag.rdim {
+  background: #fde8ec;
+  color: #1d2330;
+}

@@ -12,3 +12,6 @@ docs
 .agents
 .gemini
 .opencode
+node_modules
+**/node_modules
+web/dist
