@@ -373,3 +373,18 @@ def test_approval_api(conn, pg_url, config, fake, account):
         c.post(f"/api/suggestions/{sid}/discard", json={}, headers=CSRF).status_code == 400
     )  # already applied
     assert c.post("/api/suggestions/999/approve", json={}, headers=CSRF).status_code == 404
+
+
+def test_status_reports_clickup_feed(conn, fake, account):
+    from kb import health
+
+    [s] = health.clickup_status(conn)
+    assert s["lists_syncing"] == 1 and s["tasks"] == 0 and s["healthy"] is False  # never synced
+    fake.tasks["L1"] = [task("a", 1000)]
+    n = clickup.sync_account(conn, fake.client(), account)
+    health.record_ok(conn, clickup.source_id(account.id), new=n)
+    [s] = health.clickup_status(conn)
+    assert s["tasks"] == 1 and s["healthy"] is True and s["last_error"] is None
+    conn.execute("UPDATE clickup_lists SET sync = false")
+    [s] = health.clickup_status(conn)
+    assert s["note"] == "no list is marked and set to sync yet"

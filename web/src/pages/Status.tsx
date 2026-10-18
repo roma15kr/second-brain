@@ -12,6 +12,16 @@ type StatusData = {
   system: {
     healthy: boolean;
     sources: Source[];
+    clickup?: {
+      source: string;
+      label: string;
+      lists_syncing: number;
+      tasks: number;
+      last_ok: string | null;
+      last_error: string | null;
+      healthy: boolean;
+      note: string | null;
+    }[];
     index_queue: { pending: number; failed: number };
     items: Record<string, number>;
     database_mb: number | null;
@@ -105,6 +115,18 @@ export function Status() {
                 <span className="muted"> · synced {kyivTime.format(new Date(s.last_ok))}</span>
               )}
               {s.last_error && <div className="error">{s.last_error}</div>}
+            </li>
+          ))}
+          {(system.clickup ?? []).map((c) => (
+            <li key={c.source}>
+              {c.healthy ? "✅" : "⚠"} ClickUp {c.label}
+              <span className="muted">
+                {" "}
+                · {c.lists_syncing} lists · {c.tasks} tasks
+                {c.last_ok && ` · synced ${kyivTime.format(new Date(c.last_ok))}`}
+              </span>
+              {c.note && <div className="muted">{c.note}</div>}
+              {c.last_error && <div className="error">{c.last_error}</div>}
             </li>
           ))}
         </ul>
