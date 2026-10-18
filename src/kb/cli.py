@@ -355,15 +355,19 @@ def cmd_web(args: argparse.Namespace) -> None:
 def cmd_routines(args: argparse.Namespace) -> None:
     from datetime import UTC, datetime
 
-    from kb.routines import briefs
+    from kb.routines import briefs, scheduler
 
+    runners = briefs.runners()
     if args.routines_command == "run":
-        if args.routine != "morning":
+        if args.routine not in runners:
             raise ConfigError(f"routine {args.routine!r} is not available yet")
         with db.connect(database_url()) as conn:
-            brief_id = briefs.run_morning(conn, datetime.now(UTC))
-            brief = briefs.latest(conn, ["morning"])
+            brief_id = runners[args.routine](conn, datetime.now(UTC))
+            brief = briefs.latest(conn, [args.routine])
         print(f"brief {brief_id}: {brief['headline'] if brief else ''}")
+        return
+    url = database_url()
+    scheduler.serve(lambda: db.connect(url), runners)
 
 
 def cmd_mcp(args: argparse.Namespace) -> None:
@@ -463,8 +467,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8001)
     p.set_defaults(func=cmd_web)
-    p = sub.add_parser("routines", help="assistant routines (briefs)")
-    rs = p.add_subparsers(dest="routines_command", required=True)
+    p = sub.add_parser("routines", help="assistant routines: scheduler, or `run <routine>` now")
+    rs = p.add_subparsers(dest="routines_command")  # no subcommand: run the scheduler
     rr = rs.add_parser("run", help="run one routine now, e.g. kb routines run morning")
     rr.add_argument(
         "routine", choices=["morning", "revision", "evening", "weekly_review", "weekly_plan"]

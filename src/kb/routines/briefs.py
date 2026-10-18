@@ -3,6 +3,7 @@ data-only rendering, used before the AI step exists and whenever the AI budget i
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -119,3 +120,8 @@ def run_morning(conn: Conn, now: datetime) -> int:
 
     pack = factpack.build(conn, "morning", factpack.morning_window(now))
     return store(conn, pack, data_only(pack), "data")
+
+
+def runners() -> dict[RoutineName, Callable[[Conn, datetime], int]]:
+    """Routines that can run today; the scheduler skips the others (they arrive in later tasks)."""
+    return {"morning": run_morning}

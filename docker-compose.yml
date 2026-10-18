@@ -87,6 +87,10 @@ services:
       timeout: 5s
       retries: 5
 
+  routines:
+    <<: *kb
+    command: ["sh", "-c", "kb migrate && exec kb routines"]
+
   web:
     <<: *kb
     command: ["sh", "-c", "kb migrate && exec kb web --port 8001"]

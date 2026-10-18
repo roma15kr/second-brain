@@ -12,7 +12,7 @@ branch `change/web-os-v1`.
 
 ## 2. Scheduler and push
 
-- [ ] 2.1 `kb routines` loop with `due_slots` (Europe/Kyiv), `claim` and catch-up once, `routines` compose service; verify `test_due_slots_kyiv_dst`, `test_claim_is_idempotent`, `test_catch_up_once_after_downtime`
+- [x] 2.1 `kb routines` loop with `due_slots` (Europe/Kyiv), `claim` and catch-up once, `routines` compose service; verify `test_due_slots_kyiv_dst`, `test_claim_is_idempotent`, `test_catch_up_once_after_downtime`
 - [ ] 2.2 Service worker (vite-plugin-pwa injectManifest), manifest and install; push subscriptions per device and routine, VAPID sending, quiet hours, gone-subscription cleanup; verify `sw.test.ts`, `test_push_payload_has_no_content`, `test_gone_subscription_deleted`, `test_quiet_hours_no_push_but_brief_stored`, and a real push on the owner's phone (manual)
 
 ## 3. AI briefs
