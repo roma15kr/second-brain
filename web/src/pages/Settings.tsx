@@ -284,7 +284,7 @@ function Identities() {
   );
 }
 
-function Rules() {
+export function Rules() {
   const SCOPES = useProjects();
   const queryClient = useQueryClient();
   const rules = useQuery({

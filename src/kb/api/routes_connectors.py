@@ -202,3 +202,160 @@ def telegram_password(
     if row is None:
         raise HTTPException(400, "this login is not waiting for a password")
     return {"ok": True}
+
+
+@router.post("/api/connectors/mail/{account_id}/disconnect")
+def disconnect_mailbox(
+    conn: Db,
+    account_id: int,
+    remove_from_search: Annotated[bool, Body(embed=True)] = False,
+    delete_archive: Annotated[bool, Body(embed=True)] = False,
+    confirm: Annotated[str | None, Body(embed=True)] = None,
+) -> dict[str, int]:
+    if delete_archive and confirm != "DELETE":
+        raise HTTPException(400, 'deleting the archived originals needs confirm = "DELETE"')
+    try:
+        return accounts.disconnect_mailbox(conn, account_id, remove_from_search, delete_archive)
+    except accounts.ConnectorError as e:
+        raise HTTPException(404, str(e)) from e
+
+
+@router.get("/api/connectors/mail/senders")
+def senders_to_mark(conn: Db) -> dict[str, Any]:
+    """Senders of unsorted email in the last 30 days, to mark by address or domain."""
+    rows = conn.execute(
+        """
+        SELECT lower(substring(m.author from '[^<\\s]+@[^>\\s]+')) AS address,
+               count(DISTINCT i.id) AS threads, max(i.last_activity_at) AS last
+        FROM items i JOIN messages m ON m.source_id = i.source_id AND m.unit_key = i.source_item_key
+        WHERE i.kind = 'email_thread' AND NOT i.hidden AND 'unsorted' = ANY(i.scopes)
+          AND i.last_activity_at > now() - interval '30 days'
+        GROUP BY 1 HAVING lower(substring(m.author from '[^<\\s]+@[^>\\s]+')) IS NOT NULL
+        ORDER BY threads DESC, last DESC LIMIT 50
+        """
+    ).fetchall()
+    return {
+        "senders": [
+            {"address": r["address"], "threads": r["threads"], "last": r["last"].isoformat()}
+            for r in rows
+        ]
+    }
+
+
+CATALOG: list[dict[str, str]] = [
+    {
+        "key": "github",
+        "name": "GitHub",
+        "state": "planned",
+        "adds": "Code, issues and PRs (Digisoft, RDIM B2B)",
+    },
+    {
+        "key": "karakeep",
+        "name": "Karakeep",
+        "state": "planned",
+        "adds": "Saved links and web clips",
+    },
+    {
+        "key": "drive",
+        "name": "Google Drive",
+        "state": "planned",
+        "adds": "Keep Library documents in sync",
+    },
+    {
+        "key": "ads",
+        "name": "GA4 · Meta Ads · Google Ads · TikTok Ads",
+        "state": "planned",
+        "adds": "Marketing metrics in CMO standups",
+    },
+    {
+        "key": "commerce",
+        "name": "Marketplaces · Shopify · Stripe",
+        "state": "planned",
+        "adds": "Sales and payments",
+    },
+    {
+        "key": "ops",
+        "name": "Vault & ops",
+        "state": "planned",
+        "adds": "Domain expiry and failed-payment reminders",
+    },
+    {
+        "key": "whatsapp",
+        "name": "WhatsApp",
+        "state": "not_possible",
+        "adds": "Personal WhatsApp has no official API; chat-export import is planned",
+    },
+]
+
+
+@router.get("/api/connectors")
+def hub(request: Request, conn: Db) -> dict[str, Any]:
+    from kb import health, loops
+    from kb.connectors import tg_dialogs
+
+    config = request.app.state.config
+    effective = accounts.effective_config(conn, config)
+    now = datetime.now(UTC)
+    counts = {
+        r["source_id"]: r["n"]
+        for r in conn.execute(
+            "SELECT source_id, count(*) AS n FROM items WHERE NOT hidden AND kind <> 'passage'"
+            " GROUP BY source_id"
+        )
+    }
+    by_scope: dict[str, dict[str, int]] = {}
+    for r in conn.execute(
+        "SELECT source_id, s, count(*) AS n FROM items, unnest(scopes) s WHERE NOT hidden"
+        " AND kind <> 'passage' GROUP BY source_id, s"
+    ):
+        by_scope.setdefault(r["source_id"], {})[r["s"]] = r["n"]
+    connected = {m["source_id"]: m for m in accounts.list_mailboxes(conn)}
+    mail = []
+    for s in effective.imap_sources():
+        st = health.source_status(conn, s, now)
+        m = connected.get(s.id)
+        mail.append(
+            {
+                "source_id": s.id,
+                "account_id": m["id"] if m else None,
+                "label": m["label"] if m else s.id,
+                "address": m["address"] if m else _safe_username(s),
+                "from_config": m is None,
+                "scopes": list(s.scopes),
+                "healthy": st["healthy"],
+                "last_ok": st["last_ok"],
+                "last_error": st["last_error"],
+                "items": counts.get(s.id, 0),
+                "by_scope": by_scope.get(s.id, {}),
+            }
+        )
+    tg = []
+    dialogs = tg_dialogs.listing(conn)
+    for s in config.telegram_sources():
+        st = health.source_status(conn, s, now)
+        tg.append(
+            {
+                "source_id": s.id,
+                "healthy": st["healthy"],
+                "last_ok": st["last_ok"],
+                "last_error": st["last_error"],
+                "included": len(dialogs["included"]),
+                "to_mark": len(dialogs["to_mark"]),
+                "items": counts.get(s.id, 0),
+                "by_scope": by_scope.get(s.id, {}),
+            }
+        )
+    return {
+        "mail": mail,
+        "disconnected_mail": [m for m in connected.values() if m["state"] == "disconnected"],
+        "telegram": tg,
+        "telegram_self_ids": sorted(loops.owner_telegram_ids(conn)),
+        "catalog": CATALOG,
+    }
+
+
+def _safe_username(source: Any) -> str:
+    try:
+        return str(source.username())
+    except Exception:
+        return ""

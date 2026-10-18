@@ -274,3 +274,40 @@ def effective_config(conn: Conn, config: Config) -> Config:
     merged = config.model_copy(update={"sources": [*config.sources, *extra]})
     _cache[id(config)] = (time.monotonic(), merged)
     return merged
+
+
+def disconnect_mailbox(
+    conn: Conn, account_id: int, remove_from_search: bool = False, delete_archive: bool = False
+) -> dict[str, int]:
+    """Stops syncing. Data stays searchable unless removed from search (items hidden); the
+    archived originals are deleted only on an explicit second confirmation."""
+    row = conn.execute(
+        "UPDATE connector_accounts SET state = 'disconnected' WHERE id = %s AND kind = 'imap'"
+        " RETURNING id",
+        (account_id,),
+    ).fetchone()
+    if row is None:
+        raise ConnectorError(f"no mailbox {account_id}")
+    source_id = f"mail-{account_id}"
+    hidden = deleted = 0
+    if delete_archive:
+        deleted = len(
+            conn.execute(
+                "DELETE FROM raw_records WHERE source_id = %s RETURNING 1", (source_id,)
+            ).fetchall()
+        )
+        conn.execute("DELETE FROM messages WHERE source_id = %s", (source_id,))
+        hidden = len(
+            conn.execute(
+                "DELETE FROM items WHERE source_id = %s RETURNING 1", (source_id,)
+            ).fetchall()
+        )
+    elif remove_from_search:
+        hidden = len(
+            conn.execute(
+                "UPDATE items SET hidden = true WHERE source_id = %s AND NOT hidden RETURNING 1",
+                (source_id,),
+            ).fetchall()
+        )
+    _invalidate()
+    return {"hidden_items": hidden, "deleted_records": deleted}

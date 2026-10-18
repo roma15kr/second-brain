@@ -220,3 +220,73 @@ def test_replace_password_rechecks(client, conn, logins, monkeypatch):
         == 200
     )
     assert client.get("/api/connectors/mail").json()["mailboxes"][0]["scopes"] == ["rdim"]
+
+
+def _connected_with_item(conn):
+    mid = accounts.add_mailbox(
+        conn,
+        accounts.Mailbox(
+            label="RDIM", address="me@rdim.example", password=PASSWORD, scopes=("rdim",)
+        ),
+        scopes.known(conn),
+        NOW,
+    )
+    conn.execute(
+        "INSERT INTO raw_records (source_id, external_id, kind, payload, content_hash)"
+        " VALUES (%s, 'x1', 'email', '{}', 'h')",
+        (f"mail-{mid}",),
+    )
+    conn.execute(
+        "INSERT INTO items (source_id, source_item_key, kind, scopes, title, raw_text)"
+        " VALUES (%s, 'u', 'email_thread', '{rdim}', 'Dealer terms', 'x')",
+        (f"mail-{mid}",),
+    )
+    return mid
+
+
+def test_disconnect_keep_vs_remove(client, conn, logins):
+    mid = _connected_with_item(conn)
+    r = client.post(f"/api/connectors/mail/{mid}/disconnect", json={}, headers=CSRF)
+    assert r.json() == {"hidden_items": 0, "deleted_records": 0}
+    assert accounts.imap_sources(conn) == []  # sync stops
+    assert (
+        conn.execute("SELECT hidden FROM items").fetchone()["hidden"] is False
+    )  # still searchable
+    r = client.post(
+        f"/api/connectors/mail/{mid}/disconnect", json={"remove_from_search": True}, headers=CSRF
+    )
+    assert r.json()["hidden_items"] == 1
+    assert (
+        conn.execute("SELECT count(*) AS n FROM raw_records").fetchone()["n"] == 1
+    )  # archive kept
+    refused = client.post(
+        f"/api/connectors/mail/{mid}/disconnect", json={"delete_archive": True}, headers=CSRF
+    )
+    assert refused.status_code == 400
+    r = client.post(
+        f"/api/connectors/mail/{mid}/disconnect",
+        json={"delete_archive": True, "confirm": "DELETE"},
+        headers=CSRF,
+    )
+    assert r.json()["deleted_records"] == 1
+    assert conn.execute("SELECT count(*) AS n FROM items").fetchone()["n"] == 0
+
+
+def test_hub_lists_sources_counts_and_catalog(client, conn, logins):
+    _connected_with_item(conn)
+    hub = client.get("/api/connectors").json()
+    mailbox = next(m for m in hub["mail"] if not m["from_config"])
+    assert mailbox["address"] == "me@rdim.example" and mailbox["items"] == 1
+    assert mailbox["by_scope"] == {"rdim": 1} and mailbox["healthy"] is False  # never synced yet
+    whatsapp = next(c for c in hub["catalog"] if c["key"] == "whatsapp")
+    assert whatsapp["state"] == "not_possible" and "chat-export" in whatsapp["adds"]
+    assert any(m["from_config"] for m in hub["mail"])  # the config mailbox is shown read-only
+
+
+def test_senders_to_mark(client, conn):
+    from tests.test_triage import mail
+
+    mail(conn, "s1", "Accounts <accounts@printhouse.example>", "Invoice", "x", datetime.now(UTC))
+    conn.execute("UPDATE items SET scopes = '{unsorted}'")
+    senders = client.get("/api/connectors/mail/senders").json()["senders"]
+    assert senders[0]["address"] == "accounts@printhouse.example" and senders[0]["threads"] == 1
