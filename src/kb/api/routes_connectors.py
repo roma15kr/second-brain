@@ -6,7 +6,7 @@ import re
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from kb import scopes, secrets
@@ -116,4 +116,89 @@ def update_mailbox(
         )
     except accounts.ConnectorError as e:
         raise HTTPException(404 if str(e).startswith("no mailbox") else 400, str(e)) from e
+    return {"ok": True}
+
+
+# --- Telegram ---------------------------------------------------------------------------------
+
+
+def _qr_svg(url: str) -> str:
+    import qrcode
+    from qrcode.image.svg import SvgPathImage
+
+    img = qrcode.make(url, image_factory=SvgPathImage, box_size=8, border=2)
+    return img.to_string(encoding="unicode")
+
+
+def _login_view(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "status": row["status"],
+        "error": row["error"],
+        "qr_svg": _qr_svg(row["qr_url"]) if row["status"] == "qr" and row["qr_url"] else None,
+        "updated_at": row["updated_at"].isoformat(),
+    }
+
+
+@router.get("/api/connectors/telegram")
+def telegram(conn: Db) -> dict[str, Any]:
+    from kb import loops
+    from kb.connectors import tg_dialogs
+
+    login = conn.execute("SELECT * FROM telegram_login ORDER BY id DESC LIMIT 1").fetchone()
+    return {
+        **tg_dialogs.listing(conn),
+        "self_ids": sorted(loops.owner_telegram_ids(conn)),
+        "login": _login_view(login),
+    }
+
+
+@router.post("/api/connectors/telegram/dialogs/{chat_id}")
+def telegram_dialog(
+    request: Request,
+    conn: Db,
+    chat_id: int,
+    included: Annotated[bool | None, Body(embed=True)] = None,
+    scopes_: Annotated[list[str] | None, Body(embed=True, alias="scopes")] = None,
+) -> dict[str, int]:
+    from kb.connectors import tg_dialogs
+
+    try:
+        changed = tg_dialogs.set_dialog(conn, request.app.state.config, chat_id, included, scopes_)
+    except scopes.ReviewError as e:
+        raise HTTPException(404 if str(e).startswith("no Telegram") else 400, str(e)) from e
+    return {"rescoped_messages": changed}
+
+
+@router.post("/api/connectors/telegram/login")
+def telegram_login(conn: Db) -> dict[str, Any]:
+    conn.execute(
+        "UPDATE telegram_login SET status = 'expired', updated_at = now()"
+        " WHERE status IN ('pending', 'qr', 'password_needed')"
+    )
+    row = conn.execute("INSERT INTO telegram_login DEFAULT VALUES RETURNING *").fetchone()
+    return _login_view(row) or {}
+
+
+@router.get("/api/connectors/telegram/login/{login_id}")
+def telegram_login_status(conn: Db, login_id: int) -> dict[str, Any]:
+    row = conn.execute("SELECT * FROM telegram_login WHERE id = %s", (login_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, f"no login {login_id}")
+    return _login_view(row) or {}
+
+
+@router.post("/api/connectors/telegram/login/{login_id}/password")
+def telegram_password(
+    conn: Db, login_id: int, password: Annotated[str, Body(embed=True)]
+) -> dict[str, bool]:
+    row = conn.execute(
+        "UPDATE telegram_login SET secret = %s, updated_at = now() WHERE id = %s"
+        " AND status = 'password_needed' RETURNING id",
+        (secrets.seal({"password": password}), login_id),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(400, "this login is not waiting for a password")
     return {"ok": True}

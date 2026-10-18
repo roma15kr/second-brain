@@ -137,6 +137,22 @@ def db_rules(conn: Conn) -> list[Rule]:
     return [Rule(r["kind"], r["value"], tuple(r["scopes"]), r["source_id"]) for r in rows]
 
 
+def set_rule(conn: Conn, kind: str, value: str, scopes: list[str] | None) -> int | None:
+    """Replaces the owner's rule for (kind, value); None removes it. (The unique key includes the
+    nullable source_id, so ON CONFLICT cannot be used for rules without a source.)"""
+    conn.execute(
+        "DELETE FROM scope_rules WHERE kind = %s AND value = %s AND source_id IS NULL",
+        (kind, value),
+    )
+    if not scopes:
+        return None
+    row = conn.execute(
+        "INSERT INTO scope_rules (kind, value, scopes) VALUES (%s, %s, %s) RETURNING id",
+        (kind, value, scopes),
+    ).fetchone()
+    return int(row["id"]) if row else None
+
+
 def resolver(conn: Conn, config: Config, classify: Classifier | None = None) -> Resolver:
     from kb.connectors import accounts
 

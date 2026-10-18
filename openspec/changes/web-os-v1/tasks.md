@@ -50,7 +50,7 @@ branch `change/web-os-v1`.
 ## 9. Connectors hub and marks
 
 - [x] 9.1 `scopes` table (add/rename/archive projects), `secrets.py` (AES-GCM, `KB_SECRET_KEY`), `connector_accounts`; connect a mailbox from the web — Gmail preset or any IMAP + SMTP server (both connections tested, default mark, picked up without restart); verify `test_add_project_scope`, `test_secret_roundtrip_and_never_returned_by_api`, `test_wrong_imap_password_not_saved`, `test_new_account_ingested_without_restart`
-- [ ] 9.2 Telegram dialogs in `tg_dialogs` (read-only listing), include/ignore and mark from the web with backfill, "to mark" list, QR login from the web; config allowlist imported once; verify `test_new_dialog_not_ingested_until_included`, `test_mark_change_rescopes_items`, `test_telegram_wrapper_has_no_write_methods`
+- [x] 9.2 Telegram dialogs in `tg_dialogs` (read-only listing), include/ignore and mark from the web with backfill, "to mark" list, QR login from the web; config allowlist imported once; verify `test_new_dialog_not_ingested_until_included`, `test_mark_change_rescopes_items`, `test_telegram_wrapper_has_no_write_methods`
 - [ ] 9.3 Connectors hub page (states, counts, catalog with planned and WhatsApp "not possible"), mail rules and "senders to mark", disconnect keep/remove; verify `test_disconnect_keep_vs_remove`, `connectors.test.tsx`
 
 ## 10. Personal base (Library)

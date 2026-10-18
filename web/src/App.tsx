@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router";
 import { NeedsPasskey } from "./auth/NeedsPasskey";
+import { TelegramConnector } from "./connectors/TelegramConnector";
 import { Security } from "./auth/Security";
 import { SignIn } from "./auth/SignIn";
 import { useMe } from "./auth/useMe";
@@ -46,6 +47,7 @@ function Routed({ needsPasskey }: { needsPasskey: boolean }) {
         <Route path="/scopes/:scope" element={<Scope />} />
         <Route path="/settings" element={<Settings security={<Security />} />} />
         <Route path="/status" element={<Status />} />
+        <Route path="/connectors/telegram" element={<TelegramConnector />} />
         <Route path="*" element={<p className="muted">Page not found.</p>} />
       </Routes>
     </Shell>

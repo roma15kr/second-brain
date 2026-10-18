@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from kb import indexer
-from kb.config import Config, TelegramChat, TelegramSource
+from kb.config import TelegramChat
 from kb.connectors import telegram
 from kb.connectors.telegram import ChatInfo, ReadOnlyClient
 from kb.search import SearchFilters, search
@@ -12,21 +12,6 @@ from kb.search import SearchFilters, search
 ALLOWED = ChatInfo(chat_id=-1001234, title="Quokka team", username=None, peer_type="channel")
 OTHER = ChatInfo(chat_id=-1009999, title="Random chat", username=None, peer_type="channel")
 DM = ChatInfo(chat_id=555, title="Oleh", username="oleh_q", peer_type="user")
-
-
-@pytest.fixture
-def tg_source() -> TelegramSource:
-    return TelegramSource(
-        id="tg",
-        type="telegram",
-        scopes=["personal"],
-        chats=[TelegramChat(chat=-1001234, scopes=["quokka"]), TelegramChat(chat="@oleh_q")],
-    )
-
-
-@pytest.fixture
-def tg_config(tg_source) -> Config:
-    return Config(sources=[tg_source])
 
 
 def msg(msg_id, text, date=datetime(2026, 9, 1, 10, tzinfo=UTC), edit_date=None, **kw):

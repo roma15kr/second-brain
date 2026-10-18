@@ -1,3 +1,4 @@
+import { useProjects } from "../shell/useProjects";
 import { ScopeTag } from "../shell/ScopeTag";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
@@ -29,10 +30,9 @@ type SearchData = {
   briefs: { id: number; routine: string; headline: string; created_at: string }[];
 };
 
-const SCOPES = ["personal", "digisoft", "quokka", "rdim", "unsorted"];
-
 // Knowledge-base search with filters, matched context and deep links (web-dashboard spec).
 export function Search() {
+  const SCOPES = [...useProjects(), "unsorted"];
   const [params, setParams] = useSearchParams();
   const [draft, setDraft] = useState(params.get("q") ?? "");
   const q = params.get("q") ?? "";

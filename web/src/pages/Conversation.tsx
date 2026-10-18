@@ -1,3 +1,4 @@
+import { useProjects } from "../shell/useProjects";
 import { ScopeTag } from "../shell/ScopeTag";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -29,11 +30,11 @@ type Item = {
   loops: { id: number; kind: string; title: string; status: string; due_date: string | null }[];
 };
 
-const SCOPES = ["personal", "digisoft", "quokka", "rdim"];
 const PAGE = 50;
 
 // One conversation: summary, outcome, people, scope, loops and messages (web-dashboard spec).
 export function Conversation() {
+  const SCOPES = useProjects();
   const { id } = useParams();
   const [params] = useSearchParams();
   const matched = params.get("m");

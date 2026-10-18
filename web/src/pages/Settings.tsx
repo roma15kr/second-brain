@@ -1,3 +1,4 @@
+import { useProjects } from "../shell/useProjects";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../api/client";
@@ -28,7 +29,6 @@ type Rule = { id: number; kind: string; value: string; scopes: string[] };
 type Unsorted = { item_id: number; kind: string; title: string | null; participants: string[] };
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const SCOPES = ["personal", "digisoft", "quokka", "rdim"];
 const ROUTINE_LABELS: Record<string, string> = {
   morning: "Morning brief",
   revision: "Mail revision",
@@ -285,6 +285,7 @@ function Identities() {
 }
 
 function Rules() {
+  const SCOPES = useProjects();
   const queryClient = useQueryClient();
   const rules = useQuery({
     queryKey: ["rules"],
@@ -367,6 +368,7 @@ function Rules() {
 }
 
 function UnsortedReview() {
+  const SCOPES = useProjects();
   const queryClient = useQueryClient();
   const list = useQuery({
     queryKey: ["unsorted"],

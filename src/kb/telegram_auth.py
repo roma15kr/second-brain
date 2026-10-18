@@ -92,3 +92,59 @@ async def login_with_qr(client: Any, ask_secret: Prompt, say: Say) -> Any:
         except SessionPasswordNeededError:
             return await client.sign_in(password=ask_secret("Two-step verification password: "))
     raise TimeoutError("QR code was not scanned; run the command again")
+
+
+# --- login from the web OS (connectors spec: QR login on the page) -------------------------
+
+WEB_POLL_SECONDS = 3.0
+PASSWORD_WAIT_SECONDS = 300
+
+
+async def web_login(conn: Any, client: Any, poll: float = WEB_POLL_SECONDS) -> Any:
+    """Waits for a login request from the web OS and completes it by QR (and the two-step
+    password when the account has one). Returns the logged-in user."""
+    from telethon.errors import SessionPasswordNeededError
+
+    from kb import secrets
+
+    def update(rid: int, **fields: Any) -> None:
+        sets = ", ".join(f"{k} = %s" for k in fields)
+        conn.execute(
+            f"UPDATE telegram_login SET {sets}, updated_at = now() WHERE id = %s",
+            (*fields.values(), rid),
+        )
+
+    while True:
+        req = conn.execute(
+            "SELECT id FROM telegram_login WHERE status = 'pending' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if req is None:
+            await asyncio.sleep(poll)
+            continue
+        rid = req["id"]
+        qr = await client.qr_login()
+        update(rid, status="qr", qr_url=qr.url)
+        try:
+            return await qr.wait(timeout=QR_TIMEOUT_SECONDS)
+        except (TimeoutError, asyncio.TimeoutError):  # noqa: UP041 - telethon may raise the alias
+            update(rid, status="expired", qr_url=None)
+            continue
+        except SessionPasswordNeededError:
+            update(rid, status="password_needed", qr_url=None)
+        waited = 0.0
+        while waited < PASSWORD_WAIT_SECONDS:
+            row = conn.execute("SELECT secret FROM telegram_login WHERE id = %s", (rid,)).fetchone()
+            if row and row["secret"]:
+                password = secrets.unseal(row["secret"])["password"]
+                update(rid, secret=None)
+                try:
+                    user = await client.sign_in(password=password)
+                except Exception as e:
+                    update(rid, status="failed", error=f"two-step password rejected: {e}")
+                    break
+                update(rid, status="done")
+                return user
+            await asyncio.sleep(poll)
+            waited += poll
+        else:
+            update(rid, status="expired", secret=None)

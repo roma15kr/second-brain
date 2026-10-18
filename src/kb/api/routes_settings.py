@@ -151,14 +151,9 @@ def add_rule(
         raise HTTPException(400, str(e)) from e
     if not value.strip():
         raise HTTPException(400, "a rule needs a value")
-    row = conn.execute(
-        "INSERT INTO scope_rules (kind, value, scopes) VALUES (%s, %s, %s)"
-        " ON CONFLICT (kind, value, source_id) DO UPDATE SET scopes = EXCLUDED.scopes"
-        " RETURNING id",
-        (kind, value.strip().lower(), scopes),
-    ).fetchone()
+    rule_id = scope_mod.set_rule(conn, kind, value.strip().lower(), scopes)
     changed = scope_mod.rescope(conn, request.app.state.config)
-    return {"id": row["id"] if row else None, "rescoped_messages": changed}
+    return {"id": rule_id, "rescoped_messages": changed}
 
 
 @router.delete("/api/settings/rules/{rule_id}")

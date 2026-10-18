@@ -1,3 +1,4 @@
+import { useProjects } from "../shell/useProjects";
 import { ScopeTag } from "../shell/ScopeTag";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -26,7 +27,6 @@ const GROUPS: [keyof InboxData["groups"], string][] = [
   ["fyi", "FYI"],
   ["noise", "Noise"],
 ];
-const SCOPES = ["personal", "digisoft", "quokka", "rdim"];
 
 function at(daysAhead: number, weekdayMonday = false): string {
   const d = new Date();
@@ -37,6 +37,7 @@ function at(daysAhead: number, weekdayMonday = false): string {
 }
 
 function Row({ item, onChanged }: { item: InboxItem; onChanged: () => void }) {
+  const SCOPES = useProjects();
   const [message, setMessage] = useState<string | null>(null);
   const act = useMutation({
     mutationFn: ({ path, body }: { path: string; body?: unknown }) =>

@@ -470,3 +470,10 @@ fieldset.plain {
 .kpi.bad {
   color: var(--error);
 }
+.qr svg {
+  width: 220px;
+  height: 220px;
+  background: #fff;
+  padding: 8px;
+  border-radius: 8px;
+}

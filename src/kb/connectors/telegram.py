@@ -246,6 +246,9 @@ def make_client(source: TelegramSource, snapshot: bool = False) -> Any:
     return TelegramClient(session, source.api_id(), source.api_hash(), flood_sleep_threshold=120)
 
 
+ALLOWLIST_SECONDS = 60
+
+
 def record_self(conn: Conn, me: Any) -> None:
     """Remember the owner's Telegram id so loops know which messages are the owner's."""
     from kb import loops
@@ -261,25 +264,33 @@ async def run(source: TelegramSource, connect_db: Callable[[], Conn]) -> None:
     """Long-running ingest: catch up, then follow live events; re-check gaps periodically."""
     from telethon import events
 
+    from kb import health, telegram_auth
+    from kb.connectors import tg_dialogs
+
     raw = make_client(source)
     await raw.connect()
-    if not await raw.is_user_authorized():
-        raise ConfigError(
-            f"telegram source {source.id}: not logged in; run `kb auth telegram {source.id}`"
-        )
-    client = ReadOnlyClient(raw)
     conn = connect_db()
+    if not await raw.is_user_authorized():
+        # Logged out: wait for a QR login started on the Connectors page.
+        health.record_error(conn, source.id, "Telegram is not logged in: log in on Connectors")
+        await telegram_auth.web_login(conn, raw)
+    client = ReadOnlyClient(raw)
     record_self(conn, await client.get_me())
-    entities = await resolve_chats(client, source)
-    by_id = {chat_info(e).chat_id: e for e in entities}
+    await sync_dialogs(conn, client, source)
+    state: dict[str, Any] = {"source": tg_dialogs.effective_source(conn, source)}
+    entities = await resolve_chats(client, state["source"])
+    by_id: dict[int, Any] = {chat_info(e).chat_id: e for e in entities}
 
-    @raw.on(events.NewMessage(chats=list(by_id)))
+    # No fixed chat filter: the allowlist changes while running (dialogs included on the web).
+    @raw.on(events.NewMessage())
     async def _new(event: Any) -> None:
-        on_message(conn, source, chat_info(by_id[event.chat_id]), event.message)
+        if event.chat_id in by_id:
+            on_message(conn, state["source"], chat_info(by_id[event.chat_id]), event.message)
 
-    @raw.on(events.MessageEdited(chats=list(by_id)))
+    @raw.on(events.MessageEdited())
     async def _edited(event: Any) -> None:
-        on_message(conn, source, chat_info(by_id[event.chat_id]), event.message)
+        if event.chat_id in by_id:
+            on_message(conn, state["source"], chat_info(by_id[event.chat_id]), event.message)
 
     @raw.on(events.MessageDeleted())
     async def _deleted(event: Any) -> None:
@@ -288,18 +299,47 @@ async def run(source: TelegramSource, connect_db: Callable[[], Conn]) -> None:
             return
         on_deleted(conn, source, chat_id, list(event.deleted_ids))
 
-    await catch_up(conn, client, source, entities)
+    await catch_up(conn, client, state["source"], list(by_id.values()))
+
+    async def refresh_allowlist() -> None:
+        """Every minute: dialogs included on the web start (with backfill), ignored ones stop."""
+        while True:
+            await asyncio.sleep(ALLOWLIST_SECONDS)
+            try:
+                state["source"] = tg_dialogs.effective_source(conn, source)
+                wanted = await resolve_chats(client, state["source"])
+                wanted_ids = {chat_info(e).chat_id: e for e in wanted}
+                added = [e for cid, e in wanted_ids.items() if cid not in by_id]
+                for cid in [c for c in by_id if c not in wanted_ids]:
+                    del by_id[cid]
+                by_id.update(wanted_ids)
+                if added:
+                    await catch_up(conn, client, state["source"], added)
+            except Exception:
+                log.exception("telegram %s: allowlist refresh failed", source.id)
 
     async def periodic() -> None:
         while True:
             await asyncio.sleep(source.catch_up_seconds)
             try:
-                await catch_up(conn, client, source, entities)
+                await sync_dialogs(conn, client, source)
+                await catch_up(conn, client, state["source"], list(by_id.values()))
             except Exception:
                 log.exception("telegram %s: periodic catch-up failed", source.id)
 
-    task = asyncio.create_task(periodic())
+    tasks = [asyncio.create_task(periodic()), asyncio.create_task(refresh_allowlist())]
     try:
         await raw.run_until_disconnected()
     finally:
-        task.cancel()
+        for t in tasks:
+            t.cancel()
+
+
+async def sync_dialogs(conn: Conn, client: ReadOnlyClient, source: TelegramSource) -> int:
+    """Lists the owner's dialogs (titles and last activity only) for the Connectors page."""
+    from kb.connectors import tg_dialogs
+
+    found = []
+    async for dialog in client.iter_dialogs():
+        found.append((chat_info(dialog.entity), getattr(dialog, "date", None)))
+    return tg_dialogs.upsert_dialogs(conn, source, found)

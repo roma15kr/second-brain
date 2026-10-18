@@ -1,3 +1,4 @@
+import { useProjects } from "../shell/useProjects";
 import { ScopeTag } from "../shell/ScopeTag";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
@@ -26,7 +27,6 @@ const DIRECTIONS: [string, Loop["kind"] | null][] = [
   ["Mine", "manual"],
 ];
 const STATUSES = ["open", "snoozed", "done", "dismissed"] as const;
-const SCOPES = ["personal", "digisoft", "quokka", "rdim"];
 const WHO: Record<Loop["kind"], string> = {
   needs_reply: "Reply to",
   i_owe: "You → ",
@@ -47,6 +47,7 @@ function nextMonday(): string {
 
 // Loops with direction, counterpart, due date or age, scope and source (open-loops spec).
 export function Loops() {
+  const SCOPES = useProjects();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("open");
   const [kind, setKind] = useState<Loop["kind"] | null>(null);
