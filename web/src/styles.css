@@ -440,3 +440,14 @@ blockquote.match {
   gap: 6px;
   align-items: center;
 }
+.codes {
+  columns: 2;
+  font-size: 14px;
+}
+.banner {
+  margin-bottom: 12px;
+}
+h4 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+}

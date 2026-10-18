@@ -292,3 +292,112 @@ def finish_login(
         (verified.new_sign_count, now, cred_id),
     )
     return create_session(conn, device, now)
+
+
+# --- recovery codes -------------------------------------------------------------------------
+
+RECOVERY_CODES = 10
+_SCRYPT = {"n": 2**14, "r": 8, "p": 1, "dklen": 32}
+
+
+def _scrypt(code: str, salt: bytes) -> bytes:
+    return hashlib.scrypt(_normalize_code(code).encode(), salt=salt, **_SCRYPT)
+
+
+def new_recovery_codes(conn: Conn) -> list[str]:
+    """Replaces all recovery codes with 10 new single-use ones; returns them (shown once)."""
+    conn.execute("DELETE FROM recovery_codes")
+    codes = []
+    for _ in range(RECOVERY_CODES):
+        raw = base64.b32encode(secrets.token_bytes(10)).decode().lower()  # 16 characters
+        code = "-".join(raw[i : i + 4] for i in range(0, 16, 4))
+        salt = secrets.token_bytes(16)
+        conn.execute(
+            "INSERT INTO recovery_codes (code_hash) VALUES (%s)", (salt + _scrypt(code, salt),)
+        )
+        codes.append(code)
+    return codes
+
+
+def remaining_recovery_codes(conn: Conn) -> int:
+    row = conn.execute("SELECT count(*) AS n FROM recovery_codes WHERE used_at IS NULL").fetchone()
+    return int(row["n"]) if row else 0
+
+
+def recover(conn: Conn, code: str, device: str, now: datetime) -> str:
+    """Signs in with a recovery code (single use); the session must then add a passkey."""
+    for r in conn.execute(
+        "SELECT id, code_hash FROM recovery_codes WHERE used_at IS NULL"
+    ).fetchall():
+        stored = bytes(r["code_hash"])
+        if secrets.compare_digest(stored[16:], _scrypt(code, stored[:16])):
+            conn.execute("UPDATE recovery_codes SET used_at = %s WHERE id = %s", (now, r["id"]))
+            return create_session(conn, device, now, needs_passkey=True)
+    raise AuthError(401, "That recovery code is not valid or was already used.")
+
+
+# --- sessions (signed-in devices) -----------------------------------------------------------
+
+
+def session_id(token_hash: bytes) -> str:
+    return bytes(token_hash).hex()[:16]
+
+
+def list_sessions(conn: Conn, current_token: str | None, now: datetime) -> list[dict[str, Any]]:
+    current = _hash(current_token).hex()[:16] if current_token else None
+    rows = conn.execute(
+        "SELECT token_hash, device, created_at, last_seen_at, needs_passkey FROM web_sessions"
+        " WHERE expires_at > %s ORDER BY last_seen_at DESC",
+        (now,),
+    ).fetchall()
+    return [
+        {
+            "id": session_id(r["token_hash"]),
+            "device": r["device"],
+            "created_at": r["created_at"].isoformat(),
+            "last_seen_at": r["last_seen_at"].isoformat(),
+            "current": session_id(r["token_hash"]) == current,
+            "recovery": r["needs_passkey"],
+        }
+        for r in rows
+    ]
+
+
+def revoke_session(conn: Conn, sid: str) -> int:
+    rows = conn.execute(
+        "DELETE FROM web_sessions WHERE encode(token_hash, 'hex') LIKE %s || '%%' RETURNING 1",
+        (sid,),
+    ).fetchall()
+    return len(rows)
+
+
+def revoke_other_sessions(conn: Conn, current_token: str) -> int:
+    rows = conn.execute(
+        "DELETE FROM web_sessions WHERE token_hash <> %s RETURNING 1", (_hash(current_token),)
+    ).fetchall()
+    return len(rows)
+
+
+def passkey_added(conn: Conn, current_token: str) -> None:
+    """A recovery session that registered a passkey becomes a normal session."""
+    conn.execute(
+        "UPDATE web_sessions SET needs_passkey = false WHERE token_hash = %s",
+        (_hash(current_token),),
+    )
+
+
+def list_passkeys(conn: Conn, rp_id: str) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT id, device, created_at, last_used_at FROM webauthn_credentials WHERE rp_id = %s"
+        " ORDER BY created_at",
+        (rp_id,),
+    ).fetchall()
+    return [
+        {
+            "id": bytes(r["id"]).hex()[:16],
+            "device": r["device"],
+            "created_at": r["created_at"].isoformat(),
+            "last_used_at": r["last_used_at"].isoformat() if r["last_used_at"] else None,
+        }
+        for r in rows
+    ]

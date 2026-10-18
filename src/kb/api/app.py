@@ -9,6 +9,7 @@ client-side routes (`/briefs/12`) survive a reload.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -33,6 +34,7 @@ from kb.api import (
 )
 from kb.config import Config
 from kb.db import Conn
+from kb.ratelimit import RateLimiter, client_ip
 
 PUBLIC_API = {
     "/api/health",
@@ -41,7 +43,9 @@ PUBLIC_API = {
     "/api/auth/register/finish",
     "/api/auth/login/begin",
     "/api/auth/login/finish",
+    "/api/auth/recover",
 }
+LOCKED = "Too many failed attempts from this network; try again in 10 minutes."
 CSRF_HEADER = "x-kb-request"
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 NO_CACHE = {"sw.js", "registerSW.js"}  # the service worker must update promptly
@@ -67,6 +71,7 @@ def build_app(
     clock: Clock = _now,
     config: Config | None = None,
     searcher: Callable[[dict[str, Any]], list[dict[str, Any]]] | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
 ) -> FastAPI:
     app = FastAPI(title="second-brain web OS", docs_url=None, redoc_url=None)
     app.state.connect = connect
@@ -81,6 +86,23 @@ def build_app(
             raise RuntimeError("the web OS needs DATABASE_URL")
         with connect() as conn:
             yield conn
+
+    # web-access spec: 10 failed sign-in/recovery/setup attempts in 10 minutes lock a client out
+    limiter = RateLimiter(
+        max_failures=10, failure_window=600, max_requests=10**9, request_window=60
+    )
+
+    @contextmanager
+    def attempt(request: Request) -> Iterator[None]:
+        ip, now = client_ip(request.scope), monotonic()
+        if limiter.locked(ip, now):
+            raise auth.AuthError(429, LOCKED)
+        try:
+            yield
+        except auth.AuthError as e:
+            if e.status in (400, 401, 403):
+                limiter.failed(ip, now)
+            raise
 
     def relying_party() -> auth.RelyingParty:
         if rp is None or not rp.rp_id:
@@ -153,7 +175,7 @@ def build_app(
 
     @app.post("/api/auth/register/begin")
     def register_begin(request: Request, setup_code: SetupCode = None) -> Response:
-        with db() as conn:
+        with attempt(request), db() as conn:
             cid, options = auth.begin_registration(
                 conn, relying_party(), setup_code, request.state.session is not None, clock()
             )
@@ -163,7 +185,8 @@ def build_app(
 
     @app.post("/api/auth/register/finish")
     def register_finish(request: Request, credential: Credential) -> JSONResponse:
-        with db() as conn:
+        codes: list[str] = []
+        with attempt(request), db() as conn:
             token = auth.finish_registration(
                 conn,
                 relying_party(),
@@ -173,7 +196,12 @@ def build_app(
                 request.state.session is not None,
                 clock(),
             )
-        out = JSONResponse({"ok": True})
+            if token:  # first passkey: recovery codes are shown once
+                codes = auth.new_recovery_codes(conn)
+            session = request.state.session
+            if session and session["needs_passkey"]:
+                auth.passkey_added(conn, request.cookies.get(auth.SESSION_COOKIE, ""))
+        out = JSONResponse({"ok": True, "recovery_codes": codes})
         out.delete_cookie(auth.CHALLENGE_COOKIE, path="/api/auth")
         if token:
             set_session_cookie(out, token)
@@ -189,7 +217,7 @@ def build_app(
 
     @app.post("/api/auth/login/finish")
     def login_finish(request: Request, credential: Credential) -> JSONResponse:
-        with db() as conn:
+        with attempt(request), db() as conn:
             token = auth.finish_login(
                 conn,
                 relying_party(),
@@ -202,6 +230,43 @@ def build_app(
         out.delete_cookie(auth.CHALLENGE_COOKIE, path="/api/auth")
         set_session_cookie(out, token)
         return out
+
+    @app.post("/api/auth/recover")
+    def recover(request: Request, code: Annotated[str, Body(embed=True)]) -> JSONResponse:
+        with attempt(request), db() as conn:
+            token = auth.recover(conn, code, _device(request), clock())
+        out = JSONResponse({"ok": True, "needs_passkey": True})
+        set_session_cookie(out, token)
+        return out
+
+    @app.get("/api/auth/sessions")
+    def sessions(request: Request) -> dict[str, Any]:
+        with db() as conn:
+            return {
+                "sessions": auth.list_sessions(
+                    conn, request.cookies.get(auth.SESSION_COOKIE), clock()
+                ),
+                "passkeys": auth.list_passkeys(conn, rp.rp_id if rp else ""),
+                "recovery_codes_left": auth.remaining_recovery_codes(conn),
+            }
+
+    @app.post("/api/auth/sessions/{sid}/revoke")
+    def revoke(sid: str) -> dict[str, int]:
+        if len(sid) < 8:
+            raise auth.AuthError(400, "unknown session")
+        with db() as conn:
+            return {"revoked": auth.revoke_session(conn, sid)}
+
+    @app.post("/api/auth/sessions/revoke-others")
+    def revoke_others(request: Request) -> dict[str, int]:
+        with db() as conn:
+            n = auth.revoke_other_sessions(conn, request.cookies.get(auth.SESSION_COOKIE, ""))
+        return {"revoked": n}
+
+    @app.post("/api/auth/recovery-codes")
+    def regenerate_codes() -> dict[str, list[str]]:
+        with db() as conn:
+            return {"recovery_codes": auth.new_recovery_codes(conn)}
 
     @app.post("/api/auth/logout")
     def logout(request: Request) -> JSONResponse:

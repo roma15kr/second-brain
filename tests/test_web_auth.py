@@ -164,3 +164,87 @@ def test_moving_to_a_new_domain_allows_enrolment_with_a_setup_code(conn, pg_url,
     fresh = auth.new_setup_code(conn, NOW)
     r = new.post("/api/auth/register/begin", json={"setup_code": fresh}, headers=CSRF)
     assert r.status_code == 200 and r.json()["rp"]["id"] == "os.zhukovsky.example"
+
+
+def enrol(client, conn, monkeypatch):
+    _fake_verified(monkeypatch)
+    code = auth.new_setup_code(conn, NOW)
+    client.post("/api/auth/register/begin", json={"setup_code": code}, headers=CSRF)
+    r = client.post("/api/auth/register/finish", json={"credential": {"id": "x"}}, headers=CSRF)
+    return r.json()["recovery_codes"]
+
+
+def test_first_passkey_shows_ten_recovery_codes(client, conn, monkeypatch):
+    codes = enrol(client, conn, monkeypatch)
+    assert len(codes) == 10 and len(set(codes)) == 10
+    assert all(len(c) == 19 for c in codes)  # xxxx-xxxx-xxxx-xxxx
+    stored = conn.execute("SELECT code_hash FROM recovery_codes").fetchall()
+    assert all(c.encode() not in bytes(r["code_hash"]) for r in stored for c in codes)
+
+
+def test_recovery_code_single_use(app, client, conn, monkeypatch):
+    codes = enrol(client, conn, monkeypatch)
+    phone = TestClient(app, base_url="https://os.example.com")
+    r = phone.post("/api/auth/recover", json={"code": codes[3].upper()}, headers=CSRF)
+    assert r.status_code == 200 and r.json()["needs_passkey"] is True
+    assert phone.get("/api/auth/me").json()["needs_passkey"] is True
+    other = TestClient(app, base_url="https://os.example.com")
+    assert other.post("/api/auth/recover", json={"code": codes[3]}, headers=CSRF).status_code == 401
+    # adding a passkey from the recovery session ends the "add a passkey" state
+    monkeypatch.setattr(
+        auth,
+        "verify_registration_response",
+        lambda **kw: SimpleNamespace(
+            credential_id=b"cred-2", credential_public_key=b"pk", sign_count=0
+        ),
+    )
+    phone.post("/api/auth/register/begin", json={}, headers=CSRF)
+    r = phone.post("/api/auth/register/finish", json={"credential": {"id": "y"}}, headers=CSRF)
+    assert r.status_code == 200 and r.json()["recovery_codes"] == []
+    assert phone.get("/api/auth/me").json()["needs_passkey"] is False
+
+
+def test_sign_out_everywhere(app, client, conn):
+    signed_in(client, conn)
+    laptop = signed_in(TestClient(app, base_url="https://os.example.com"), conn)
+    phone = signed_in(TestClient(app, base_url="https://os.example.com"), conn)
+    sessions = client.get("/api/auth/sessions").json()["sessions"]
+    assert len(sessions) == 3 and sum(s["current"] for s in sessions) == 1
+    assert client.post("/api/auth/sessions/revoke-others", headers=CSRF).json() == {"revoked": 2}
+    assert laptop.get("/api/nope").status_code == 401 and phone.get("/api/nope").status_code == 401
+    assert client.get("/api/nope").status_code == 404  # this device stays signed in
+
+
+def test_sign_out_one_device(app, client, conn):
+    signed_in(client, conn)
+    phone = signed_in(TestClient(app, base_url="https://os.example.com"), conn)
+    other = next(s for s in client.get("/api/auth/sessions").json()["sessions"] if not s["current"])
+    assert client.post(f"/api/auth/sessions/{other['id']}/revoke", headers=CSRF).json() == {
+        "revoked": 1
+    }
+    assert phone.get("/api/nope").status_code == 401
+
+
+def test_login_lockout_after_10_failures(conn, pg_url, monkeypatch):
+    t = {"now": 1000.0}
+    app = build_app(
+        None,
+        connect=lambda: db.connect(pg_url),
+        rp=RP,
+        clock=lambda: NOW,
+        monotonic=lambda: t["now"],
+    )
+    client = TestClient(app, base_url="https://os.example.com")
+    codes = enrol(client, conn, monkeypatch)
+    attacker = TestClient(app, base_url="https://os.example.com")
+    for _ in range(10):
+        assert (
+            attacker.post("/api/auth/recover", json={"code": "wrong"}, headers=CSRF).status_code
+            == 401
+        )
+    r = attacker.post("/api/auth/recover", json={"code": codes[0]}, headers=CSRF)
+    assert r.status_code == 429  # locked even with a right code
+    t["now"] += 601
+    assert (
+        attacker.post("/api/auth/recover", json={"code": codes[0]}, headers=CSRF).status_code == 200
+    )
