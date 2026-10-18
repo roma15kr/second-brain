@@ -29,6 +29,10 @@ _Last updated: 2026-10-18 by Claude_
   Library for constitution/plans), meetings (reminders, prep, notes → task drafts), proactive assistant
   with approval queue (priority, reply drafts to Gmail Drafts, nudges, delegation, focus, goals);
   research: `docs/research/react-vs-svelte.md` (React kept), `docs/research/proactive-assistance.md`.
+  Owner decisions: React confirmed; dependencies `pypdf`, `python-docx`, `icalendar`,
+  `recurring-ical-events` approved; email = Gmail + any IMAP/SMTP with send on tap (10 s undo);
+  calendars = Google secret address + Apple iCloud/CalDAV; meeting notes come from our own recorder
+  apps (`voice-apps-v1`, next change) via the device API defined here.
   Branch merged with `change/v1-baseline-specs` (PR #3 now also contains PR #2's commits).
 
 ## Next steps
@@ -39,8 +43,6 @@ _Last updated: 2026-10-18 by Claude_
 5. Next changes (roadmap): ClickUp/Karakeep/Calendar, metrics warehouse, Telegram bot + automations, meeting app.
 
 ## Open questions
-- web-os-v1: approve new dependencies `pypdf`, `python-docx`, `icalendar`, `recurring-ical-events`?
-- web-os-v1: which meeting-notes app is in use (for notes import)?
 - AI scope classifier (planned in v1 design, never wired): build it, or keep rules + unsorted review?
 - Telegram segmentation by silence gap vs topic shift (design: least confident #1).
 - Age decay for personal knowledge (design: least confident #4).

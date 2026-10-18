@@ -55,7 +55,7 @@ branch `change/web-os-v1`.
 
 ## 10. Personal base (Library)
 
-- [ ] 10.1 Owner approves new dependencies (`pypdf`, `python-docx`); documents and notes with required mark, versions, text extraction, indexed for web search and MCP; verify `test_extract_md_pdf_docx`, `test_document_requires_mark`, `test_versions_latest_indexed`, `library.test.tsx`
+- [ ] 10.1 Add `pypdf` and `python-docx` (approved by the owner 2026-10-18); documents and notes with required mark, versions, text extraction, indexed for web search and MCP; verify `test_extract_md_pdf_docx`, `test_document_requires_mark`, `test_versions_latest_indexed`, `library.test.tsx`
 - [ ] 10.2 "AI may read" switch enforced in every prompt builder; goals proposed from core documents and confirmed by the owner; Library page per mockup; verify `test_ai_disallowed_document_never_in_prompt`, `test_goals_proposed_need_confirmation`
 
 ## 11. ClickUp
@@ -73,7 +73,7 @@ branch `change/web-os-v1`.
 
 ## 13. Calendar and meetings
 
-- [ ] 13.1 Owner approves `icalendar` + `recurring-ical-events`; connect Google calendars by secret address and Apple iCloud / CalDAV with an app-specific password, mark calendars, sync events, Meetings page, reminders before meetings; verify `test_ics_recurring_expanded_kyiv`, `test_caldav_discovery_icloud_fixture`, `test_caldav_report_time_range`, `test_calendar_client_has_no_write_methods`, `test_declined_and_all_day_not_reminded`, `meeting.test.tsx`, and the owner's iCloud calendar on Today
+- [ ] 13.1 Add `icalendar` + `recurring-ical-events` (approved 2026-10-18); connect Google calendars by secret address and Apple iCloud / CalDAV with an app-specific password, mark calendars, sync events, Meetings page, reminders before meetings; verify `test_ics_recurring_expanded_kyiv`, `test_caldav_discovery_icloud_fixture`, `test_caldav_report_time_range`, `test_calendar_client_has_no_write_methods`, `test_declined_and_all_day_not_reminded`, `meeting.test.tsx`, and the owner's iCloud calendar on Today
 - [ ] 13.2 Meeting prep at T-30 (or in the morning brief before 10:00) with people, history, loops, ClickUp tasks, goals and agenda; verify `test_prep_and_reminder_times` and a real prep on the owner's phone
 - [ ] 13.3 Device pairing (Settings → Devices, one-time code/QR, revoke) and recording upload API for the recorder apps, matched to calendar events or saved as unscheduled calls; manual notes import (paste, .txt/.md/.vtt/.srt/.docx); processing → summary, decisions, owner's loops, team task drafts; verify `test_pairing_code_single_use_and_expires`, `test_device_token_cannot_read_kb`, `test_recording_matched_to_overlapping_event`, `test_unscheduled_call_created`, `test_revoked_device_refused`, `test_upload_idempotent`, `test_notes_to_loops_and_task_drafts`
 - [ ] 13.4 Focus blocks and meeting-load warning in briefs; attention audit, neglected goals and decision log in weekly routines; verify `test_focus_blocks_and_meeting_load_warning`, `test_neglected_goal_in_weekly_review`

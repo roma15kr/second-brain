@@ -138,7 +138,7 @@ suggestion (idempotent retry). Webhooks are a later optimisation (needs a public
 ### D16. Personal base storage and extraction
 `documents` (title, kind, scopes, ai_allowed, core) + `document_versions` (bytes in Postgres
 `bytea` ≤ 20 MB, sha256, extracted text, created_at). Extraction: md/txt direct; PDF `pypdf`; DOCX
-`python-docx` (new dependencies, need approval). Latest version is indexed as `document` units
+`python-docx` (new dependencies, approved 2026-10-18). Latest version is indexed as `document` units
 split by headings (passages), so search and MCP find them. `ai_allowed = false` documents are
 excluded from every AI prompt by a single filter in the fact-pack/prompt builders (tested).
 Goals: one `gpt-6.1-sol` structured call per core-document version proposes goals with the source
@@ -451,7 +451,7 @@ services; no existing behaviour changes.
 - Exact default revision pass times (11:00/14:00/17:00 assumed) — editable in Settings.
 
 ## Least confident decisions
-1. **React vs Svelte** — benchmarked (D23): React kept; Svelte is faster and lighter, but the gap
+1. **React vs Svelte** — benchmarked (D23); the owner confirmed React on 2026-10-18; Svelte is faster and lighter, but the gap
    is invisible at our data sizes except on a cold phone start.
 2. **Loop detection by LLM per conversation** — may produce false positives in busy group chats
    (РД ТОП); limiting detection to DMs and small groups first may be better.
@@ -463,8 +463,8 @@ services; no existing behaviour changes.
    clean but needs another Coolify domain.
 7. **Drafts via IMAP APPEND and send via SMTP** — avoids OAuth, but threading of appended drafts depends on
    correct `References`; verified on the real mailbox in the drafts tracer task.
-8. **New dependencies** (`pypdf`, `python-docx`, `icalendar`, `recurring-ical-events`) — need the
-   owner's approval (AGENTS.md); alternatives: text-only uploads and a minimal ICS parser.
+8. **New dependencies** (`pypdf`, `python-docx`, `icalendar`, `recurring-ical-events`) — approved by
+   the owner on 2026-10-18; the risk left is their maintenance, not the choice.
 9. **Polling ClickUp every 5 minutes instead of webhooks** — simpler, no public callback; fits 100 req/min.
 10. **Meeting notes source** — the owner's meeting-notes app is unknown; import accepts paste,
     files and forwarded email until the native recorder exists.

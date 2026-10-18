@@ -20,5 +20,6 @@ rejected by the owner: the requirements are client-side capabilities that an SPA
 
 ## Consequences
 A JS toolchain and a second build stage in the Docker image. API contract must be typed on both
-sides (OpenAPI → generated TS types). React vs Svelte was benchmarked on 2026-10-18 (`docs/research/react-vs-svelte.md`): React kept —
+sides (OpenAPI → generated TS types). React vs Svelte was benchmarked on 2026-10-18 (`docs/research/react-vs-svelte.md`) and the owner
+confirmed React the same day —
 Svelte is faster and lighter, but agent-UI libraries and AI-written code reliability decide here.
