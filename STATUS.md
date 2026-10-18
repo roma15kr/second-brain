@@ -5,7 +5,7 @@ _Last updated: 2026-10-18 by Claude_
 - `v1-mail-telegram-search`: 29/30 tasks done. Remaining: **10.3 acceptance** — owner writes ~30 real
   questions in `eval/questions.yaml` (format: `eval/questions.example.yaml`), then
   `KB_MCP_TOKEN=… kb eval eval/questions.yaml --mcp-url https://kb.141-94-30-173.sslip.io/mcp --min-recall 0.8`.
-- Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), ns31426159, branch `kb-design-v1-plan`.
+- Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), ns31426159, branch `main` (switched 2026-10-18 after PR #1).
   MCP `https://kb.141-94-30-173.sslip.io/mcp` (public HTTPS + token + lockout, ADR 0009 amendment).
 
 ## Done recently (2026-10-18)
@@ -29,7 +29,7 @@ _Last updated: 2026-10-18 by Claude_
 1. Owner: 30 evaluation questions → run `kb eval` → tune if recall@10 < 0.8 (task 10.3), then archive the change.
 2. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key); optionally rotate MCP token.
 3. Owner: add reserve storage → off-site copy of `/backups` (backup service) + Vaultwarden export (ADR 0013).
-4. Merge `kb-design-v1-plan` into `main` (owner), point Coolify at `main`.
+4. Owner: retarget PRs #2 (baseline specs) and #3 (web-os-v1 proposal) to `main` and merge.
 5. Next changes (roadmap): ClickUp/Karakeep/Calendar, metrics warehouse, Telegram bot + automations, meeting app.
 
 ## Open questions
