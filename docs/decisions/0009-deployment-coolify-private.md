@@ -22,7 +22,7 @@ Google OAuth apps must not stay in "Testing" mode (refresh tokens expire after 7
 
 ## Amendment 2026-10-12: MCP stays on public HTTPS with a bearer token
 Owner decision (option B of three: Tailscale-only, public + token, public + OAuth). The MCP endpoint
-`https://kb.141-94-30-173.sslip.io/mcp` remains publicly reachable so it works from any device
+`https://kb.zhukovsky.biz/mcp` remains publicly reachable so it works from any device
 without a VPN. Mitigations: a 64-character Coolify-generated token (tokens < 32 chars are refused),
 constant-time comparison, lockout of a client IP after 10 wrong tokens in 10 minutes, 120 requests
 per minute per client, HTTPS only via Coolify's proxy, no other service published. Risk accepted:
