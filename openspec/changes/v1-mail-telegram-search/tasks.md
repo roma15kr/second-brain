@@ -64,4 +64,4 @@ Each slice ends runnable with its tests passing (`make check`) and is committed 
 
 ## Workflow follow-up
 
-- Owner reviews and merges; archive the change with `/opsx:archive` once 10.3 passes.
+- Owner reviews and merges; archive the change once 10.3 passes with `openspec archive v1-mail-telegram-search --skip-specs`: the baseline specs in `openspec/specs/` (branch `change/v1-baseline-specs`) already describe v1 as built, so the delta must not be applied again.
