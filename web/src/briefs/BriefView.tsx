@@ -39,7 +39,7 @@ function SectionView({ section: s }: { section: BriefSection }) {
     );
   }
   const heading =
-    s.kind === "ai" || s.kind === "focus" ? (
+    s.kind === "ai" || s.kind === "focus" || s.kind === "group" ? (
       <h3>{s.kind === "focus" ? "★ Focus" : s.title}</h3>
     ) : (
       <h3>
