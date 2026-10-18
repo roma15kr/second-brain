@@ -17,6 +17,13 @@ type SessionsData = {
   recovery_codes_left: number;
 };
 
+// Signing out also drops the offline copy of pages kept by the service worker.
+async function signOut() {
+  await api("/api/auth/logout", { method: "POST" }).catch(() => {});
+  if ("caches" in window) await caches.delete("api-read");
+  window.location.assign("/");
+}
+
 // Settings › Security: signed-in devices, passkeys and recovery codes (web-access spec).
 export function Security() {
   const queryClient = useQueryClient();
@@ -80,9 +87,14 @@ export function Security() {
           </li>
         ))}
       </ul>
-      <button className="btn" onClick={() => everywhere.mutate()}>
-        Sign out everywhere else
-      </button>
+      <div className="row">
+        <button className="btn" onClick={() => everywhere.mutate()}>
+          Sign out everywhere else
+        </button>
+        <button className="btn" onClick={() => void signOut()}>
+          Sign out of this device
+        </button>
+      </div>
       <h4>Passkeys</h4>
       <ul className="list">
         {d.passkeys.map((p) => (

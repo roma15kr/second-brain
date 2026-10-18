@@ -14,6 +14,7 @@ import { Person } from "./pages/Person";
 import { Scope } from "./pages/Scope";
 import { Search } from "./pages/Search";
 import { Settings } from "./pages/Settings";
+import { Status } from "./pages/Status";
 import { Today } from "./pages/Today";
 import { Week } from "./pages/Week";
 import { Notifications } from "./push/Notifications";
@@ -44,6 +45,7 @@ function Routed({ needsPasskey }: { needsPasskey: boolean }) {
         <Route path="/people/:id" element={<Person />} />
         <Route path="/scopes/:scope" element={<Scope />} />
         <Route path="/settings" element={<Settings security={<Security />} />} />
+        <Route path="/status" element={<Status />} />
         <Route path="*" element={<p className="muted">Page not found.</p>} />
       </Routes>
     </Shell>

@@ -13,6 +13,9 @@ export async function api<T>(
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const method = init.method ?? "GET";
+  if (method !== "GET" && typeof navigator !== "undefined" && !navigator.onLine) {
+    throw new ApiError(0, "You are offline — changes are disabled until you are back online.");
+  }
   const headers: Record<string, string> = {};
   if (method !== "GET") headers["X-KB-Request"] = "1";
   if (init.body !== undefined) headers["Content-Type"] = "application/json";

@@ -9,5 +9,6 @@ export const APPS: App[] = [
   { path: "/week", label: "Week", icon: "📅" },
   { path: "/search", label: "Search", icon: "🔎" },
   { path: "/people", label: "People", icon: "👥" },
+  { path: "/status", label: "Status", icon: "❤" },
   { path: "/settings", label: "Settings", icon: "⚙" },
 ];

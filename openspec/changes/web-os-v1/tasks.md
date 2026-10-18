@@ -45,7 +45,7 @@ branch `change/web-os-v1`.
 
 - [x] 8.1 Settings page and `/api/settings` (schedule, passes, quiet hours, push toggles, identities, budget cap, scope rules, unsorted review); verify `test_settings_validation` and that a changed morning time moves the next slot
 - [x] 8.2 Recovery codes, devices list, sign out one/everywhere, lockout after 10 failures; verify `test_recovery_code_single_use`, `test_sign_out_everywhere`, `test_login_lockout_after_10_failures`
-- [ ] 8.3 Status page (sync health, routine runs, queue, backups, AI spend, 28-day usefulness metric) and offline read-only mode; verify `test_usefulness_metric_28_days`, `offline.test.tsx`
+- [x] 8.3 Status page (sync health, routine runs, queue, backups, AI spend, 28-day usefulness metric) and offline read-only mode; verify `test_usefulness_metric_28_days`, `offline.test.tsx`
 
 ## 9. Connectors hub and marks
 

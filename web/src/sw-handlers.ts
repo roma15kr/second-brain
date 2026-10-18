@@ -1,3 +1,6 @@
+// API reads kept for offline use (last loaded copy).
+export const OFFLINE_API = [/^\/api\/auth\/me$/, /^\/api\/today$/, /^\/api\/briefs(\/\d+)?$/];
+
 // Push handling, kept free of service-worker globals so it can be unit-tested.
 export type PushPayload = { title: string; body: string; url: string };
 
