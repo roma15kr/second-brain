@@ -52,6 +52,7 @@ class FactPack:
     by_scope: dict[str, list[ItemFact]] = field(default_factory=dict)
     counts: dict[str, int] = field(default_factory=dict)
     loops: dict[str, list[dict[str, Any]]] = field(default_factory=dict)  # from loops.for_brief
+    priorities: list[dict[str, Any]] = field(default_factory=list)  # accepted weekly plan
 
     def refs(self) -> set[str]:
         return {f.ref for items in self.by_scope.values() for f in items}

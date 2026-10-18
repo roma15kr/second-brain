@@ -7,6 +7,7 @@ import { Briefs } from "./pages/Briefs";
 import { Inbox } from "./pages/Inbox";
 import { Loops } from "./pages/Loops";
 import { Today } from "./pages/Today";
+import { Week } from "./pages/Week";
 import { Notifications } from "./push/Notifications";
 
 function Shell() {
@@ -19,6 +20,7 @@ function Shell() {
         <NavLink to="/inbox">Inbox</NavLink>
         <NavLink to="/loops">Loops</NavLink>
         <NavLink to="/briefs">Briefs</NavLink>
+        <NavLink to="/week">Week</NavLink>
       </nav>
       <Routes>
         <Route
@@ -41,6 +43,15 @@ function Shell() {
           }
         />
         <Route path="/briefs/:id" element={<BriefPage />} />
+        <Route
+          path="/week"
+          element={
+            <>
+              <h1>Week</h1>
+              <Week />
+            </>
+          }
+        />
         <Route
           path="/loops"
           element={

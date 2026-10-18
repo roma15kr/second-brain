@@ -27,6 +27,7 @@ from kb.api import (
     routes_push,
     routes_settings,
     routes_today,
+    routes_week,
 )
 from kb.config import Config
 from kb.db import Conn
@@ -210,6 +211,7 @@ def build_app(
     app.include_router(routes_inbox.router)
     app.include_router(routes_settings.router)
     app.include_router(routes_loops.router)
+    app.include_router(routes_week.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:

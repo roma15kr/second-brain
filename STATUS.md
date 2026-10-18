@@ -64,7 +64,7 @@ _Last updated: 2026-10-18 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
-- `make check` takes ~12 min (each DB test recreates the schema); run targeted tests while working.
+- Test DB: schema is built once per session; each test empties tables with DELETE (TRUNCATE costs ~3 s per test). `make check` ≈ 4 min.
 - Gmail All Mail includes drafts (label `\Draft`): never treat them as the owner's reply.
 - Domains moved to os./kb.zhukovsky.biz (Cloudflare-proxied) on 2026-10-18: passkeys and Home Screen apps are per domain, so re-enrol (`kb web setup-code`) and reinstall after any domain change.
 - Coolify compose domains for a NEW service can only be set after one deploy has loaded the new compose file.
