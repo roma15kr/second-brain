@@ -317,6 +317,24 @@ def build_mcp_app(config: Config, url: str, token: str, preload: bool = True) ->
     return build_app(lambda: db.connect(url), token, config, embedder, reranker)
 
 
+def build_web_app() -> Any:
+    """The web OS app; the built SPA comes from KB_WEB_DIST (the Docker image sets it)."""
+    from pathlib import Path
+
+    from kb.api.app import build_app
+
+    dist = os.environ.get("KB_WEB_DIST")
+    return build_app(Path(dist) if dist else None)
+
+
+def cmd_web(args: argparse.Namespace) -> None:
+    import uvicorn
+
+    uvicorn.run(
+        build_web_app(), host=args.host, port=args.port, log_level="info", proxy_headers=True
+    )
+
+
 def cmd_mcp(args: argparse.Namespace) -> None:
     import uvicorn
 
@@ -332,8 +350,7 @@ def cmd_search(args: argparse.Namespace) -> None:
     print(json.dumps([r.to_dict() for r in results], ensure_ascii=False, indent=2))
 
 
-def main(argv: list[str] | None = None) -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kb")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("migrate", help="apply database migrations").set_defaults(func=cmd_migrate)
@@ -410,12 +427,21 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8765)
     p.set_defaults(func=cmd_mcp)
+    p = sub.add_parser("web", help="serve the web OS (JSON API + SPA)")
+    p.add_argument("--host", default="0.0.0.0")
+    p.add_argument("--port", type=int, default=8001)
+    p.set_defaults(func=cmd_web)
     p = sub.add_parser("search", help="search from the command line")
     p.add_argument("query")
     p.add_argument("--scope", action="append")
     p.add_argument("--limit", type=int, default=10)
     p.set_defaults(func=cmd_search)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    args = build_parser().parse_args(argv)
     args.func(args)
 
 

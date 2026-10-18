@@ -87,6 +87,23 @@ services:
       timeout: 5s
       retries: 5
 
+  web:
+    <<: *kb
+    command: ["sh", "-c", "kb migrate && exec kb web --port 8001"]
+    environment:
+      DATABASE_URL: postgresql://kb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kb
+      KB_CONFIG_YAML: ${KB_CONFIG_YAML}
+      KB_WEB_ORIGIN: ${KB_WEB_ORIGIN:-}
+    # Coolify's proxy routes the web OS domain (HTTPS) to port 8001; every data route needs a
+    # passkey session (web-access spec).
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/api/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 volumes:
   kb-postgres:
   kb-telegram:
