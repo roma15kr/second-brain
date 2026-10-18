@@ -203,6 +203,49 @@ LOOP_SECTIONS = {
 }
 
 
+def clickup_due(conn: Conn, owner: set[str], now: datetime) -> list[dict[str, Any]]:
+    """The owner's ClickUp tasks due today or overdue and not closed (clickup-integration spec)."""
+    if not owner:
+        return []
+    end_of_today = datetime.combine(
+        now.astimezone(KYIV).date(), datetime.max.time(), tzinfo=KYIV
+    ).isoformat()
+    rows = conn.execute(
+        """
+        SELECT id, title, locator, scopes, metadata, last_activity_at FROM items
+        WHERE kind = 'clickup_task' AND NOT hidden
+          AND metadata->>'due_date' IS NOT NULL AND (metadata->>'due_date')::timestamptz <= %s
+          AND coalesce(metadata->>'status_type', '') NOT IN ('closed', 'done')
+          AND metadata->'assignee_emails' ?| %s
+        ORDER BY (metadata->>'due_date')::timestamptz
+        """,
+        (end_of_today, sorted(owner)),
+    ).fetchall()
+    out = []
+    for r in rows:
+        due = datetime.fromisoformat(r["metadata"]["due_date"]).astimezone(KYIV).date()
+        late = due < now.astimezone(KYIV).date()
+        out.append(
+            {
+                "ref": f"item:{r['id']}",
+                "id": r["id"],
+                "kind": "clickup_task",
+                "title": r["title"],
+                "summary": f"{r['metadata'].get('list') or 'ClickUp'} · "
+                + (f"overdue since {due.isoformat()}" if late else "due today"),
+                "outcome": None,
+                "link": r["locator"],
+                "last_activity_at": r["last_activity_at"].isoformat()
+                if r["last_activity_at"]
+                else "",
+                "scopes": list(r["scopes"]),
+                "participants": [],
+                "overdue": late,
+            }
+        )
+    return out
+
+
 def loop_sections(pack: FactPack) -> list[Section]:
     out = []
     for key, title in LOOP_SECTIONS.get(pack.routine, []):
@@ -371,6 +414,11 @@ def write_brief(
         text = "\n".join(f"{n}. {p['title']}" for n, p in enumerate(pack.priorities, 1))
         sections.append(Section("This week's priorities", text, kind="note"))
     sections.extend(loop_sections(pack))
+    if pack.routine == "morning":
+        from kb import loops
+
+        if due_tasks := clickup_due(conn, loops.owner_emails(conn, config), now):
+            sections.append(Section("ClickUp: due today & overdue", "", due_tasks, kind="group"))
     if pack.routine == "morning" and (upcoming := coming_up(conn, now)):
         sections.append(upcoming)
     sections.extend(data_only(pack))

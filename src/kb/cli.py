@@ -57,9 +57,46 @@ def cmd_ingest(args: argparse.Namespace) -> None:
             except Exception as exc:
                 log.exception("sync failed for %s", source.id)
                 _record_error(source.id, exc)
+        _sync_clickup(last_run)
         if args.once:
             return
         time.sleep(5)
+
+
+CLICKUP_EVERY = 300  # seconds between ClickUp syncs
+CLICKUP_LISTS_EVERY = 3600  # refresh the spaces/lists catalogue hourly
+
+
+def _sync_clickup(last_run: dict[str, float]) -> None:
+    """ClickUp accounts connected in the web OS: changed tasks every 5 minutes (design D14)."""
+    from kb.connectors import clickup
+
+    try:
+        with db.connect(database_url()) as conn:
+            connected = clickup.accounts(conn)
+    except Exception:
+        log.exception("cannot read ClickUp accounts")
+        return
+    for acc in connected:
+        sid = clickup.source_id(acc.id)
+        now = time.monotonic()
+        if now < last_run.get(f"{sid}:until", 0) or now - last_run.get(sid, -1e9) < CLICKUP_EVERY:
+            continue
+        last_run[sid] = now
+        client = clickup.ClickUpClient(acc.token)
+        try:
+            with db.connect(database_url()) as conn:
+                if now - last_run.get(f"{sid}:lists", -1e9) >= CLICKUP_LISTS_EVERY:
+                    clickup.refresh_lists(conn, client, acc)
+                    last_run[f"{sid}:lists"] = now
+                n = clickup.sync_account(conn, client, acc)
+                health.record_ok(conn, sid, new=n)
+        except clickup.RateLimited as exc:  # pause until ClickUp's reset; the cursor is saved
+            last_run[f"{sid}:until"] = now + max(5.0, exc.reset_at - time.time())
+            log.warning("%s: %s", sid, exc)
+        except Exception as exc:
+            log.exception("ClickUp sync failed for %s", sid)
+            _record_error(sid, exc)
 
 
 def _record_error(source_id: str, exc: BaseException) -> None:

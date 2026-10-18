@@ -18,7 +18,14 @@ from kb.db import Conn
 
 log = logging.getLogger(__name__)
 
-UNIT_KINDS = ("email_thread", "tg_conversation", "passage", "document", "doc_section")
+UNIT_KINDS = (
+    "email_thread",
+    "tg_conversation",
+    "passage",
+    "document",
+    "doc_section",
+    "clickup_task",
+)
 
 
 class Embedder(Protocol):

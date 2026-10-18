@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
 from kb import scopes, secrets
@@ -345,8 +346,33 @@ def hub(request: Request, conn: Db) -> dict[str, Any]:
                 "by_scope": by_scope.get(s.id, {}),
             }
         )
+    from kb.connectors.base import get_state
+
+    clickup_rows = []
+    for a in conn.execute(
+        "SELECT a.id, a.label, (SELECT count(*) FROM clickup_lists l WHERE l.account_id = a.id"
+        " AND l.sync) AS lists FROM connector_accounts a WHERE a.kind = 'clickup'"
+        " AND a.state = 'active' ORDER BY a.id"
+    ).fetchall():
+        sid = f"clickup-{a['id']}"
+        h = get_state(conn, sid, health.KEY) or {}
+        failing = bool(h.get("last_error_at")) and (
+            not h.get("last_ok") or h["last_error_at"] > h["last_ok"]
+        )
+        clickup_rows.append(
+            {
+                "source_id": sid,
+                "label": a["label"],
+                "lists": a["lists"],
+                "last_ok": h.get("last_ok"),
+                "last_error": h.get("last_error") if failing else None,
+                "healthy": bool(h.get("last_ok")) and not failing,
+                "items": counts.get(sid, 0),
+            }
+        )
     return {
         "mail": mail,
+        "clickup": clickup_rows,
         "disconnected_mail": [m for m in connected.values() if m["state"] == "disconnected"],
         "telegram": tg,
         "telegram_self_ids": sorted(loops.owner_telegram_ids(conn)),
@@ -359,3 +385,158 @@ def _safe_username(source: Any) -> str:
         return str(source.username())
     except Exception:
         return ""
+
+
+# --- ClickUp ----------------------------------------------------------------------------------
+
+
+def _clickup_client(token: str) -> Any:
+    from kb.connectors import clickup
+
+    return clickup.ClickUpClient(token)
+
+
+@router.post("/api/connectors/clickup")
+def connect_clickup(
+    request: Request,
+    conn: Db,
+    token: Annotated[str, Body(embed=True)],
+    team_id: Annotated[str | None, Body(embed=True)] = None,
+) -> dict[str, Any]:
+    """Checks the personal token, picks the workspace and lists its spaces/lists."""
+    from kb.connectors import clickup
+
+    client = request.app.state.clickup_client(token.strip())
+    try:
+        user = client.user()
+        teams = client.teams()
+    except clickup.ClickUpError as e:
+        raise HTTPException(400, str(e)) from e
+    if not teams:
+        raise HTTPException(400, "this token sees no ClickUp workspace")
+    if team_id is None and len(teams) > 1:
+        return {"choose_team": [{"id": str(t["id"]), "name": t.get("name", "")} for t in teams]}
+    team = next((t for t in teams if str(t["id"]) == (team_id or str(teams[0]["id"]))), None)
+    if team is None:
+        raise HTTPException(400, f"no workspace {team_id}")
+    row = conn.execute(
+        "INSERT INTO connector_accounts (kind, label, settings, secret, default_scopes, checked_at)"
+        " VALUES ('clickup', %s, %s, %s, '{}', now()) RETURNING id",
+        (
+            team.get("name") or "ClickUp",
+            Jsonb(
+                {
+                    "team_id": str(team["id"]),
+                    "team_name": team.get("name"),
+                    "user": user.get("email"),
+                }
+            ),
+            secrets.seal({"token": token.strip()}),
+        ),
+    ).fetchone()
+    assert row is not None
+    account = clickup.Account(int(row["id"]), token.strip(), str(team["id"]))
+    lists = clickup.refresh_lists(conn, client, account)
+    return {"id": account.id, "lists": lists}
+
+
+@router.get("/api/connectors/clickup")
+def clickup_overview(conn: Db) -> dict[str, Any]:
+    accounts_ = conn.execute(
+        "SELECT id, label, settings, state FROM connector_accounts WHERE kind = 'clickup'"
+        " ORDER BY id"
+    ).fetchall()
+    lists = conn.execute(
+        "SELECT l.*, (SELECT count(*) FROM items i WHERE i.kind = 'clickup_task'"
+        " AND i.metadata->>'list_id' = l.list_id) AS tasks"
+        " FROM clickup_lists l ORDER BY space_name, folder_name, list_name"
+    ).fetchall()
+    members = conn.execute(
+        """
+        SELECT e.email, string_agg(DISTINCT i.metadata->>'list', ', ') AS areas, count(*) AS tasks
+        FROM items i, jsonb_array_elements_text(i.metadata->'assignee_emails') e(email)
+        WHERE i.kind = 'clickup_task' AND e.email <> '' GROUP BY e.email ORDER BY tasks DESC
+        """
+    ).fetchall()
+    member_rows = []
+    for m in members:
+        p = conn.execute(
+            "SELECT p.id, p.display_name FROM identities i JOIN people p ON p.id = i.person_id"
+            " WHERE i.key = %s",
+            ("email:" + m["email"],),
+        ).fetchone()
+        member_rows.append(
+            {
+                "email": m["email"],
+                "areas": m["areas"],
+                "tasks": m["tasks"],
+                "person_id": p["id"] if p else None,
+                "person": p["display_name"] if p else None,
+            }
+        )
+    return {
+        "accounts": [
+            {
+                "id": a["id"],
+                "label": a["label"],
+                "team": a["settings"].get("team_name"),
+                "state": a["state"],
+            }
+            for a in accounts_
+        ],
+        "lists": [
+            {
+                "list_id": r["list_id"],
+                "account_id": r["account_id"],
+                "space": r["space_name"],
+                "folder": r["folder_name"],
+                "list": r["list_name"],
+                "sync": r["sync"],
+                "scopes": list(r["scopes"]),
+                "default_for_drafts": r["default_for_drafts"],
+                "tasks": r["tasks"],
+            }
+            for r in lists
+        ],
+        "members": member_rows,
+    }
+
+
+@router.post("/api/connectors/clickup/lists/{list_id}")
+def clickup_list(
+    conn: Db,
+    list_id: str,
+    sync: Annotated[bool | None, Body(embed=True)] = None,
+    scopes_: Annotated[list[str] | None, Body(embed=True, alias="scopes")] = None,
+    default_for_drafts: Annotated[bool | None, Body(embed=True)] = None,
+) -> dict[str, int]:
+    row = conn.execute("SELECT * FROM clickup_lists WHERE list_id = %s", (list_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, f"no ClickUp list {list_id}")
+    if scopes_ is not None:
+        try:
+            scopes.validate_scopes(scopes_, scopes.known(conn))
+        except scopes.ReviewError as e:
+            raise HTTPException(400, str(e)) from e
+    if (sync or (sync is None and row["sync"])) and not (scopes_ or row["scopes"]):
+        raise HTTPException(400, "mark the list (personal or a project) before syncing it")
+    conn.execute(
+        "UPDATE clickup_lists SET sync = coalesce(%s, sync), scopes = coalesce(%s, scopes)"
+        " WHERE list_id = %s",
+        (sync, scopes_, list_id),
+    )
+    if default_for_drafts:
+        conn.execute(
+            "UPDATE clickup_lists SET default_for_drafts = (list_id = %s) WHERE account_id = %s",
+            (list_id, row["account_id"]),
+        )
+    relabelled = 0
+    if scopes_ is not None:  # a mark is a rule for the list: re-label its tasks
+        relabelled = len(
+            conn.execute(
+                "UPDATE items SET scopes = %s WHERE kind = 'clickup_task'"
+                " AND metadata->>'list_id' = %s RETURNING 1",
+                (scopes_, list_id),
+            ).fetchall()
+        )
+    return {"relabelled_tasks": relabelled}

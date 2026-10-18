@@ -2,59 +2,44 @@
 _Last updated: 2026-10-18 by Claude_
 
 ## Current focus
-- `v1-mail-telegram-search`: 29/30 tasks done. Remaining: **10.3 acceptance** — owner writes ~30 real
-  questions in `eval/questions.yaml` (format: `eval/questions.example.yaml`), then
+- `web-os-v1` (branch `change/web-os-v1`, merged slice by slice into `main` and deployed): 25/39 tasks.
+  Next: slice 11 ClickUp, 12 proactive assistant (drafts, send on tap), 13 calendars/meetings/audio, 14 acceptance.
+- `v1-mail-telegram-search`: 29/30 tasks. Remaining: **10.3 acceptance** — owner writes ~30 real questions in
+  `eval/questions.yaml` (format: `eval/questions.example.yaml`), then
   `KB_MCP_TOKEN=… kb eval eval/questions.yaml --mcp-url https://kb.zhukovsky.biz/mcp --min-recall 0.8`.
-- Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), ns31426159, branch `main` (switched 2026-10-18 after PR #1).
-  MCP `https://kb.zhukovsky.biz/mcp` (public HTTPS + token + lockout, ADR 0009 amendment).
+- Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), branch `main`.
+  Web OS https://os.zhukovsky.biz (passkeys) · MCP https://kb.zhukovsky.biz/mcp (token + lockout) · Cloudflare-proxied.
 
 ## Done recently (2026-10-18)
-- Baseline OpenSpec specs for the built v1 system in `openspec/specs/` (9 capabilities: source-ingestion,
-  secret-redaction, conversation-indexing, scope-assignment, people-directory, knowledge-search,
-  mcp-interface, system-health, retrieval-evaluation) — branch `change/v1-baseline-specs`. They differ from
-  the v1 deltas where the build differs: public MCP + token + lockout, `status` tool, Gmail via IMAP,
-  no AI scope classifier (unmatched → unsorted), enrichment cost controls, backups, eval.
-  Archive v1 with `--skip-specs`.
-- Proposal `web-os-v1` (routines, open loops, web dashboard, passkeys, push) — branch `change/web-os-v1`, awaiting review.
+- web-os-v1 live, PRs #5–#15:
+  - slice 1–2: React PWA, passkeys, Today brief, Kyiv scheduler, Web Push (verified on iPhone), domains;
+  - slice 3–4: AI morning/evening briefs (gpt-6.1-sol, refs validated, budget → data-only), Briefs pages,
+    mail revision 11/14/17 (gpt-6-luna triage, sender prefs) + Inbox;
+  - slice 5–6: open loops (needs-reply from triage, promises with due dates uk/ru/en, auto-close), Loops page,
+    weekly review (Fri) and plan (Mon, accept/edit, priorities in morning briefs);
+  - slice 7: OS shell (dock, ⌘K palette, bell), Search via MCP internal route, Conversation, People/Person/Scope;
+  - slice 8: Settings, Security (recovery codes, devices, lockout), Status (28-day usefulness), offline mode;
+  - slice 9: Connectors hub — projects, encrypted mailboxes (IMAP+SMTP), Telegram dialogs + QR login on the page;
+  - slice 10: Library (PDF/Word/Markdown/notes, versions, search), "AI may read" enforced for MCP, goals.
+- Proposal research: `docs/research/react-vs-svelte.md` (React kept), `docs/research/proactive-assistance.md`;
+  owner decisions: Gmail + IMAP/SMTP with send on tap, Apple iCloud CalDAV, own recorder apps (`voice-apps-v1`),
+  meeting audio 12 months (ADR 0010 amendment).
+- Baseline OpenSpec specs for v1 in `openspec/specs/` (PR #4); archive v1 with `--skip-specs`.
+- Test suite 17 → 4 min (schema built once, tables emptied with DELETE).
 
 ## Done earlier (2026-10-10 … 10-12)
-- Slices 1–9 verified live: Gmail (IMAP extensions) + 12 Telegram chats; redaction; threads/conversations;
-  scopes; AI summaries (OpenAI gpt-6-luna, ~$0.33 backfill); local e5 embeddings + pgvector; IDF rare terms;
-  exact pinning; jina reranker; passages; people directory; caches make rebuilds free (26 min, no re-embed).
-- Ops: `kb status` / MCP `status` (sources, queue, LLM, embeddings, reranker, backups, DB size);
-  daily backup with automatic restore test (first: 82 MB dump, counts match); MCP lockout verified live.
-- Example eval (5 questions, live): recall@10 1.0, recall@1 0.8, MRR 0.9, p50 1.5 s.
+- v1 slices 1–9 live: Gmail (IMAP extensions) + Telegram; redaction; threads/conversations; scopes; AI summaries;
+  local e5 embeddings + pgvector; IDF; exact pinning; reranker; passages; people; caches make rebuilds free.
+- Ops: `kb status` / MCP `status`; daily backup with automatic restore test; MCP lockout verified live.
+- Example eval (5 questions): recall@10 1.0, recall@1 0.8, MRR 0.9, p50 1.5 s.
 
-- `web-os-v1` proposal extended (2026-10-18): connectors hub (mail, Telegram dialogs, ClickUp, calendar,
-  Library for constitution/plans), meetings (reminders, prep, notes → task drafts), proactive assistant
-  with approval queue (priority, reply drafts to Gmail Drafts, nudges, delegation, focus, goals);
-  research: `docs/research/react-vs-svelte.md` (React kept), `docs/research/proactive-assistance.md`.
-  Owner decisions: React confirmed; dependencies `pypdf`, `python-docx`, `icalendar`,
-  `recurring-ical-events` approved; email = Gmail + any IMAP/SMTP with send on tap (10 s undo);
-  calendars = Google secret address + Apple iCloud/CalDAV; meeting notes come from our own recorder
-  apps (`voice-apps-v1`, next change) via the device API defined here.
-  Meeting/call audio stored in the KB for 12 months (ADR 0010 amendment); transcripts forever.
-  Branch merged with `change/v1-baseline-specs` (PR #3 now also contains PR #2's commits).
-
-- web-os-v1 slice 1 live (2026-10-18, PR #5): https://os.zhukovsky.biz — passkey sign-in
-  (owner enrolled), Today page with a data-only morning brief (`kb routines run morning`). `make check`
-  covers python + ts (~10 min). Coolify `web` service, domain set via API after the first deploy.
-
-- web-os-v1 slice 2 live (PR #6, #7): `routines` scheduler (morning 08:00 Kyiv), installable PWA,
-  Web Push verified on the owner's iPhone; domains os./kb.zhukovsky.biz via Cloudflare; MCP stays on kb.
-  (OAuth for claude.ai connectors later → then consider os.zhukovsky.biz/mcp).
-
-- web-os-v1 slices 3–5 (PRs #8, #9, next): AI morning brief + evening wrap (gpt-6.1-sol, refs validated,
-  $30/month cap → data-only), Briefs pages with rating; mail revision 11/14/17 (gpt-6-luna triage, sender
-  prefs, push only when needed) + Inbox; open loops: needs-reply from triage (auto-close on owner reply,
-  drafts ignored), promise detection i_owe/owed_to_me with due dates (uk/ru/en), snooze/dismiss/due/manual,
-  Loops page, loops in briefs. Telegram self id recorded automatically for ME detection.
-
-1. Owner: 30 evaluation questions → run `kb eval` → tune if recall@10 < 0.8 (task 10.3), then archive the change.
-2. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key); optionally rotate MCP token.
-3. Owner: add reserve storage → off-site copy of `/backups` (backup service) + Vaultwarden export (ADR 0013).
-4. Owner: retarget PRs #2 (baseline specs) and #3 (web-os-v1 proposal) to `main` and merge.
-5. Next changes (roadmap): ClickUp/Karakeep/Calendar, metrics warehouse, Telegram bot + automations, meeting app.
+## Next steps
+1. Owner: generate recovery codes (Settings → Security) — the first passkey predates them.
+2. Owner: go through Connectors → Telegram "To mark"; upload constitution and 2026 plans to the Library, confirm goals.
+3. Owner: 30 evaluation questions → `kb eval` (v1 task 10.3), then archive v1 with `--skip-specs`.
+4. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key).
+5. Owner: add reserve storage → off-site copy of `/backups` + Vaultwarden export (ADR 0013).
+6. Next changes: `voice-apps-v1` (macOS/iOS recorder + dictation), GitHub/Karakeep, metrics warehouse.
 
 ## Open questions
 - AI scope classifier (planned in v1 design, never wired): build it, or keep rules + unsorted review?

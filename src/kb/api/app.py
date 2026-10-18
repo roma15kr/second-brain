@@ -22,6 +22,7 @@ from starlette.concurrency import run_in_threadpool
 
 from kb.api import (
     auth,
+    routes_assistant,
     routes_briefs,
     routes_connectors,
     routes_goals,
@@ -80,6 +81,10 @@ def build_app(
     app = FastAPI(title="second-brain web OS", docs_url=None, redoc_url=None)
     app.state.connect = connect
     app.state.config = config or Config()
+    app.state.clickup_client = routes_connectors._clickup_client  # replaced in tests
+    from kb.assistant import suggestions as _suggestions
+
+    app.state.clickup_factory = _suggestions.clickup_client_factory  # replaced in tests
     app.state.searcher = searcher or (
         routes_search.local_searcher(connect, app.state.config) if connect else None
     )
@@ -293,6 +298,7 @@ def build_app(
     app.include_router(routes_connectors.router)
     app.include_router(routes_library.router)
     app.include_router(routes_goals.router)
+    app.include_router(routes_assistant.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:
