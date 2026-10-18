@@ -25,6 +25,7 @@ UNIT_KINDS = (
     "document",
     "doc_section",
     "clickup_task",
+    "clickup_comments",
 )
 
 

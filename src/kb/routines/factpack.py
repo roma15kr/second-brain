@@ -86,7 +86,7 @@ def build(conn: Conn, routine: RoutineName, window: tuple[datetime, datetime]) -
                coalesce(summary, question, left(raw_text, 300)) AS summary, outcome, locator,
                last_activity_at, participants
         FROM items
-        WHERE NOT hidden AND kind IN ('email_thread', 'tg_conversation')
+        WHERE NOT hidden AND kind IN ('email_thread', 'tg_conversation', 'clickup_task')
           AND last_activity_at > %s AND last_activity_at <= %s
         ORDER BY last_activity_at DESC
         """,

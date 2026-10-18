@@ -25,7 +25,7 @@ from kb.db import Conn
 log = logging.getLogger(__name__)
 
 PROMPT_VERSION = "1"
-UNIT_KINDS = ("email_thread", "tg_conversation")
+UNIT_KINDS = ("email_thread", "tg_conversation", "clickup_task")
 # USD per 1M tokens (input, output), standard tier; Batch API is half.
 PRICES = {"gpt-6-luna": (0.10, 0.50), "gpt-6.1-sol": (2.00, 10.00), "gpt-5.6-luna": (0.20, 1.20)}
 CHARS_PER_TOKEN_DEFAULT = 3.0  # mixed uk/ru/en; refined from recorded usage
@@ -243,7 +243,11 @@ def distill_key(content: str, llm: LlmConfig) -> str:
 
 
 def unit_input(item: dict[str, Any], llm: LlmConfig) -> str:
-    kind = "Email thread" if item["kind"] == "email_thread" else "Telegram conversation"
+    kind = {
+        "email_thread": "Email thread",
+        "tg_conversation": "Telegram conversation",
+        "clickup_task": "ClickUp task with its comments",
+    }.get(item["kind"], "Conversation")
     text = item["raw_text"]
     if len(text) > llm.max_input_chars:
         text = "[…earlier part omitted…]\n" + text[-llm.max_input_chars :]

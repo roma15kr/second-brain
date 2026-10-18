@@ -65,6 +65,8 @@ def cmd_ingest(args: argparse.Namespace) -> None:
 
 CLICKUP_EVERY = 300  # seconds between ClickUp syncs
 CLICKUP_LISTS_EVERY = 3600  # refresh the spaces/lists catalogue hourly
+CLICKUP_COMMENTS_EVERY = 1800  # check recently active open tasks for new comments
+CLICKUP_SLICE_SECONDS = 60  # ClickUp work per turn, so mail sync is never held up for long
 
 
 def _sync_clickup(last_run: dict[str, float]) -> None:
@@ -89,7 +91,15 @@ def _sync_clickup(last_run: dict[str, float]) -> None:
                 if now - last_run.get(f"{sid}:lists", -1e9) >= CLICKUP_LISTS_EVERY:
                     clickup.refresh_lists(conn, client, acc)
                     last_run[f"{sid}:lists"] = now
-                n = clickup.sync_account(conn, client, acc)
+                n, finished = clickup.sync_account_for(conn, client, acc, CLICKUP_SLICE_SECONDS)
+                if not finished:  # a big first pass: continue soon, mail sync runs in between
+                    last_run[sid] = now - CLICKUP_EVERY + 10
+                if (
+                    finished
+                    and now - last_run.get(f"{sid}:comments", -1e9) >= CLICKUP_COMMENTS_EVERY
+                ):
+                    n += clickup.refresh_recent_comments(conn, client, acc)
+                    last_run[f"{sid}:comments"] = now
                 health.record_ok(conn, sid, new=n)
         except clickup.RateLimited as exc:  # pause until ClickUp's reset; the cursor is saved
             last_run[f"{sid}:until"] = now + max(5.0, exc.reset_at - time.time())
