@@ -8,7 +8,7 @@ branch `change/web-os-v1`.
 - [x] 1.1 Add root `package.json` (npm workspaces → `web/`) and scaffold `web/` (Vite + React + TS, ESLint, Prettier, Vitest); set `STACKS := python ts`; verify `make check` runs both stacks and passes with one trivial test per stack
 - [x] 1.2 Add FastAPI app `kb.api` serving `/api/health` and the built SPA with history fallback, `kb web` command and `web` compose service; multi-stage Dockerfile builds `web/dist`; verify `test_spa_fallback_serves_index` and `docker compose up web` shows the SPA
 - [x] 1.3 Migration 0011 (auth, settings, routine_runs, briefs tables only); passkey registration with setup code and sign-in, session cookie, CSRF header; verify `test_all_routes_require_session`, `test_setup_code_required_for_first_passkey`, `test_csrf_header_required_on_post`
-- [ ] 1.4 `kb routines run morning` builds a fact pack and stores a data-only brief; `GET /api/today` and the Today page render it with source links to Gmail/Telegram; verify `test_factpack_morning_window_and_scopes`, `today.test.tsx`, and a manual sign-in on the deployed `web` service
+- [x] 1.4 `kb routines run morning` builds a fact pack and stores a data-only brief; `GET /api/today` and the Today page render it with source links to Gmail/Telegram; verify `test_factpack_morning_window_and_scopes`, `today.test.tsx`, and a manual sign-in on the deployed `web` service
 
 ## 2. Scheduler and push
 
