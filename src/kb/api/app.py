@@ -24,7 +24,9 @@ from kb.api import (
     routes_briefs,
     routes_inbox,
     routes_loops,
+    routes_people,
     routes_push,
+    routes_search,
     routes_settings,
     routes_today,
     routes_week,
@@ -64,10 +66,14 @@ def build_app(
     rp: auth.RelyingParty | None = None,
     clock: Clock = _now,
     config: Config | None = None,
+    searcher: Callable[[dict[str, Any]], list[dict[str, Any]]] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="second-brain web OS", docs_url=None, redoc_url=None)
     app.state.connect = connect
     app.state.config = config or Config()
+    app.state.searcher = searcher or (
+        routes_search.local_searcher(connect, app.state.config) if connect else None
+    )
 
     @contextmanager
     def db() -> Iterator[Conn]:
@@ -212,6 +218,8 @@ def build_app(
     app.include_router(routes_settings.router)
     app.include_router(routes_loops.router)
     app.include_router(routes_week.router)
+    app.include_router(routes_search.router)
+    app.include_router(routes_people.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:

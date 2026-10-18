@@ -1,3 +1,4 @@
+import { ScopeTag } from "../shell/ScopeTag";
 import type { Brief, BriefItem, BriefSection } from "../api/types";
 
 const KIND_ICON: Record<string, string> = { email_thread: "✉", tg_conversation: "✈", loop: "↺" };
@@ -43,7 +44,7 @@ function SectionView({ section: s }: { section: BriefSection }) {
       <h3>{s.kind === "focus" ? "★ Focus" : s.title}</h3>
     ) : (
       <h3>
-        <span className={`tag ${s.title}`}>{s.title}</span> <span className="muted">{s.text}</span>
+        <ScopeTag scope={s.title} /> <span className="muted">{s.text}</span>
       </h3>
     );
   return (

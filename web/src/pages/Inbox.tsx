@@ -1,3 +1,4 @@
+import { ScopeTag } from "../shell/ScopeTag";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../api/client";
@@ -59,9 +60,7 @@ function Row({ item, onChanged }: { item: InboxItem; onChanged: () => void }) {
           <strong>{item.title}</strong>
         )}{" "}
         {item.scopes.map((s) => (
-          <span key={s} className={`tag ${s}`}>
-            {s}
-          </span>
+          <ScopeTag key={s} scope={s} />
         ))}
         <span className="muted">
           {" "}

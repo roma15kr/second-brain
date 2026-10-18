@@ -43,13 +43,13 @@ def clear_errors[F: Callable[..., Any]](fn: F) -> F:
     return wrapper  # type: ignore[return-value]
 
 
-def build_server(
+def make_search(
     get_conn: Callable[[], Conn],
     config: Config | None = None,
     embedder: Any = None,
     reranker: Any = None,
-) -> MCPServer:
-    server = MCPServer(name="second-brain", instructions=INSTRUCTIONS)
+) -> Callable[..., list[dict[str, Any]]]:
+    """The search behind the MCP tools and the web OS's internal search route."""
 
     def run(
         query: str,
@@ -81,6 +81,18 @@ def build_server(
                 settings=config.search if config else None,
             )
             return [e.to_dict() for e in hits]
+
+    return run
+
+
+def build_server(
+    get_conn: Callable[[], Conn],
+    config: Config | None = None,
+    embedder: Any = None,
+    reranker: Any = None,
+) -> MCPServer:
+    server = MCPServer(name="second-brain", instructions=INSTRUCTIONS)
+    run = make_search(get_conn, config, embedder, reranker)
 
     @server.tool(name="search")
     @clear_errors
@@ -349,4 +361,36 @@ def build_app(
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
         host="0.0.0.0",
     )
+    app.add_route(
+        "/internal/search",
+        internal_search(make_search(get_conn, config, embedder, reranker)),
+        methods=["POST"],
+    )
     return BearerAuth(app, token)
+
+
+def internal_search(run: Callable[..., list[dict[str, Any]]]) -> Callable[..., Any]:
+    """JSON search for the web OS (same token as MCP), so the models live in one process."""
+    from starlette.concurrency import run_in_threadpool
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
+    async def endpoint(request: Request) -> JSONResponse:
+        body = await request.json()
+        try:
+            results = await run_in_threadpool(
+                run,
+                str(body.get("query", "")),
+                body.get("kinds"),
+                body.get("scopes"),
+                body.get("sources"),
+                body.get("date_from"),
+                body.get("date_to"),
+                int(body.get("limit", 10)),
+                body.get("person"),
+            )
+        except (SearchError, people.PeopleError, ValueError) as e:
+            return JSONResponse({"detail": str(e)}, status_code=400)
+        return JSONResponse({"results": results})
+
+    return endpoint
