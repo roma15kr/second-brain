@@ -146,7 +146,7 @@ def add_rule(
     from kb import scopes as scope_mod
 
     try:
-        scope_mod.validate_scopes(scopes)
+        scope_mod.validate_scopes(scopes, scope_mod.known(conn))
     except scope_mod.ReviewError as e:
         raise HTTPException(400, str(e)) from e
     if not value.strip():

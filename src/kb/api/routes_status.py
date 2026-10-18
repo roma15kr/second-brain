@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Request
 
 from kb import distill, health, metrics, settings_store
 from kb.api.deps import get_conn
+from kb.connectors import accounts
 from kb.db import Conn
 
 router = APIRouter()
@@ -31,7 +32,7 @@ def status(request: Request, conn: Db) -> dict[str, Any]:
         (month_start,),
     ).fetchall()
     return {
-        "system": health.status(conn, config),
+        "system": health.status(conn, accounts.effective_config(conn, config)),
         "routine_runs": [
             {
                 "routine": r["routine"],

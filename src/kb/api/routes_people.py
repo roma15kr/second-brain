@@ -129,8 +129,9 @@ def link(conn: Db, person_id: int, key: Annotated[str, Body(embed=True)]) -> dic
 
 @router.get("/api/scopes/{scope}")
 def scope_page(conn: Db, scope: str) -> dict[str, Any]:
-    if scope not in scopes.VALID:
-        raise HTTPException(404, f"unknown scope {scope!r}; valid: {', '.join(scopes.VALID)}")
+    valid = (*scopes.known(conn), "unsorted")
+    if scope not in valid:
+        raise HTTPException(404, f"unknown scope {scope!r}; valid: {', '.join(valid)}")
     now = datetime.now(UTC)
     week_ago, month_ago = now - timedelta(days=7), now - timedelta(days=30)
     days = conn.execute(
@@ -171,7 +172,7 @@ def scope_page(conn: Db, scope: str) -> dict[str, Any]:
 
 @router.post("/api/scopes/{scope}/archive")
 def archive(conn: Db, scope: str, archived: Annotated[bool, Body(embed=True)]) -> dict[str, bool]:
-    if scope not in scopes.VALID or scope == "unsorted":
+    if scope not in scopes.known(conn):
         raise HTTPException(400, f"cannot archive {scope!r}")
     scopes.set_archived(conn, scope, archived)
     return {"archived": archived}

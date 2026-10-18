@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from kb import archive, email_parse, jobs, people, scopes, units
 from kb.config import Config, ConfigError, ImapSource, TelegramSource
+from kb.connectors import accounts
 from kb.connectors.base import get_state, set_state
 from kb.db import Conn
 from kb.redact import redact_text
@@ -72,7 +73,9 @@ def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) ->
         subject=redact_text(parsed.subject),
         refs=[r for r in refs if r],
         version=raw["fetched_at"].isoformat(),
-        locator=email_locator(config, raw["source_id"], payload, parsed.message_id),
+        locator=email_locator(
+            accounts.effective_config(conn, config), raw["source_id"], payload, parsed.message_id
+        ),
         metadata={
             "raw_id": raw_id,
             "folder": payload.get("folder"),

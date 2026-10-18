@@ -138,7 +138,10 @@ def db_rules(conn: Conn) -> list[Rule]:
 
 
 def resolver(conn: Conn, config: Config, classify: Classifier | None = None) -> Resolver:
-    return Resolver(db_rules(conn), config_rules(config), config, classify)
+    from kb.connectors import accounts
+
+    effective = accounts.effective_config(conn, config)  # + mailboxes connected in the web OS
+    return Resolver(db_rules(conn), config_rules(config), effective, classify)
 
 
 def facts_from_row(row: dict[str, Any]) -> Facts:
@@ -216,10 +219,18 @@ class ReviewError(ValueError):
     pass
 
 
-def validate_scopes(scopes: list[str]) -> list[str]:
-    bad = [s for s in scopes if s not in VALID]
+def known(conn: Conn) -> tuple[str, ...]:
+    """Scopes the owner can use: personal, the four initial projects and projects added in the
+    web OS (scope-assignment spec: projects can be added)."""
+    rows = conn.execute("SELECT name FROM projects ORDER BY created_at, name").fetchall()
+    extra = tuple(r["name"] for r in rows if r["name"] not in VALID)
+    return (*VALID, *extra)
+
+
+def validate_scopes(scopes: list[str], valid: tuple[str, ...] = VALID) -> list[str]:
+    bad = [s for s in scopes if s not in valid]
     if bad or not scopes:
-        raise ReviewError(f"unknown scope(s) {bad}; valid scopes: {', '.join(VALID)}")
+        raise ReviewError(f"unknown scope(s) {bad}; valid scopes: {', '.join(valid)}")
     return scopes
 
 
@@ -242,7 +253,7 @@ def assign(
     'sender' (email sender address). Returns a description of what was done."""
     from kb import units
 
-    validate_scopes(scopes)
+    validate_scopes(scopes, known(conn))
     item = conn.execute("SELECT * FROM items WHERE id = %s", (item_id,)).fetchone()
     if item is None:
         raise ReviewError(f"no item with id {item_id}")

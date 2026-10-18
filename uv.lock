@@ -606,6 +606,7 @@ name = "kb"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "fastembed" },
     { name = "imapclient" },
@@ -635,6 +636,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=50.0.2" },
     { name = "fastapi", specifier = ">=0.143.5" },
     { name = "fastembed", specifier = ">=0.7" },
     { name = "imapclient", specifier = ">=3.0" },

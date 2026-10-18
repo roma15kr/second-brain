@@ -26,8 +26,10 @@ NOT_DRAFT = "NOT (coalesce(m.metadata->'labels', '[]'::jsonb) ? '\\Draft')"
 
 def owner_emails(conn: Conn, config: Config) -> set[str]:
     """Connected mailboxes plus addresses the owner added in Settings."""
+    from kb.connectors import accounts
+
     out: set[str] = set()
-    for s in config.sources:
+    for s in accounts.effective_config(conn, config).sources:
         if isinstance(s, ImapSource):
             try:
                 out.add(s.username().lower())
