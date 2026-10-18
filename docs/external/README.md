@@ -7,6 +7,7 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - `KB_MCP_TOKEN` — bearer token MCP clients must send
   - `OPENAI_API_KEY` — server-side LLM: distillation, scope classification, digests (set in Coolify, never in chat)
   - `KB_DISTILL_MODEL` — model id for distillation (default `gpt-6-luna`)
+  - `KB_BRIEF_MODEL` — model id for routine briefs (default `gpt-6.1-sol`); monthly AI cap is `llm.monthly_budget_usd` in `KB_CONFIG_YAML` (default 30)
   - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` — Gmail API OAuth client
   - `IMAP_PASSWORD_<MAILBOX>` — app password per IMAP mailbox (or stored encrypted via `kb auth imap`)
   - `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` — from my.telegram.org; session file on the `telegram` volume

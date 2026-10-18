@@ -116,6 +116,7 @@ def test_kb_routines_wires_push(monkeypatch):
 
     seen: dict[str, object] = {}
     monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
+    monkeypatch.setenv("KB_CONFIG_YAML", "sources: []")
     monkeypatch.setattr(scheduler, "serve", lambda connect, runners, notify: seen.update(n=notify))
     cli.main(["routines"])
     assert seen["n"] is push.notify_brief

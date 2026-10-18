@@ -136,11 +136,38 @@ def _body_text(body: dict[str, Any]) -> str:
     return ""
 
 
+class StructuredLlm(Protocol):
+    def structured(
+        self, model: str, system: str, text: str, schema: dict[str, Any], name: str, effort: str
+    ) -> tuple[dict[str, Any], Usage]: ...
+
+
 class OpenAIClient:
     def __init__(self) -> None:
         from openai import OpenAI
 
         self.client = OpenAI()
+
+    def structured(
+        self, model: str, system: str, text: str, schema: dict[str, Any], name: str, effort: str
+    ) -> tuple[dict[str, Any], Usage]:
+        """One structured-output call with any JSON schema (briefs, triage, loops)."""
+        body: dict[str, Any] = {
+            "model": model,
+            "instructions": system,
+            "input": text,
+            "reasoning": {"effort": effort},
+            "max_output_tokens": 4000,
+            "store": False,
+            "text": {
+                "format": {"type": "json_schema", "name": name, "strict": True, "schema": schema}
+            },
+        }
+        r = self.client.responses.create(**body)
+        if r.status != "completed":
+            raise RuntimeError(f"response status {r.status}: {r.incomplete_details}")
+        usage = Usage(r.usage.input_tokens, r.usage.output_tokens) if r.usage else Usage()
+        return json.loads(r.output_text), usage
 
     def complete(
         self, model: str, system: str, text: str, effort: str
@@ -376,6 +403,22 @@ def record_usage(conn: Conn, source_id: str, model: str, purpose: str, usage: Us
             usage.output_tokens,
         ),
     )
+
+
+def cost_usd(model: str, usage: Usage) -> float:
+    price_in, price_out = PRICES.get(model, (0.0, 0.0))
+    return (usage.input_tokens * price_in + usage.output_tokens * price_out) / 1_000_000
+
+
+def month_spend_usd(conn: Conn, today: date | None = None) -> float:
+    """All server-side AI spend this calendar month (UTC), at list prices."""
+    day = today or datetime.now(UTC).date()
+    rows = conn.execute(
+        "SELECT model, sum(input_tokens) AS i, sum(output_tokens) AS o FROM llm_usage"
+        " WHERE day >= %s AND day <= %s GROUP BY model",
+        (day.replace(day=1), day),
+    ).fetchall()
+    return sum(cost_usd(r["model"], Usage(int(r["i"]), int(r["o"]))) for r in rows)
 
 
 def used_today(conn: Conn, source_id: str, day: date | None = None) -> int:

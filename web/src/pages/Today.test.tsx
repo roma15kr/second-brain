@@ -59,3 +59,55 @@ test("before the first brief, today says when it arrives", async () => {
   renderApp();
   expect(await screen.findByText(/first one arrives at 08:00/)).toBeInTheDocument();
 });
+
+test("AI brief shows focus reasons, AI text and notes", async () => {
+  const item = {
+    ref: "item:7",
+    id: 7,
+    kind: "email_thread",
+    title: "Listing price",
+    summary: "Dealer asks.",
+    outcome: null,
+    link: "https://mail.google.com/x",
+    last_activity_at: "2026-10-19T20:00:00Z",
+    scopes: ["quokka"],
+    participants: [],
+  };
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/today": {
+      brief: {
+        id: 2,
+        routine: "morning",
+        title: "Morning brief",
+        headline: "Morning brief: 1 conversation across 1 scope",
+        window_start: "2026-10-19T16:00:00Z",
+        window_end: "2026-10-20T05:00:00Z",
+        mode: "ai",
+        created_at: "2026-10-20T05:00:00Z",
+        sections: [
+          {
+            title: "Focus",
+            text: "",
+            refs: ["item:7"],
+            kind: "focus",
+            items: [{ ...item, reason: "Dealer is waiting" }],
+          },
+          {
+            title: "Quokka",
+            text: "A dealer needs a price today.",
+            refs: ["item:7"],
+            kind: "ai",
+            items: [item],
+          },
+          { title: "Coming up", text: "Evening wrap 19:00", refs: [], kind: "note", items: [] },
+        ],
+      },
+    },
+  });
+  renderApp();
+  expect(await screen.findByText("★ Focus")).toBeInTheDocument();
+  expect(screen.getByText("Dealer is waiting")).toBeInTheDocument();
+  expect(screen.getByText("A dealer needs a price today.")).toBeInTheDocument();
+  expect(screen.getByText("Coming up:")).toBeInTheDocument();
+});

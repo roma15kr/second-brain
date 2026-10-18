@@ -154,3 +154,13 @@ ul.list li:first-child {
 .notifications {
   margin: -4px 0 12px;
 }
+.note {
+  background: var(--bg);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.section-focus h3 {
+  color: var(--accent);
+}

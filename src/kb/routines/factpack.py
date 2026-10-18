@@ -64,6 +64,13 @@ def morning_window(now: datetime) -> tuple[datetime, datetime]:
     return start, now
 
 
+def evening_window(now: datetime, morning_at: time = time(8, 0)) -> tuple[datetime, datetime]:
+    """Today since the morning brief slot (08:00 Kyiv), until now."""
+    local = now.astimezone(KYIV)
+    day = local.date() if local.time() >= morning_at else local.date() - timedelta(days=1)
+    return datetime.combine(day, morning_at, tzinfo=KYIV), now
+
+
 def _scope_order(scope: str) -> tuple[int, str]:
     return (1 if scope == UNSORTED else 0, scope)
 
