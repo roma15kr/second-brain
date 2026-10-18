@@ -199,8 +199,21 @@ The macOS/iOS recorder apps (change `voice-apps-v1`) need a stable server contra
   the live assistant needs it; out of scope here).
 - **Upload:** `POST /api/devices/recordings` with JSON: kind (call|meeting|voice_note), started_at,
   ended_at, app/platform source (Zoom, Telegram, in-person…), language, segments [{speaker,
-  is_owner, start, end, text}], optional notes, optional idempotency key. Audio files are not
-  uploaded in this change (transcription happens in the apps' change; ADR 0010 retention applies there).
+  is_owner, start, end, text}], optional notes, optional idempotency key. Returns the recording id.
+- **Audio (ADR 0010 amendment, 12 months):** `PUT /api/devices/recordings/:id/audio/:track`
+  (track = owner|others|mixed) as a resumable chunked upload (`Content-Range`, 8 MB chunks; `HEAD`
+  returns the received length), Opus/M4A, sha256 verified at the end. Files live on a new volume
+  `kb-audio` (`/data/audio/YYYY/MM/<recording>-<track>.<ext>`, written to a temp name then
+  renamed), metadata in `recording_audio` (recording, track, codec, duration, bytes, sha256, path,
+  expires_at = recorded_at + 12 months, deleted_at). Playback: `GET /api/recordings/:id/audio/:track`
+  with HTTP Range (session cookie only; device tokens cannot read). A daily retention job deletes
+  expired files and keeps the row (deleted_at) so the meeting page says "audio deleted on …".
+  Manually attached audio files (m4a/mp3/wav/ogg) are stored the same way; transcribing them is
+  part of `voice-apps-v1` (server-side transcription).
+- **Backups:** the `backup` service mounts `kb-audio` read-only and copies new files incrementally
+  to `/backups/audio` (same layout; files are immutable, so a copy = new names only), verifying
+  sha256; result recorded in `backup_checks` (kind audio). Off-site copy follows with the reserve
+  storage (STATUS next steps).
 - **Matching:** overlap ≥ 50% with a calendar event → attached to it; else attendees by speaker
   names/chat → unscheduled call/meeting item. Processing as D20 (summary, decisions, loops, task
   drafts). Voice notes become Library notes marked by the device's default mark.
@@ -244,6 +257,8 @@ route-level code splitting, small shell, external store for streams.
 | `src/kb/connectors/calendar.py` | Google iCal fetch, CalDAV discovery/REPORT (iCloud), recurrence expansion, events (D15) |
 | `src/kb/connectors/smtp.py` | send on tap with undo window, Sent copy for non-Gmail (D17) |
 | `src/kb/api/routes_devices.py` | device pairing, tokens, recording upload and matching (D22) |
+| `src/kb/audio.py` | resumable audio upload, checksum, Range playback, 12-month retention (D22) |
+| `docker/backup.sh`, `docker-compose.yml` (edit) | `kb-audio` volume; incremental audio backup |
 | `src/kb/connectors/telegram.py` (edit) | dialogs listing, DB allowlist, QR login requests (D12) |
 | `src/kb/connectors/imap.py` (edit) | skip `\Draft`; `append_draft()` (D17) |
 | `src/kb/library.py` | documents, versions, extraction, goals (D16) |
@@ -407,6 +422,10 @@ Python (pytest, embedded Postgres, stubbed LLM/push):
 - Devices: `test_pairing_code_single_use_and_expires`, `test_device_token_cannot_read_kb`,
   `test_recording_matched_to_overlapping_event`, `test_unscheduled_call_created`,
   `test_revoked_device_refused`, `test_upload_idempotent`.
+- Audio: `test_resumable_upload_continues_from_received_length`, `test_checksum_mismatch_rejected`,
+  `test_range_playback_requires_session`, `test_device_token_cannot_download_audio`,
+  `test_retention_deletes_audio_keeps_transcript`, `test_delete_scope_audio`,
+  `test_audio_backup_copies_new_files_and_verifies`; TS `meeting.test.tsx` — tapping a line seeks playback.
 - Calendar: `test_ics_recurring_expanded_kyiv`, `test_declined_and_all_day_not_reminded`,
   `test_prep_and_reminder_times`.
 - Library: `test_extract_md_pdf_docx`, `test_document_requires_mark`, `test_versions_latest_indexed`,
@@ -468,5 +487,7 @@ services; no existing behaviour changes.
 9. **Polling ClickUp every 5 minutes instead of webhooks** — simpler, no public callback; fits 100 req/min.
 10. **Meeting notes source** — the owner's meeting-notes app is unknown; import accepts paste,
     files and forwarded email until the native recorder exists.
-11. **No audio upload in this change** — the recorder apps send finished transcripts; if server-side
-    transcription turns out better (one OpenAI key, re-transcription), `voice-apps-v1` adds audio upload.
+11. **Audio on a Docker volume instead of object storage** — simplest on one server; 8–15 GB/year fits
+    the disk, but the backup copy is on the same disk until the reserve storage exists.
+12. **Transcripts made in the apps, audio uploaded alongside** — the server could re-transcribe the
+    stored audio later (better diarization); decided in `voice-apps-v1`.

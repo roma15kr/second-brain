@@ -33,6 +33,7 @@ _Last updated: 2026-10-18 by Claude_
   `recurring-ical-events` approved; email = Gmail + any IMAP/SMTP with send on tap (10 s undo);
   calendars = Google secret address + Apple iCloud/CalDAV; meeting notes come from our own recorder
   apps (`voice-apps-v1`, next change) via the device API defined here.
+  Meeting/call audio stored in the KB for 12 months (ADR 0010 amendment); transcripts forever.
   Branch merged with `change/v1-baseline-specs` (PR #3 now also contains PR #2's commits).
 
 ## Next steps

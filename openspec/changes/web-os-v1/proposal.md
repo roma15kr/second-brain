@@ -63,7 +63,8 @@ drafts, task drafts, nudges) are approved, edited-and-approved, rather than disc
 - **Meetings:** calendar sync, reminders before meetings, prep (people, history, open loops,
   ClickUp tasks, goal, agenda); transcripts arrive straight from the owner's recorder apps (or are
   attached manually) → summary, decisions, the owner's promises as loops, team actions as ClickUp
-  task drafts.
+  task drafts. Meeting and call **audio** is stored too (12 months, then deleted; transcripts kept
+  forever), played back in sync with the transcript, backed up (ADR 0010 amendment).
 - **Proactive assistant (propose, never act alone):** mail ordered by importance × urgency with the
   reason; reply drafts in the owner's tone with cited context (save to Drafts, or send
   on the owner's tap with 10 s undo — never automatically; Telegram drafts copied by the owner); nudges for overdue promises to the owner; delegation
@@ -127,7 +128,9 @@ themselves.
   summaries, goals ≈ $8–12/month with `gpt-6.1-sol` — total ≈ $15–20/month, inside the $100 budget.
 - Writes outside the server for the first time: email drafts (IMAP APPEND), email sent via SMTP on
   the owner's tap, ClickUp tasks (personal token) — all only after approval.
-- Device API for the recorder apps (pairing, per-device tokens, transcript upload).
+- Device API for the recorder apps (pairing, per-device tokens, transcript and audio upload).
+- Disk: new `kb-audio` volume, ≈ 8–15 GB per year at ~10 meeting hours a week (12-month window), plus
+  its backup copy.
 - Credentials entered in the web OS are stored encrypted (`KB_SECRET_KEY`).
 - Docker image gains a frontend build stage; `make check` covers TypeScript too.
 - Mockups: `mockups/*.html`, one per screen.

@@ -60,3 +60,33 @@ From meeting notes the system SHALL produce a summary, decisions, and action ite
 #### Scenario: Team actions
 - **WHEN** a transcript says "Олена will update the listings by Friday"
 - **THEN** a task draft for Олена due Friday waits in the approval queue, linked to the meeting
+
+### Requirement: Meeting audio is kept for 12 months
+The recorder apps SHALL upload the audio of each call or meeting (the owner's voice and the other participants as separate tracks) together with its transcript; the server SHALL store it, verify it arrived complete, and resume interrupted uploads. Audio SHALL be deleted automatically 12 months after the recording, while the transcript, summary and decisions are kept. The owner SHALL be able to delete a recording's audio earlier, or all audio of a scope.
+
+#### Scenario: Upload over a weak connection
+- **WHEN** the phone loses the network halfway through uploading a 1-hour recording
+- **THEN** the upload continues from where it stopped when the network returns, and the audio is stored once
+
+#### Scenario: Retention
+- **WHEN** a recording becomes older than 12 months
+- **THEN** its audio is deleted and its transcript, summary and decisions remain searchable
+
+#### Scenario: Deleting a project's audio
+- **WHEN** the owner deletes all audio of scope `rdim` after the contract ends
+- **THEN** RDIM recordings have no audio left and their transcripts remain
+
+### Requirement: Listening alongside the transcript
+The meeting page SHALL play a recording's audio with the transcript beside it: tapping a transcript line SHALL play from that moment, the current line SHALL be highlighted, and the owner SHALL be able to play either track or both and download the audio. Audio SHALL only be available to the signed-in owner and SHALL never be sent to an AI service by the web OS.
+
+#### Scenario: Re-listening to a decision
+- **WHEN** the owner taps the line where the commission was agreed
+- **THEN** playback starts at that moment of the recording
+
+### Requirement: Audio is backed up and its storage is visible
+Audio SHALL be included in the daily backups (copied incrementally, verified by checksum), and Status SHALL show the audio storage used, its growth per month and the next deletions due.
+
+#### Scenario: Storage check
+- **WHEN** the owner opens Status
+- **THEN** it shows audio storage (e.g. "11.2 GB, +0.9 GB/month") and the last audio backup result
+
