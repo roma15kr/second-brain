@@ -86,7 +86,7 @@ def test_quiet_night_brief(conn):
     brief = briefs.latest(conn, ["morning"])
     assert brief is not None
     assert brief["headline"] == "Morning brief: nothing new"
-    assert brief["sections"][0]["title"] == "Quiet"
+    assert [x["title"] for x in brief["sections"]] == ["Coming up", "Quiet"]
 
 
 def test_api_today_returns_latest_brief(conn, pg_url):
@@ -102,6 +102,7 @@ def test_kb_routines_run_morning_command(conn, pg_url, monkeypatch, capsys):
     from kb import cli
 
     monkeypatch.setenv("DATABASE_URL", pg_url)
+    monkeypatch.setenv("KB_CONFIG_YAML", "sources: []")
     cli.main(["routines", "run", "morning"])
     assert "Morning brief" in capsys.readouterr().out
     assert briefs.latest(conn, ["morning"]) is not None

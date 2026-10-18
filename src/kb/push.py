@@ -117,7 +117,7 @@ def notify_brief(conn: Conn, brief_id: int, now: datetime) -> int:
     row = conn.execute("SELECT routine, headline FROM briefs WHERE id = %s", (brief_id,)).fetchone()
     if row is None:
         return 0
-    return send(conn, row["routine"], row["headline"], f"/briefs/{brief_id}", now)
+    return send(conn, row["routine"], row["headline"], f"/briefs/{brief_id}?via=push", now)
 
 
 def generate_vapid_keys() -> tuple[str, str]:

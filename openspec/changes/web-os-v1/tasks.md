@@ -13,12 +13,12 @@ branch `change/web-os-v1`.
 ## 2. Scheduler and push
 
 - [x] 2.1 `kb routines` loop with `due_slots` (Europe/Kyiv), `claim` and catch-up once, `routines` compose service; verify `test_due_slots_kyiv_dst`, `test_claim_is_idempotent`, `test_catch_up_once_after_downtime`
-- [ ] 2.2 Service worker (vite-plugin-pwa injectManifest), manifest and install; push subscriptions per device and routine, VAPID sending, quiet hours, gone-subscription cleanup; verify `sw.test.ts`, `test_push_payload_has_no_content`, `test_gone_subscription_deleted`, `test_quiet_hours_no_push_but_brief_stored`, and a real push on the owner's phone (manual)
+- [x] 2.2 Service worker (vite-plugin-pwa injectManifest), manifest and install; push subscriptions per device and routine, VAPID sending, quiet hours, gone-subscription cleanup; verify `sw.test.ts`, `test_push_payload_has_no_content`, `test_gone_subscription_deleted`, `test_quiet_hours_no_push_but_brief_stored`, and a real push on the owner's phone (manual)
 
 ## 3. AI briefs
 
-- [ ] 3.1 AI sections for morning brief and evening wrap (`gpt-6.1-sol`, structured output), ref validation, data-only fallback on budget cap, cost recorded per run; verify `test_brief_refs_validated_unknown_ids_dropped`, `test_data_only_brief_when_budget_reached`
-- [ ] 3.2 Briefs list and brief page with rating, `app_events` brief_opened/rating; verify `briefs.test.tsx` and that opening a brief from a push records `brief_opened`
+- [x] 3.1 AI sections for morning brief and evening wrap (`gpt-6.1-sol`, structured output), ref validation, data-only fallback on budget cap, cost recorded per run; verify `test_brief_refs_validated_unknown_ids_dropped`, `test_data_only_brief_when_budget_reached`
+- [x] 3.2 Briefs list and brief page with rating, `app_events` brief_opened/rating; verify `briefs.test.tsx` and that opening a brief from a push records `brief_opened`
 
 ## 4. Mail revision (Inbox)
 

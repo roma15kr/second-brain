@@ -40,6 +40,10 @@ _Last updated: 2026-10-18 by Claude_
   (owner enrolled), Today page with a data-only morning brief (`kb routines run morning`). `make check`
   covers python + ts (~10 min). Coolify `web` service, domain set via API after the first deploy.
 
+- web-os-v1 slice 2 live (PR #6, #7): `routines` scheduler (morning 08:00 Kyiv), installable PWA,
+  Web Push verified on the owner's iPhone; domains os./kb.zhukovsky.biz via Cloudflare; MCP stays on kb.
+  (OAuth for claude.ai connectors later → then consider os.zhukovsky.biz/mcp).
+
 ## Next steps
 1. Owner: 30 evaluation questions → run `kb eval` → tune if recall@10 < 0.8 (task 10.3), then archive the change.
 2. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key); optionally rotate MCP token.

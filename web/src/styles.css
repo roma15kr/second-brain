@@ -154,3 +154,38 @@ ul.list li:first-child {
 .notifications {
   margin: -4px 0 12px;
 }
+.note {
+  background: var(--bg);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.section-focus h3 {
+  color: var(--accent);
+}
+.topnav {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.topnav a.active {
+  font-weight: 600;
+  text-decoration: underline;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.filters {
+  margin-bottom: 12px;
+}
+.rating {
+  margin-top: 12px;
+}
+li.unread a strong::before {
+  content: "● ";
+  color: var(--accent);
+}

@@ -365,7 +365,8 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
     from kb.routines import briefs, scheduler
 
-    runners = briefs.runners()
+    config = load_config()
+    runners = briefs.runners(config, briefs.default_llm(config))
     if args.routines_command == "run":
         if args.routine not in runners:
             raise ConfigError(f"routine {args.routine!r} is not available yet")

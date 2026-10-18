@@ -46,7 +46,7 @@ def test_push_payload_has_no_content(conn, monkeypatch):
     assert data == {
         "title": "Second brain",
         "body": "Morning brief: 3 need your reply",
-        "url": f"/briefs/{bid}",
+        "url": f"/briefs/{bid}?via=push",
     }
     assert "contract" not in rec.calls[0]["data"]
 
@@ -116,6 +116,7 @@ def test_kb_routines_wires_push(monkeypatch):
 
     seen: dict[str, object] = {}
     monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
+    monkeypatch.setenv("KB_CONFIG_YAML", "sources: []")
     monkeypatch.setattr(scheduler, "serve", lambda connect, runners, notify: seen.update(n=notify))
     cli.main(["routines"])
     assert seen["n"] is push.notify_brief

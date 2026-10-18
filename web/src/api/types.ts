@@ -1,6 +1,7 @@
 // API shapes (hand-written until the OpenAPI → TypeScript generation lands with more routes).
 export type BriefItem = {
   ref: string;
+  reason?: string;
   id: number;
   kind: string;
   title: string;
@@ -12,7 +13,13 @@ export type BriefItem = {
   participants: string[];
 };
 
-export type BriefSection = { title: string; text: string; refs: string[]; items: BriefItem[] };
+export type BriefSection = {
+  title: string;
+  text: string;
+  refs: string[];
+  items: BriefItem[];
+  kind?: "ai" | "focus" | "data" | "note";
+};
 
 export type Brief = {
   id: number;
@@ -23,5 +30,6 @@ export type Brief = {
   window_end: string;
   mode: "ai" | "data";
   sections: BriefSection[];
+  cost_usd?: number;
   created_at: string;
 };
