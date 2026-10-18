@@ -19,6 +19,8 @@
 - macOS meeting assistant (live transcript, live KB assistant, batch re-transcription)
 - Suggested mail replies: for emails that need an answer, draft a reply in the owner's tone using KB context (earlier threads, ClickUp, meetings, metrics); delivered as a Gmail/IMAP draft or in Telegram for one-tap approval; never sent automatically (needs a write scope only for drafts)
 
+- Web OS PWA (research: docs/research/web-os-pwa-voice.md): web-app-v1 shell (passkeys, Search/Inbox/People/Status), voice-v1 (dictation, uploads via iOS Shortcut / Android share target, diarized meeting transcripts, Chrome tab recorder), chat-v1 (KB chat via OpenAI tools), mac-helper (desktop-call recorder)
+
 ## Later / maybe
 - WhatsApp (chat exports or linked-device bridge) — v2 decision
 - Public remote-MCP endpoint with OAuth for Claude on mobile
