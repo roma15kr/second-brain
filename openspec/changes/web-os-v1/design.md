@@ -26,7 +26,7 @@ or calendars, offline editing (offline is read-only), multi-user, the planned co
 FastAPI (Starlette-based, like the MCP server) gives Pydantic request/response models and an
 OpenAPI document; `openapi-typescript` generates `web/src/api/schema.ts`, so both sides share one
 contract. A new compose service `web` runs `kb web` (uvicorn) on its own domain
-`os.141-94-30-173.sslip.io`; it serves `/api/*` and the built SPA (`/` + history fallback).
+`os.zhukovsky.biz`; it serves `/api/*` and the built SPA (`/` + history fallback).
 *Alternative:* plain Starlette routes (no new dependency, hand-written TS types — drift risk).
 
 ### D2. Auth: passkeys + session cookie

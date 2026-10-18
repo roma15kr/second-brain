@@ -119,3 +119,18 @@ async def test_lockout_after_repeated_wrong_tokens_and_request_cap():
 def test_short_tokens_are_refused():
     with pytest.raises(ValueError, match="at least 32"):
         BearerAuth(_ok_app, "short-token")
+
+
+def test_client_ip_prefers_cloudflare_header_over_spoofable_forwarded_for():
+    from kb.mcp_server import client_ip
+
+    spoofed = {
+        "headers": [
+            (b"x-forwarded-for", b"6.6.6.6, 203.0.113.9"),
+            (b"cf-connecting-ip", b"203.0.113.9"),
+        ],
+        "client": ("172.18.0.5", 1234),
+    }
+    assert client_ip(spoofed) == "203.0.113.9"
+    assert client_ip({"headers": [(b"x-forwarded-for", b"198.51.100.7")]}) == "198.51.100.7"
+    assert client_ip({"headers": [], "client": ("10.0.0.2", 1)}) == "10.0.0.2"

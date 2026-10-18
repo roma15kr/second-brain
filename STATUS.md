@@ -4,9 +4,9 @@ _Last updated: 2026-10-18 by Claude_
 ## Current focus
 - `v1-mail-telegram-search`: 29/30 tasks done. Remaining: **10.3 acceptance** — owner writes ~30 real
   questions in `eval/questions.yaml` (format: `eval/questions.example.yaml`), then
-  `KB_MCP_TOKEN=… kb eval eval/questions.yaml --mcp-url https://kb.141-94-30-173.sslip.io/mcp --min-recall 0.8`.
+  `KB_MCP_TOKEN=… kb eval eval/questions.yaml --mcp-url https://kb.zhukovsky.biz/mcp --min-recall 0.8`.
 - Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), ns31426159, branch `main` (switched 2026-10-18 after PR #1).
-  MCP `https://kb.141-94-30-173.sslip.io/mcp` (public HTTPS + token + lockout, ADR 0009 amendment).
+  MCP `https://kb.zhukovsky.biz/mcp` (public HTTPS + token + lockout, ADR 0009 amendment).
 
 ## Done recently (2026-10-18)
 - Baseline OpenSpec specs for the built v1 system in `openspec/specs/` (9 capabilities: source-ingestion,
@@ -36,7 +36,7 @@ _Last updated: 2026-10-18 by Claude_
   Meeting/call audio stored in the KB for 12 months (ADR 0010 amendment); transcripts forever.
   Branch merged with `change/v1-baseline-specs` (PR #3 now also contains PR #2's commits).
 
-- web-os-v1 slice 1 live (2026-10-18, PR #5): https://os.141-94-30-173.sslip.io — passkey sign-in
+- web-os-v1 slice 1 live (2026-10-18, PR #5): https://os.zhukovsky.biz — passkey sign-in
   (owner enrolled), Today page with a data-only morning brief (`kb routines run morning`). `make check`
   covers python + ts (~10 min). Coolify `web` service, domain set via API after the first deploy.
 
@@ -55,6 +55,7 @@ _Last updated: 2026-10-18 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
+- Domains moved to os./kb.zhukovsky.biz (Cloudflare-proxied) on 2026-10-18: passkeys and Home Screen apps are per domain, so re-enrol (`kb web setup-code`) and reinstall after any domain change.
 - Coolify compose domains for a NEW service can only be set after one deploy has loaded the new compose file.
 - First passkey: `kb web setup-code` in the Coolify terminal (web container); codes expire in 1 h.
 - Embedding cost scales with input length: ~1 unit/s on the server CPU at 2,000 chars; a full re-embed of ~3k units takes ~50 min.

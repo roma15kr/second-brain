@@ -142,3 +142,25 @@ def test_kb_web_setup_code_command(pg_url, conn, monkeypatch, capsys):
     assert found is not None
     code = found.group(1)
     assert auth._valid_setup_code(conn, code, datetime.now(UTC)) is not None
+
+
+def test_moving_to_a_new_domain_allows_enrolment_with_a_setup_code(conn, pg_url, monkeypatch):
+    _fake_verified(monkeypatch)
+    old = TestClient(
+        build_app(None, connect=lambda: db.connect(pg_url), rp=RP, clock=lambda: NOW),
+        base_url="https://os.example.com",
+    )
+    code = auth.new_setup_code(conn, NOW)
+    old.post("/api/auth/register/begin", json={"setup_code": code}, headers=CSRF)
+    old.post("/api/auth/register/finish", json={"credential": {"id": "x"}}, headers=CSRF)
+
+    new_rp = auth.RelyingParty("https://os.zhukovsky.example")
+    new = TestClient(
+        build_app(None, connect=lambda: db.connect(pg_url), rp=new_rp, clock=lambda: NOW),
+        base_url="https://os.zhukovsky.example",
+    )
+    assert new.get("/api/auth/me").json()["has_passkeys"] is False
+    assert new.post("/api/auth/register/begin", json={}, headers=CSRF).status_code == 403
+    fresh = auth.new_setup_code(conn, NOW)
+    r = new.post("/api/auth/register/begin", json={"setup_code": fresh}, headers=CSRF)
+    assert r.status_code == 200 and r.json()["rp"]["id"] == "os.zhukovsky.example"

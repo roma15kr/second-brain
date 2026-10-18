@@ -265,8 +265,12 @@ class RateLimiter:
 
 
 def client_ip(scope: Scope) -> str:
-    """Behind Coolify's proxy the real client is the first X-Forwarded-For address."""
+    """The real client: Cloudflare's CF-Connecting-IP (set by Cloudflare, not by the client),
+    else the first X-Forwarded-For address added by Coolify's proxy."""
     headers = dict(scope.get("headers") or [])
+    cf = headers.get(b"cf-connecting-ip", b"").decode(errors="ignore").strip()
+    if cf:
+        return cf
     forwarded = headers.get(b"x-forwarded-for", b"").decode(errors="ignore")
     if forwarded:
         return forwarded.split(",")[0].strip()

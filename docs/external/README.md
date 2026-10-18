@@ -11,14 +11,15 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - `IMAP_PASSWORD_<MAILBOX>` — app password per IMAP mailbox (or stored encrypted via `kb auth imap`)
   - `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` — from my.telegram.org; session file on the `telegram` volume
   - `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` — Web Push (web-os-v1); generate with `kb web vapid-keys`; subject is a `mailto:` contact for push services
-  - `KB_WEB_ORIGIN` — public origin of the web OS (passkey relying party), e.g. https://os.141-94-30-173.sslip.io
+  - `KB_WEB_ORIGIN` — public origin of the web OS (passkey relying party), e.g. https://os.zhukovsky.biz
   - `KB_WEB_DIST` — built SPA directory, set by the Docker image (`/app/web/dist`)
 - Third-party services and dashboards:
   - Coolify (on the owner's dedicated server) — deployment; dashboard reachable over Tailscale only.
     App `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), server ns31426159, deploy key `second-brain-deploy`.
     Local tooling reads `COOLIFY_URL`, `COOLIFY_TOKEN` from `.env` (gitignored).
-  - MCP test endpoint: https://kb.141-94-30-173.sslip.io/mcp — token in Coolify env `SERVICE_PASSWORD_64_MCPTOKEN`
+  - MCP test endpoint: https://kb.zhukovsky.biz/mcp — token in Coolify env `SERVICE_PASSWORD_64_MCPTOKEN`
   - Coolify-generated: `SERVICE_PASSWORD_POSTGRES`; app config in `KB_CONFIG_YAML`; mailbox `IMAP_USER_MAIN`, `IMAP_PASSWORD_MAIN`
+  - Cloudflare — DNS for zhukovsky.biz; `os.` and `kb.` are proxied (orange cloud) to the server 141.94.30.173; the MCP lockout uses `CF-Connecting-IP`
   - Tailscale — private network for dashboard, MCP and the Mac app
   - Google Cloud project — Gmail API OAuth client (must be Internal or In production, not Testing)
   - my.telegram.org — Telegram API app credentials
