@@ -10,6 +10,8 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` — Gmail API OAuth client
   - `IMAP_PASSWORD_<MAILBOX>` — app password per IMAP mailbox (or stored encrypted via `kb auth imap`)
   - `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` — from my.telegram.org; session file on the `telegram` volume
+  - `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` — Web Push (web-os-v1)
+  - `KB_WEB_ORIGIN` — public origin of the web OS (passkey relying party), e.g. https://os.141-94-30-173.sslip.io
 - Third-party services and dashboards:
   - Coolify (on the owner's dedicated server) — deployment; dashboard reachable over Tailscale only.
     App `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), server ns31426159, deploy key `second-brain-deploy`.
@@ -20,5 +22,6 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - Google Cloud project — Gmail API OAuth client (must be Internal or In production, not Testing)
   - my.telegram.org — Telegram API app credentials
   - OpenAI Platform — API key, usage and monthly spend limit for the server-side LLM
+  - Web Push services (Apple, Google, Mozilla push endpoints) — deliver notifications to subscribed devices; no content in payloads
   - Reserve storage (S3-compatible, different provider/region than the server; provider TBD) — Coolify Postgres backups and nightly encrypted Vaultwarden export; its credentials are in the printed emergency kit, not only in the vault
 - Test accounts: none yet.
