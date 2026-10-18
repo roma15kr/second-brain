@@ -132,7 +132,7 @@ suggestion (idempotent retry). Webhooks are a later optimisation (needs a public
   via `REPORT calendar-query` with a time range (−30 / +90 days), using `httpx` (already installed
   through openai/mcp) — no CalDAV library. Only read methods are implemented.
 - Both: polled every 10 min; parsed with `icalendar` + `recurring-ical-events` (new dependencies,
-  need approval) into `events` (uid, calendar, start/end, title, attendees, my response status,
+  approved 2026-10-18) into `events` (uid, calendar, start/end, title, attendees, my response status,
   location/meet link). Attendee emails link to people.
 
 ### D16. Personal base storage and extraction
