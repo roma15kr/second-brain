@@ -24,6 +24,7 @@ from kb.api import (
     routes_briefs,
     routes_inbox,
     routes_loops,
+    routes_people,
     routes_push,
     routes_search,
     routes_settings,
@@ -218,6 +219,7 @@ def build_app(
     app.include_router(routes_loops.router)
     app.include_router(routes_week.router)
     app.include_router(routes_search.router)
+    app.include_router(routes_people.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:

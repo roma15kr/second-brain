@@ -1,3 +1,4 @@
+import { ScopeTag } from "../shell/ScopeTag";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { api } from "../api/client";
@@ -157,9 +158,7 @@ export function Loops() {
                 <strong>{lp.title}</strong>
               )}{" "}
               {lp.scopes.map((s) => (
-                <span key={s} className={`tag ${s}`}>
-                  {s}
-                </span>
+                <ScopeTag key={s} scope={s} />
               ))}
             </div>
             <div className="muted">

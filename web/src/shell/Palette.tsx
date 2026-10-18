@@ -51,6 +51,14 @@ export function Palette({ onClose }: { onClose: () => void }) {
       hint: "page",
       go: go(a.path),
     }));
+    const scopes = ["personal", "digisoft", "quokka", "rdim"]
+      .filter((sc) => lower && sc.includes(lower))
+      .map((sc) => ({
+        key: `scope-${sc}`,
+        label: `◧ ${sc}`,
+        hint: "scope",
+        go: go(`/scopes/${sc}`),
+      }));
     const ppl = (people.data?.people ?? []).map((p) => ({
       key: `person-${p.id}`,
       label: `👤 ${p.name}`,
@@ -73,7 +81,7 @@ export function Palette({ onClose }: { onClose: () => void }) {
           },
         ]
       : [];
-    return [...ppl, ...pages, ...hits, ...searchAll];
+    return [...ppl, ...pages, ...scopes, ...hits, ...searchAll];
   }, [q, people.data, search.data, navigate, onClose]);
 
   function onKey(e: KeyboardEvent) {

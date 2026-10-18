@@ -1,3 +1,4 @@
+import { ScopeTag } from "../shell/ScopeTag";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
@@ -66,9 +67,7 @@ export function Conversation() {
         <h2>{it.title || "(no subject)"}</h2>
         <div className="row">
           {it.scopes.map((s) => (
-            <span key={s} className={`tag ${s}`}>
-              {s}
-            </span>
+            <ScopeTag key={s} scope={s} />
           ))}
           <select
             aria-label="Change scope"

@@ -390,3 +390,43 @@ blockquote.match {
   border-left: 3px solid var(--accent);
   padding-left: 8px;
 }
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table td,
+.table th {
+  text-align: left;
+  padding: 6px 8px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.identities {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.bars {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.bars li {
+  display: grid;
+  grid-template-columns: 48px 1fr 30px;
+  align-items: center;
+  gap: 6px;
+}
+.bar {
+  display: block;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 4px;
+}

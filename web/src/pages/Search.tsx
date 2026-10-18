@@ -1,3 +1,4 @@
+import { ScopeTag } from "../shell/ScopeTag";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -135,9 +136,7 @@ export function Search() {
                   <span aria-hidden>{r.kind === "tg_conversation" ? "✈" : "✉"} </span>
                   <Link to={to}>{r.title || "(no subject)"}</Link>{" "}
                   {r.scopes.map((s) => (
-                    <span key={s} className={`tag ${s}`}>
-                      {s}
-                    </span>
+                    <ScopeTag key={s} scope={s} />
                   ))}
                   {r.last_activity_at && (
                     <span className="muted">

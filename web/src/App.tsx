@@ -7,6 +7,9 @@ import { Briefs } from "./pages/Briefs";
 import { Conversation } from "./pages/Conversation";
 import { Inbox } from "./pages/Inbox";
 import { Loops } from "./pages/Loops";
+import { People } from "./pages/People";
+import { Person } from "./pages/Person";
+import { Scope } from "./pages/Scope";
 import { Search } from "./pages/Search";
 import { Today } from "./pages/Today";
 import { Week } from "./pages/Week";
@@ -33,6 +36,9 @@ function Routed() {
         <Route path="/week" element={<Week />} />
         <Route path="/search" element={<Search />} />
         <Route path="/c/:id" element={<Conversation />} />
+        <Route path="/people" element={<People />} />
+        <Route path="/people/:id" element={<Person />} />
+        <Route path="/scopes/:scope" element={<Scope />} />
         <Route path="*" element={<p className="muted">Page not found.</p>} />
       </Routes>
     </Shell>
