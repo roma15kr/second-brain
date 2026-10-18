@@ -69,7 +69,10 @@ def send(
     only_endpoint: str | None = None,
 ) -> int:
     """Pushes to every device that wants this routine; returns how many accepted it."""
-    if in_quiet_hours(now) and only_endpoint is None:
+    from kb import settings_store
+
+    quiet = settings_store.load(conn).quiet_hours
+    if in_quiet_hours(now, quiet.start, quiet.end) and only_endpoint is None:
         log.info("quiet hours: no push for %s", routine)
         return 0
     private_key = os.environ.get("WEB_PUSH_VAPID_PRIVATE_KEY", "")

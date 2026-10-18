@@ -14,7 +14,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
-from kb import distill, loops
+from kb import distill, loops, settings_store
 from kb.config import Config
 from kb.db import Conn
 from kb.distill import StructuredLlm
@@ -136,7 +136,9 @@ def _ai(
 ) -> tuple[dict[str, Any] | None, float, Section | None]:
     if llm is None or not (pack.by_scope or any(pack.loops.values())):
         return None, 0.0, None
-    if distill.month_spend_usd(conn, pack.window[1].date()) >= config.llm.monthly_budget_usd:
+    if distill.month_spend_usd(conn, pack.window[1].date()) >= settings_store.budget_usd(
+        conn, config
+    ):
         note = Section("AI budget reached", "This review lists activity without AI.", kind="note")
         return None, 0.0, note
     from kb.routines.briefs import SCHEMA

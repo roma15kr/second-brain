@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router";
+import { NeedsPasskey } from "./auth/NeedsPasskey";
+import { Security } from "./auth/Security";
 import { SignIn } from "./auth/SignIn";
 import { useMe } from "./auth/useMe";
 import { BriefPage } from "./pages/BriefPage";
@@ -11,14 +13,17 @@ import { People } from "./pages/People";
 import { Person } from "./pages/Person";
 import { Scope } from "./pages/Scope";
 import { Search } from "./pages/Search";
+import { Settings } from "./pages/Settings";
+import { Status } from "./pages/Status";
 import { Today } from "./pages/Today";
 import { Week } from "./pages/Week";
 import { Notifications } from "./push/Notifications";
 import { Shell } from "./shell/Shell";
 
-function Routed() {
+function Routed({ needsPasskey }: { needsPasskey: boolean }) {
   return (
     <Shell>
+      {needsPasskey && <NeedsPasskey />}
       <Routes>
         <Route
           path="/"
@@ -39,6 +44,8 @@ function Routed() {
         <Route path="/people" element={<People />} />
         <Route path="/people/:id" element={<Person />} />
         <Route path="/scopes/:scope" element={<Scope />} />
+        <Route path="/settings" element={<Settings security={<Security />} />} />
+        <Route path="/status" element={<Status />} />
         <Route path="*" element={<p className="muted">Page not found.</p>} />
       </Routes>
     </Shell>
@@ -51,7 +58,7 @@ function Gate() {
   if (me.isError)
     return <p className="error center">Cannot reach the server: {me.error.message}</p>;
   if (!me.data.signed_in) return <SignIn hasPasskeys={me.data.has_passkeys} />;
-  return <Routed />;
+  return <Routed needsPasskey={me.data.needs_passkey} />;
 }
 
 export function App({ client = new QueryClient() }: { client?: QueryClient }) {

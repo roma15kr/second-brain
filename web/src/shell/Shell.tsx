@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router";
 import { APPS } from "./apps";
 import { Bell } from "./Bell";
 import { Palette } from "./Palette";
+import { useOnline } from "./useOnline";
 
 const clock = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Kyiv",
@@ -23,6 +24,7 @@ function title(pathname: string): string {
 // OS shell: dock (bottom bar on phones), ⌘K palette, notification center (web-dashboard spec).
 export function Shell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
+  const online = useOnline();
   const [palette, setPalette] = useState(false);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -71,7 +73,17 @@ export function Shell({ children }: { children: ReactNode }) {
           <Bell />
           <span className="muted desktop-only">{clock.format(now)}</span>
         </header>
-        <main className="page">{children}</main>
+        <main className="page">
+          {!online && (
+            <p className="note banner" role="status">
+              Offline — showing the last loaded pages; actions are disabled until you are back
+              online.
+            </p>
+          )}
+          <fieldset className="plain" disabled={!online}>
+            {children}
+          </fieldset>
+        </main>
       </div>
       {palette && <Palette onClose={() => setPalette(false)} />}
     </div>

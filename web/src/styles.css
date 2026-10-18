@@ -430,3 +430,43 @@ blockquote.match {
   background: var(--accent);
   border-radius: 4px;
 }
+.settings-form {
+  display: grid;
+  gap: 8px;
+}
+.settings-form label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.codes {
+  columns: 2;
+  font-size: 14px;
+}
+.banner {
+  margin-bottom: 12px;
+}
+h4 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+}
+fieldset.plain {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.metric {
+  min-width: 160px;
+}
+.kpi {
+  font-size: 24px;
+  font-weight: 600;
+}
+.kpi.good {
+  color: #2f9e5b;
+}
+.kpi.bad {
+  color: var(--error);
+}
