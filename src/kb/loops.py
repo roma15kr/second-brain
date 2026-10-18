@@ -38,7 +38,9 @@ def owner_emails(conn: Conn, config: Config) -> set[str]:
 
 
 def owner_telegram_ids(conn: Conn) -> set[str]:
-    return {str(i) for i in get_setting(conn, "owner_telegram_ids", [])}
+    """Recorded by the Telegram service at login, plus ids added in Settings."""
+    ids = get_setting(conn, "owner_telegram_ids", []) + get_setting(conn, "telegram_self_ids", [])
+    return {str(i) for i in ids}
 
 
 def get_setting(conn: Conn, key: str, default: Any) -> Any:

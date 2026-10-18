@@ -382,11 +382,19 @@ def cmd_routines(args: argparse.Namespace) -> None:
     def close_answered_loops(conn: db.Conn, now: datetime) -> int:
         return loops.close_answered(conn, loops.owner_emails(conn, config), now)
 
+    llm = briefs.default_llm(config)
+
+    def detect_loops(conn: db.Conn, now: datetime) -> int:
+        from kb import loop_detect
+
+        # a few conversations per cycle so scheduled briefs are never delayed
+        return loop_detect.detect_cycle(conn, config, llm, now, limit=5)
+
     scheduler.serve(
         lambda: db.connect(url),
         runners,
         notify=push.notify_brief,
-        maintenance=[close_answered_loops],
+        maintenance=[close_answered_loops, detect_loops],
     )
 
 

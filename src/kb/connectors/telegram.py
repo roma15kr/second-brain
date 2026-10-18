@@ -42,6 +42,10 @@ class ReadOnlyClient:
     async def get_entity(self, ref: Any) -> Any:
         return await self.__client.get_entity(ref)
 
+    async def get_me(self) -> Any:
+        """The logged-in account (read-only); its id marks the owner's own messages."""
+        return await self.__client.get_me()
+
 
 @dataclass(frozen=True)
 class ChatInfo:
@@ -242,6 +246,17 @@ def make_client(source: TelegramSource, snapshot: bool = False) -> Any:
     return TelegramClient(session, source.api_id(), source.api_hash(), flood_sleep_threshold=120)
 
 
+def record_self(conn: Conn, me: Any) -> None:
+    """Remember the owner's Telegram id so loops know which messages are the owner's."""
+    from kb import loops
+
+    if me is None or getattr(me, "id", None) is None:
+        return
+    known = {str(i) for i in loops.get_setting(conn, "telegram_self_ids", [])}
+    if str(me.id) not in known:
+        loops.set_setting(conn, "telegram_self_ids", sorted(known | {str(me.id)}))
+
+
 async def run(source: TelegramSource, connect_db: Callable[[], Conn]) -> None:
     """Long-running ingest: catch up, then follow live events; re-check gaps periodically."""
     from telethon import events
@@ -254,6 +269,7 @@ async def run(source: TelegramSource, connect_db: Callable[[], Conn]) -> None:
         )
     client = ReadOnlyClient(raw)
     conn = connect_db()
+    record_self(conn, await client.get_me())
     entities = await resolve_chats(client, source)
     by_id = {chat_info(e).chat_id: e for e in entities}
 

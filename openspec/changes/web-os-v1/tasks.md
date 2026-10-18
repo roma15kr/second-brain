@@ -28,7 +28,7 @@ branch `change/web-os-v1`.
 ## 5. Open loops
 
 - [x] 5.1 Owner identities in settings; deterministic needs-reply loops for email with auto-close on owner reply; `loop_events`; verify `test_needs_reply_closes_when_owner_replies`
-- [ ] 5.2 `loops.detect` job after summaries (promises by/to owner, due phrase resolution), dismissed sources never recreated; verify `test_loop_detect_promise_by_owner_with_due`, `test_promise_to_owner`, `test_chitchat_no_loop`, `test_resolve_due_phrases_uk_ru_en`, `test_dismissed_source_not_recreated`
+- [x] 5.2 `loops.detect` job after summaries (promises by/to owner, due phrase resolution), dismissed sources never recreated; verify `test_loop_detect_promise_by_owner_with_due`, `test_promise_to_owner`, `test_chitchat_no_loop`, `test_resolve_due_phrases_uk_ru_en`, `test_dismissed_source_not_recreated`
 - [ ] 5.3 Manual actions (done, dismiss, snooze, due date, add), overdue/aging, Loops page with filters; loops in morning brief and evening wrap fact packs; verify `test_snooze_returns_on_date`, `test_overdue_marked`, `loops.test.tsx`
 
 ## 6. Weekly routines
