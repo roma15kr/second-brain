@@ -106,6 +106,9 @@ services:
       DATABASE_URL: postgresql://kb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kb
       KB_CONFIG_YAML: ${KB_CONFIG_YAML}
       KB_WEB_ORIGIN: ${KB_WEB_ORIGIN:-}
+      # search runs in the mcp service, which holds the embedding/reranking models
+      KB_SEARCH_URL: http://mcp:8765/internal/search
+      KB_MCP_TOKEN: ${SERVICE_PASSWORD_64_MCPTOKEN}
       WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
       WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
       WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-}

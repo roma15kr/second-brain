@@ -333,7 +333,16 @@ def build_web_app() -> Any:
         connect=lambda: db.connect(url),
         rp=RelyingParty(origin) if origin else None,
         config=load_config(),
+        searcher=_web_searcher(),
     )
+
+
+def _web_searcher() -> Any:
+    """Search through the MCP service (models loaded there) when KB_SEARCH_URL is set."""
+    from kb.api.routes_search import remote_searcher
+
+    url, token = os.environ.get("KB_SEARCH_URL"), os.environ.get("KB_MCP_TOKEN")
+    return remote_searcher(url, token) if url and token else None
 
 
 def cmd_web(args: argparse.Namespace) -> None:

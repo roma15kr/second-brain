@@ -4,8 +4,10 @@ import { SignIn } from "./auth/SignIn";
 import { useMe } from "./auth/useMe";
 import { BriefPage } from "./pages/BriefPage";
 import { Briefs } from "./pages/Briefs";
+import { Conversation } from "./pages/Conversation";
 import { Inbox } from "./pages/Inbox";
 import { Loops } from "./pages/Loops";
+import { Search } from "./pages/Search";
 import { Today } from "./pages/Today";
 import { Week } from "./pages/Week";
 import { Notifications } from "./push/Notifications";
@@ -29,6 +31,8 @@ function Routed() {
         <Route path="/briefs" element={<Briefs />} />
         <Route path="/briefs/:id" element={<BriefPage />} />
         <Route path="/week" element={<Week />} />
+        <Route path="/search" element={<Search />} />
+        <Route path="/c/:id" element={<Conversation />} />
         <Route path="*" element={<p className="muted">Page not found.</p>} />
       </Routes>
     </Shell>
