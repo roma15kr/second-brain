@@ -151,3 +151,6 @@ ul.list li:first-child {
   background: #fde8ec;
   color: #1d2330;
 }
+.notifications {
+  margin: -4px 0 12px;
+}

@@ -90,6 +90,14 @@ services:
   routines:
     <<: *kb
     command: ["sh", "-c", "kb migrate && exec kb routines"]
+    environment:
+      DATABASE_URL: postgresql://kb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kb
+      KB_CONFIG_YAML: ${KB_CONFIG_YAML}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      KB_DISTILL_MODEL: ${KB_DISTILL_MODEL:-}
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-}
 
   web:
     <<: *kb
@@ -98,6 +106,9 @@ services:
       DATABASE_URL: postgresql://kb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kb
       KB_CONFIG_YAML: ${KB_CONFIG_YAML}
       KB_WEB_ORIGIN: ${KB_WEB_ORIGIN:-}
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-}
     # Coolify's proxy routes the web OS domain (HTTPS) to port 8001; every data route needs a
     # passkey session (web-access spec).
     expose:

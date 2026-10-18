@@ -134,6 +134,6 @@ def test_kb_routines_starts_scheduler_with_morning_runner(argv, monkeypatch):
 
     seen = {}
     monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
-    monkeypatch.setattr(scheduler, "serve", lambda connect, runners: seen.update(runners))
+    monkeypatch.setattr(scheduler, "serve", lambda connect, runners, notify: seen.update(runners))
     cli.main(argv)
     assert "morning" in seen

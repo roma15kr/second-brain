@@ -25,6 +25,7 @@ MAX_ATTEMPTS = 2
 WEEKLY_CATCH_UP = timedelta(hours=24)
 
 Runner = Callable[[Conn, datetime], int]  # returns the brief id
+Notify = Callable[[Conn, int, datetime], object]  # pushes a stored brief
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,7 @@ def run_due(
     runners: dict[RoutineName, Runner],
     now: datetime,
     settings: RoutineSettings | None = None,
+    notify: Notify | None = None,
 ) -> list[int]:
     """Runs every due, unclaimed slot of the routines that have a runner; returns run ids."""
     ran = []
@@ -124,6 +126,11 @@ def run_due(
                 " WHERE id = %s",
                 (now, brief_id, run_id),
             )
+            if notify is not None:
+                try:
+                    notify(conn, brief_id, now)
+                except Exception:  # a push failure never fails the stored brief
+                    log.exception("push for %s failed", slot.routine)
         ran.append(run_id)
     return ran
 
@@ -133,6 +140,7 @@ def serve(
     runners: dict[RoutineName, Runner],
     interval: float = 30.0,
     clock: Callable[[], datetime] | None = None,
+    notify: Notify | None = None,
 ) -> None:
     from datetime import UTC
 
@@ -141,7 +149,7 @@ def serve(
     while True:
         try:
             with connect() as conn:
-                run_due(conn, runners, clock())
+                run_due(conn, runners, clock(), notify=notify)
         except Exception:
             log.exception("scheduler cycle failed; retrying")
         _time.sleep(interval)

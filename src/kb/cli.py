@@ -336,6 +336,14 @@ def build_web_app() -> Any:
 
 
 def cmd_web(args: argparse.Namespace) -> None:
+    if args.action == "vapid-keys":
+        from kb import push
+
+        public, private = push.generate_vapid_keys()
+        print("Set these in Coolify (never commit them):")
+        print(f"WEB_PUSH_VAPID_PUBLIC_KEY={public}")
+        print(f"WEB_PUSH_VAPID_PRIVATE_KEY={private}")
+        return
     if args.action == "setup-code":
         from datetime import UTC, datetime
 
@@ -367,7 +375,9 @@ def cmd_routines(args: argparse.Namespace) -> None:
         print(f"brief {brief_id}: {brief['headline'] if brief else ''}")
         return
     url = database_url()
-    scheduler.serve(lambda: db.connect(url), runners)
+    from kb import push
+
+    scheduler.serve(lambda: db.connect(url), runners, notify=push.notify_brief)
 
 
 def cmd_mcp(args: argparse.Namespace) -> None:
@@ -463,7 +473,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=8765)
     p.set_defaults(func=cmd_mcp)
     p = sub.add_parser("web", help="serve the web OS (JSON API + SPA)")
-    p.add_argument("action", nargs="?", choices=["serve", "setup-code"], default="serve")
+    p.add_argument(
+        "action", nargs="?", choices=["serve", "setup-code", "vapid-keys"], default="serve"
+    )
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8001)
     p.set_defaults(func=cmd_web)
