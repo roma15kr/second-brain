@@ -214,3 +214,18 @@ li.overdue {
   flex: 1;
   min-width: 200px;
 }
+.priorities {
+  margin-bottom: 12px;
+}
+.priorities ol {
+  padding-left: 20px;
+}
+.priorities li {
+  margin-bottom: 6px;
+}
+.wide {
+  width: 100%;
+}
+.brief + .brief {
+  margin-top: 12px;
+}

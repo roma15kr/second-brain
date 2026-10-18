@@ -82,8 +82,9 @@ PROMPTS = {
     "morning": _COMMON
     + """
 This is the MORNING brief covering activity since last evening. Write 2-6 sections: what happened
-per scope, anything that needs the owner's reply or decision first. In `focus`, pick at most 3
-conversations the owner should handle first today, each with a one-line reason.""",
+per scope, anything that needs the owner's reply or decision first. If the pack lists this week's
+priorities, add one section on what moved on them (cite the related items). In `focus`, pick at
+most 3 conversations the owner should handle first today, each with a one-line reason.""",
     "evening": _COMMON
     + """
 This is the EVENING wrap of today. Write 2-6 sections: decisions and outcomes reached today,
@@ -249,6 +250,9 @@ def pack_text(pack: FactPack) -> str:
         f"Window: {pack.window[0].astimezone(KYIV):%a %d %b %H:%M} to "
         f"{pack.window[1].astimezone(KYIV):%a %d %b %H:%M} (Kyiv)",
     ]
+    if pack.priorities:
+        lines.append("\n## This week's priorities (accepted by the owner)")
+        lines += [f"- {p['title']} ({p.get('reason', '')})" for p in pack.priorities]
     for key, title in LOOP_SECTIONS.get(pack.routine, []):
         if rows := pack.loops.get(key):
             lines.append(f"\n## {title}")
@@ -331,6 +335,10 @@ def write_brief(
     from kb import loops
 
     pack.loops = loops.for_brief(conn, pack.routine, pack.window, now)
+    if pack.routine == "morning":
+        from kb.routines import weekly
+
+        pack.priorities = weekly.accepted_priorities(conn, now)
     sections: list[Section] = []
     mode, cost = "data", 0.0
     has_activity = bool(pack.by_scope) or any(pack.loops.values())
@@ -360,6 +368,9 @@ def write_brief(
                 if ai_sections:
                     sections.extend(ai_sections)
                     mode = "ai"
+    if pack.priorities:
+        text = "\n".join(f"{n}. {p['title']}" for n, p in enumerate(pack.priorities, 1))
+        sections.append(Section("This week's priorities", text, kind="note"))
     sections.extend(loop_sections(pack))
     if pack.routine == "morning" and (upcoming := coming_up(now)):
         sections.append(upcoming)
@@ -418,7 +429,18 @@ def runners(
         "morning": lambda conn, now: run_morning(conn, now, llm, cfg),
         "evening": lambda conn, now: run_evening(conn, now, llm, cfg),
         "revision": lambda conn, now: _run_revision(conn, now, llm, cfg),
+        "weekly_review": lambda conn, now: _weekly(conn, now, llm, cfg, "review"),
+        "weekly_plan": lambda conn, now: _weekly(conn, now, llm, cfg, "plan"),
     }
+
+
+def _weekly(
+    conn: Conn, now: datetime, llm: StructuredLlm | None, config: Config, which: str
+) -> int:
+    from kb.routines import weekly
+
+    run = weekly.run_review if which == "review" else weekly.run_plan
+    return run(conn, now, llm, config)
 
 
 def _run_revision(conn: Conn, now: datetime, llm: StructuredLlm | None, config: Config) -> int:

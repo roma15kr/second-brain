@@ -33,7 +33,7 @@ branch `change/web-os-v1`.
 
 ## 6. Weekly routines
 
-- [ ] 6.1 Friday weekly review and Monday weekly plan (previous week recap + up to 5 priorities), accept/edit plan, accepted priorities in morning briefs, Week page; verify `test_weekly_plan_accept_feeds_morning_brief` and `week.test.tsx`
+- [x] 6.1 Friday weekly review and Monday weekly plan (previous week recap + up to 5 priorities), accept/edit plan, accepted priorities in morning briefs, Week page; verify `test_weekly_plan_accept_feeds_morning_brief` and `week.test.tsx`
 
 ## 7. Knowledge pages and OS shell
 
