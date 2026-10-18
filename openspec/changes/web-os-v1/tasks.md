@@ -49,7 +49,7 @@ branch `change/web-os-v1`.
 
 ## 9. Connectors hub and marks
 
-- [ ] 9.1 `scopes` table (add/rename/archive projects), `secrets.py` (AES-GCM, `KB_SECRET_KEY`), `connector_accounts`; connect an IMAP mailbox from the web (credentials tested, default mark, picked up without restart); verify `test_add_project_scope`, `test_secret_roundtrip_and_never_returned_by_api`, `test_wrong_imap_password_not_saved`, `test_new_account_ingested_without_restart`
+- [ ] 9.1 `scopes` table (add/rename/archive projects), `secrets.py` (AES-GCM, `KB_SECRET_KEY`), `connector_accounts`; connect a mailbox from the web — Gmail preset or any IMAP + SMTP server (both connections tested, default mark, picked up without restart); verify `test_add_project_scope`, `test_secret_roundtrip_and_never_returned_by_api`, `test_wrong_imap_password_not_saved`, `test_new_account_ingested_without_restart`
 - [ ] 9.2 Telegram dialogs in `tg_dialogs` (read-only listing), include/ignore and mark from the web with backfill, "to mark" list, QR login from the web; config allowlist imported once; verify `test_new_dialog_not_ingested_until_included`, `test_mark_change_rescopes_items`, `test_telegram_wrapper_has_no_write_methods`
 - [ ] 9.3 Connectors hub page (states, counts, catalog with planned and WhatsApp "not possible"), mail rules and "senders to mark", disconnect keep/remove; verify `test_disconnect_keep_vs_remove`, `connectors.test.tsx`
 
@@ -66,15 +66,16 @@ branch `change/web-os-v1`.
 ## 12. Proactive assistant
 
 - [ ] 12.1 Tracer: `suggestions` queue, Assistant page (approve / edit / discard), Gmail draft executor (IMAP APPEND, threaded) and draft skipping in ingest; verify `test_draft_saved_to_drafts_not_sent`, `test_draft_not_ingested_and_loop_stays_open`, `assistant.test.tsx`, and one approved draft appears in the real Gmail thread unsent
-- [ ] 12.2 Eisenhower priority with reasons (goal link, person, money, deadline, waiting) in Inbox and morning brief; two-minute "do now" group; verify `test_priority_goal_linked_first_with_reason`
-- [ ] 12.3 Reply drafts with tone examples and cited context (email → Gmail Drafts; Telegram → copy and open chat), daily cap; verify draft refs validated and the cap respected (stubbed LLM)
-- [ ] 12.4 Nudges for overdue promises to the owner, delegation suggestions by teammate area, decline suggestions on overloaded weeks; learning from discards; acceptance rates on Status; verify `test_nudge_for_overdue_owed_to_me`, `test_delegate_matches_teammate_area`, `test_discard_rate_lowers_frequency`
+- [ ] 12.2 Send on tap: `outbox` with 10-second undo, SMTP send from the receiving mailbox, threaded, Sent copy for non-Gmail; verify `test_send_only_after_tap_single_message`, `test_undo_within_10s_nothing_sent`, `test_sent_threaded_and_copied_to_sent_non_gmail`, `test_no_bulk_send_endpoint`, and one real reply sent from Gmail lands in its thread
+- [ ] 12.3 Eisenhower priority with reasons (goal link, person, money, deadline, waiting) in Inbox and morning brief; two-minute "do now" group; verify `test_priority_goal_linked_first_with_reason`
+- [ ] 12.4 Reply drafts with tone examples and cited context (email → Drafts or Send on tap; Telegram → copy and open chat), daily cap; verify draft refs validated and the cap respected (stubbed LLM)
+- [ ] 12.5 Nudges for overdue promises to the owner, delegation suggestions by teammate area, decline suggestions on overloaded weeks; learning from discards; acceptance rates on Status; verify `test_nudge_for_overdue_owed_to_me`, `test_delegate_matches_teammate_area`, `test_discard_rate_lowers_frequency`
 
 ## 13. Calendar and meetings
 
-- [ ] 13.1 Owner approves `icalendar` + `recurring-ical-events`; connect calendars by secret address and mark them, sync events, Meetings page, reminders before meetings; verify `test_ics_recurring_expanded_kyiv`, `test_declined_and_all_day_not_reminded`, `meeting.test.tsx`
+- [ ] 13.1 Owner approves `icalendar` + `recurring-ical-events`; connect Google calendars by secret address and Apple iCloud / CalDAV with an app-specific password, mark calendars, sync events, Meetings page, reminders before meetings; verify `test_ics_recurring_expanded_kyiv`, `test_caldav_discovery_icloud_fixture`, `test_caldav_report_time_range`, `test_calendar_client_has_no_write_methods`, `test_declined_and_all_day_not_reminded`, `meeting.test.tsx`, and the owner's iCloud calendar on Today
 - [ ] 13.2 Meeting prep at T-30 (or in the morning brief before 10:00) with people, history, loops, ClickUp tasks, goals and agenda; verify `test_prep_and_reminder_times` and a real prep on the owner's phone
-- [ ] 13.3 Meeting notes import (paste, .txt/.md/.vtt/.srt/.docx, forwarded `[meeting]` email) → summary, decisions, owner's loops, team task drafts; verify `test_notes_to_loops_and_task_drafts`
+- [ ] 13.3 Device pairing (Settings → Devices, one-time code/QR, revoke) and recording upload API for the recorder apps, matched to calendar events or saved as unscheduled calls; manual notes import (paste, .txt/.md/.vtt/.srt/.docx); processing → summary, decisions, owner's loops, team task drafts; verify `test_pairing_code_single_use_and_expires`, `test_device_token_cannot_read_kb`, `test_recording_matched_to_overlapping_event`, `test_unscheduled_call_created`, `test_revoked_device_refused`, `test_upload_idempotent`, `test_notes_to_loops_and_task_drafts`
 - [ ] 13.4 Focus blocks and meeting-load warning in briefs; attention audit, neglected goals and decision log in weekly routines; verify `test_focus_blocks_and_meeting_load_warning`, `test_neglected_goal_in_weekly_review`
 
 ## 14. Deploy and acceptance

@@ -123,12 +123,17 @@ through `messages` like other sources; members link to people by `email:` identi
 `POST /list/{id}/task` from an approved suggestion; the created task id is stored on the
 suggestion (idempotent retry). Webhooks are a later optimisation (needs a public callback).
 
-### D15. Calendars: secret iCal address, read-only
-Google Calendar's "secret address in iCal format" needs no OAuth (consistent with the owner's
-choice of IMAP over Google OAuth). Polled every 10 min; parsed with `icalendar` +
-`recurring-ical-events` (new dependencies, need approval) into `events` (uid, calendar,
-start/end, title, attendees, my response status, location/meet link). Attendee emails link to
-people. CalDAV for other providers is a later option.
+### D15. Calendars: Google secret iCal address and CalDAV (Apple iCloud), read-only
+- **Google:** the "secret address in iCal format" per calendar needs no OAuth (consistent with the
+  owner's choice of IMAP over Google OAuth); plain HTTPS GET.
+- **Apple iCloud and other CalDAV** (Fastmail, Nextcloud, …): `caldav.icloud.com` with the Apple
+  Account email and an app-specific password (appleid.apple.com → App-Specific Passwords; needs
+  2FA). Discovery via `PROPFIND` (current-user-principal → calendar-home-set → calendars), events
+  via `REPORT calendar-query` with a time range (−30 / +90 days), using `httpx` (already installed
+  through openai/mcp) — no CalDAV library. Only read methods are implemented.
+- Both: polled every 10 min; parsed with `icalendar` + `recurring-ical-events` (new dependencies,
+  need approval) into `events` (uid, calendar, start/end, title, attendees, my response status,
+  location/meet link). Attendee emails link to people.
 
 ### D16. Personal base storage and extraction
 `documents` (title, kind, scopes, ai_allowed, core) + `document_versions` (bytes in Postgres
@@ -143,9 +148,16 @@ paragraph; `goals` rows start `proposed`, become `confirmed` by the owner.
 `suggestions` (kind reply_email|reply_tg|nudge|task|delegate|decline, scope, payload JSON, refs,
 goal_id, reason, status proposed|approved|applied|discarded|failed, applied_ref, edited bool,
 discard_reason). Executors run in the `routines` service after approval:
-- **Gmail draft:** IMAP `APPEND` to the `\Drafts` folder with the `\Draft` flag and
-  `In-Reply-To`/`References` of the last message so Gmail threads it; the ingest connector skips
-  `\Draft` messages, and loop closing ignores drafts (spec scenario).
+- **Save to Drafts:** IMAP `APPEND` to the mailbox's `\Drafts` folder (special-use; Gmail
+  `[Gmail]/Drafts`) with the `\Draft` flag and `In-Reply-To`/`References` of the last message so the
+  client threads it; the ingest connector skips `\Draft` messages, and loop closing ignores drafts.
+- **Send:** `smtplib` (standard library) over SSL/STARTTLS with the mailbox's SMTP settings
+  (Gmail: `smtp.gmail.com:465`, same app password). The SPA shows a 10-second undo; the server
+  holds the message in `outbox` (status `pending_send`, `send_after = now + 10 s`) and the
+  routines loop sends it after the delay unless cancelled. Threading headers as above. Gmail
+  stores sent mail itself; for other providers the message is also `APPEND`ed to `\Sent`. One
+  message per tap: the API accepts a send only for a single suggestion id; there is no bulk or
+  scheduled send. The From address is the mailbox the email arrived in.
 - **ClickUp task:** D14.
 - **Telegram:** no executor; the SPA copies the text and opens the `t.me` link.
 
@@ -167,9 +179,8 @@ like briefs). Telegram drafts are produced for needs-reply chat loops the same w
 The routines loop also schedules per-event jobs: prep at T-30 min (or in the morning brief when
 the meeting is before 10:00), reminder push at T-10 min. Prep uses a fact pack (attendee people,
 last items, loops, ClickUp tasks, goal match) + one AI call for the agenda (refs validated).
-Notes import: `POST /api/meetings/:id/notes` (text or file; .vtt/.srt cues joined; .docx via
-python-docx) or an email forwarded to the owner's mailbox with a `[meeting]` subject tag matched
-to the nearest event. Processing: one structured AI call → summary, decisions, actions (owner,
+Recorder apps (D22) deliver transcripts automatically; manual import: `POST
+/api/meetings/:id/notes` (text or file; .vtt/.srt cues joined; .docx via python-docx). Processing: one structured AI call → summary, decisions, actions (owner,
 due) → owner's actions become loops (`i_owe`), others become `task` suggestions with the
 teammate's default list.
 
@@ -179,7 +190,22 @@ Free blocks = working hours (settings, default 09:00–18:00) minus events, ≥ 
 scope for the week vs. confirmed goals' scopes; "no progress" = goal without matching items for 14
 days. All SQL; the AI only words the weekly sections.
 
-### D22. Frontend framework decision: React (confirmed by benchmark)
+### D22. Device API for the recorder apps
+The macOS/iOS recorder apps (change `voice-apps-v1`) need a stable server contract now:
+- **Pairing:** Settings → Devices → "Pair a device" shows a one-time code + QR (10 min); the app
+  posts it to `POST /api/devices/pair` and receives a device token (random, stored hashed with
+  name, platform, last seen); revocable per device. Device tokens can only call `/api/devices/*`
+  upload endpoints — never read the knowledge base (except `GET /api/devices/context` later, if
+  the live assistant needs it; out of scope here).
+- **Upload:** `POST /api/devices/recordings` with JSON: kind (call|meeting|voice_note), started_at,
+  ended_at, app/platform source (Zoom, Telegram, in-person…), language, segments [{speaker,
+  is_owner, start, end, text}], optional notes, optional idempotency key. Audio files are not
+  uploaded in this change (transcription happens in the apps' change; ADR 0010 retention applies there).
+- **Matching:** overlap ≥ 50% with a calendar event → attached to it; else attendees by speaker
+  names/chat → unscheduled call/meeting item. Processing as D20 (summary, decisions, loops, task
+  drafts). Voice notes become Library notes marked by the device's default mark.
+
+### D23. Frontend framework decision: React (confirmed by benchmark)
 `docs/research/react-vs-svelte.md`: Svelte 5 is ~1.5× faster on DOM work, ~5× smaller bundle,
 ~150 ms faster first paint (js-framework-benchmark, Chrome 154); server load is identical; at our
 data sizes interactions are under one frame in both. React wins on agent-UI libraries and on the
@@ -215,7 +241,9 @@ route-level code splitting, small shell, external store for streams.
 | `src/kb/secrets.py` | AES-GCM encrypt/decrypt with `KB_SECRET_KEY` (D11) |
 | `src/kb/connectors/accounts.py` | load DB + config sources; test credentials (D11) |
 | `src/kb/connectors/clickup.py` | ClickUp sync and task creation (D14) |
-| `src/kb/connectors/calendar.py` | iCal fetch, recurrence expansion, events (D15) |
+| `src/kb/connectors/calendar.py` | Google iCal fetch, CalDAV discovery/REPORT (iCloud), recurrence expansion, events (D15) |
+| `src/kb/connectors/smtp.py` | send on tap with undo window, Sent copy for non-Gmail (D17) |
+| `src/kb/api/routes_devices.py` | device pairing, tokens, recording upload and matching (D22) |
 | `src/kb/connectors/telegram.py` (edit) | dialogs listing, DB allowlist, QR login requests (D12) |
 | `src/kb/connectors/imap.py` (edit) | skip `\Draft`; `append_draft()` (D17) |
 | `src/kb/library.py` | documents, versions, extraction, goals (D16) |
@@ -297,6 +325,18 @@ def propose_goals(conn: Conn, llm: LlmClient, version_id: int) -> list[int]: ...
 def prep(conn: Conn, llm: LlmClient | None, event_id: int) -> list[Section]: ...
 def process_notes(conn: Conn, llm: LlmClient, event_id: int, text: str) -> NotesResult: ...
 
+# kb/connectors/smtp.py
+def queue_send(conn: Conn, suggestion_id: int, now: datetime) -> int: ...  # outbox id, send_after = now + 10 s
+def cancel_send(conn: Conn, outbox_id: int) -> bool: ...
+def send_due(conn: Conn, config: Config, now: datetime) -> int: ...
+
+# kb/connectors/calendar.py (CalDAV)
+def caldav_discover(client: httpx.Client, base: str, user: str, password: str) -> list[CalendarRef]: ...
+
+# kb/api/routes_devices.py
+def pair(conn: Conn, code: str, name: str, platform: str) -> str: ...  # device token, shown once
+def upload_recording(conn: Conn, device_id: int, rec: RecordingIn) -> int: ...  # item id
+
 # kb/secrets.py
 def seal(plaintext: str) -> bytes: ...
 def unseal(blob: bytes) -> str: ...
@@ -360,6 +400,13 @@ Python (pytest, embedded Postgres, stubbed LLM/push):
   `test_telegram_wrapper_has_no_write_methods` keeps passing.
 - ClickUp (recorded HTTP fixtures): `test_sync_list_incremental_cursor`, `test_429_backoff_resumes`,
   `test_task_created_only_from_approved`, `test_create_task_idempotent_retry`, `test_closed_task_closes_loop`.
+- Email send: `test_send_only_after_tap_single_message`, `test_undo_within_10s_nothing_sent`,
+  `test_sent_threaded_and_copied_to_sent_non_gmail` (fake SMTP + IMAP servers), `test_no_bulk_send_endpoint`.
+- CalDAV: `test_caldav_discovery_icloud_fixture`, `test_caldav_report_time_range` (recorded responses),
+  `test_calendar_client_has_no_write_methods`.
+- Devices: `test_pairing_code_single_use_and_expires`, `test_device_token_cannot_read_kb`,
+  `test_recording_matched_to_overlapping_event`, `test_unscheduled_call_created`,
+  `test_revoked_device_refused`, `test_upload_idempotent`.
 - Calendar: `test_ics_recurring_expanded_kyiv`, `test_declined_and_all_day_not_reminded`,
   `test_prep_and_reminder_times`.
 - Library: `test_extract_md_pdf_docx`, `test_document_requires_mark`, `test_versions_latest_indexed`,
@@ -404,7 +451,7 @@ services; no existing behaviour changes.
 - Exact default revision pass times (11:00/14:00/17:00 assumed) — editable in Settings.
 
 ## Least confident decisions
-1. **React vs Svelte** — benchmarked (D22): React kept; Svelte is faster and lighter, but the gap
+1. **React vs Svelte** — benchmarked (D23): React kept; Svelte is faster and lighter, but the gap
    is invisible at our data sizes except on a cold phone start.
 2. **Loop detection by LLM per conversation** — may produce false positives in busy group chats
    (РД ТОП); limiting detection to DMs and small groups first may be better.
@@ -414,10 +461,12 @@ services; no existing behaviour changes.
 5. **FastAPI as a new dependency** — gives OpenAPI types; plain Starlette would avoid it.
 6. **Separate web domain (`os.…`) vs a path on the MCP domain** — separate keeps cookies and CSP
    clean but needs another Coolify domain.
-7. **Gmail drafts via IMAP APPEND** — avoids OAuth, but threading of appended drafts depends on
+7. **Drafts via IMAP APPEND and send via SMTP** — avoids OAuth, but threading of appended drafts depends on
    correct `References`; verified on the real mailbox in the drafts tracer task.
 8. **New dependencies** (`pypdf`, `python-docx`, `icalendar`, `recurring-ical-events`) — need the
    owner's approval (AGENTS.md); alternatives: text-only uploads and a minimal ICS parser.
 9. **Polling ClickUp every 5 minutes instead of webhooks** — simpler, no public callback; fits 100 req/min.
 10. **Meeting notes source** — the owner's meeting-notes app is unknown; import accepts paste,
     files and forwarded email until the native recorder exists.
+11. **No audio upload in this change** — the recorder apps send finished transcripts; if server-side
+    transcription turns out better (one OpenAI key, re-transcription), `voice-apps-v1` adds audio upload.

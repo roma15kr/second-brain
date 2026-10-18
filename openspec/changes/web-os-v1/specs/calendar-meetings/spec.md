@@ -8,7 +8,11 @@ decisions, the owner's promises and task drafts for the team.
 ## ADDED Requirements
 
 ### Requirement: Calendars are connected read-only and marked
-The owner SHALL connect calendars by their secret calendar address (read-only) and mark each calendar personal or a project. Events SHALL sync at least every 10 minutes; the system SHALL never change the calendar.
+The owner SHALL connect Google calendars by their secret calendar address, and Apple iCloud or other CalDAV calendars with the account email and an app-specific password; each calendar found SHALL be marked personal or a project (or ignored). Events SHALL sync at least every 10 minutes; the system SHALL only read calendars and never change them.
+
+#### Scenario: Apple calendar
+- **WHEN** the owner connects iCloud with an app-specific password
+- **THEN** the iCloud calendars (e.g. Home, Family) are listed to mark, and marked calendars' events appear on Today
 
 #### Scenario: Work calendar
 - **WHEN** the owner adds the RDIM calendar's secret address marked `rdim`
@@ -28,8 +32,23 @@ For each meeting with attendees the system SHALL prepare, by 30 minutes before (
 - **WHEN** a call with a dealer is scheduled
 - **THEN** the prep lists the last email thread with the dealer, the price list the owner promised, and an agenda point to confirm it
 
-### Requirement: Meeting notes import
-The owner SHALL be able to attach meeting notes or a transcript to a meeting (pasted text, or a .txt, .md, .vtt, .srt or .docx file, or an email forwarded from a meeting-notes app); later the native recorder apps deliver transcripts the same way.
+### Requirement: Recorder apps deliver straight to the knowledge base
+The owner's own macOS and iOS recorder apps (built in a separate change, ADR 0014) SHALL be paired with the server from the web OS (one-time code or QR, revocable per device) and SHALL deliver call and meeting transcripts (with speakers and timestamps), their notes and voice notes directly, without any manual step. A delivered transcript SHALL be matched to the calendar event that overlaps it (by time, then attendees); otherwise it SHALL be saved as an unscheduled call or meeting.
+
+#### Scenario: Call recorded on the Mac
+- **WHEN** the recorder app finishes a Zoom call that matches the 15:00 "Quokka sync" event
+- **THEN** within minutes the transcript is attached to that meeting, searchable, and processing starts
+
+#### Scenario: Unscheduled call
+- **WHEN** a Telegram call with no calendar event is recorded
+- **THEN** it is saved as a call with its date, duration and the people recognised from speakers or the chat
+
+#### Scenario: Revoked device
+- **WHEN** the owner revokes a lost iPhone in the web OS
+- **THEN** uploads from that device are refused
+
+### Requirement: Manual notes import
+For meetings recorded elsewhere, the owner SHALL be able to attach notes or a transcript to a meeting (pasted text, or a .txt, .md, .vtt, .srt or .docx file).
 
 #### Scenario: Attaching a transcript
 - **WHEN** the owner uploads a .vtt transcript to yesterday's Quokka sync

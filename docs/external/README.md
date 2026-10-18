@@ -23,6 +23,8 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - my.telegram.org — Telegram API app credentials
   - OpenAI Platform — API key, usage and monthly spend limit for the server-side LLM
   - ClickUp API v2 — personal API token (Settings → Apps); 100 requests/min per token on Free–Business plans; reads tasks/comments, creates tasks only after approval (web-os-v1)
+  - Apple iCloud CalDAV — `caldav.icloud.com`, Apple Account email + app-specific password (appleid.apple.com → Sign-In and Security → App-Specific Passwords; needs 2FA); read-only use
+  - SMTP servers per mailbox (Gmail `smtp.gmail.com:465`, same app password) — sending only on the owner's tap
   - Google Calendar secret iCal address — read-only calendar feed, no OAuth (Settings → Integrate calendar); resetting it in Google breaks sync until replaced
   - Web Push services (Apple, Google, Mozilla push endpoints) — deliver notifications to subscribed devices; no content in payloads
   - Reserve storage (S3-compatible, different provider/region than the server; provider TBD) — Coolify Postgres backups and nightly encrypted Vaultwarden export; its credentials are in the printed emergency kit, not only in the vault

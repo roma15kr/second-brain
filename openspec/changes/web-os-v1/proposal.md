@@ -49,8 +49,10 @@ drafts, task drafts, nudges) are approved, edited-and-approved, rather than disc
 - **Open loops:** replies the owner owes, promises the owner made, promises made to the owner and
   follow-ups — detected from conversations, tracked across days until done, dismissed or snoozed.
 - **Connectors in the web OS:** one hub to connect, mark, watch and disconnect sources — email
-  (IMAP/Gmail), Telegram (QR login, choose and mark dialogs), ClickUp (choose and mark spaces/lists),
-  calendars (secret address, read-only), files and notes, meeting notes import. Everything is
+  (Gmail and any IMAP + SMTP mailbox), Telegram (QR login, choose and mark dialogs), ClickUp
+  (choose and mark spaces/lists), calendars (Google secret address; Apple iCloud and other CalDAV
+  with an app-specific password; read-only), files and notes, the owner's recorder apps (paired
+  devices deliver transcripts directly) and manual notes import. Everything is
   marked **Personal or a project**; new dialogs/lists/calendars wait in "to mark". Planned
   connectors (GitHub, Karakeep, Drive, ads and analytics, marketplaces, Shopify, Stripe, vault/ops)
   and WhatsApp (not possible live) are shown with what they will add. Projects can be added.
@@ -59,11 +61,12 @@ drafts, task drafts, nudges) are approved, edited-and-approved, rather than disc
   assistant the owner's principles and goals (goals are extracted and confirmed by the owner);
   "AI may read" switch per document.
 - **Meetings:** calendar sync, reminders before meetings, prep (people, history, open loops,
-  ClickUp tasks, goal, agenda), meeting notes import → summary, decisions, the owner's promises as
-  loops, team actions as ClickUp task drafts.
+  ClickUp tasks, goal, agenda); transcripts arrive straight from the owner's recorder apps (or are
+  attached manually) → summary, decisions, the owner's promises as loops, team actions as ClickUp
+  task drafts.
 - **Proactive assistant (propose, never act alone):** mail ordered by importance × urgency with the
-  reason; reply drafts in the owner's tone with cited context (approved → Gmail Drafts, never
-  sent; Telegram drafts copied by the owner); nudges for overdue promises to the owner; delegation
+  reason; reply drafts in the owner's tone with cited context (save to Drafts, or send
+  on the owner's tap with 10 s undo — never automatically; Telegram drafts copied by the owner); nudges for overdue promises to the owner; delegation
   and decline suggestions; ClickUp task drafts (created only after approval); focus blocks and
   meeting-load warnings; goal alignment and attention audit in weekly routines; decision log;
   learning from edits and discards.
@@ -73,10 +76,12 @@ drafts, task drafts, nudges) are approved, edited-and-approved, rather than disc
 
 ## Non-goals
 
-- Dictation, call/meeting recording and transcription (native macOS/iOS apps, ADR 0014).
+- Dictation, call/meeting recording and transcription themselves (native macOS/iOS apps, ADR 0014,
+  next change `voice-apps-v1`); this change only provides device pairing and the upload API they use.
 - Chat with the knowledge base inside the web app (later change; Claude via MCP covers it now).
-- Sending anything automatically. The only writes are approved Gmail drafts and approved ClickUp
-  tasks; Telegram stays read-only; calendars are read-only (no automatic time-blocking).
+- Sending anything automatically. The only writes are approved email drafts, emails sent on the
+  owner's tap, and approved ClickUp tasks; Telegram stays read-only; calendars are read-only (no
+  automatic time-blocking).
 - Building the planned connectors (GitHub, Karakeep, Drive, ads/analytics, marketplaces, Shopify,
   Stripe, vault/ops, WhatsApp export) — only shown on the hub; each is its own later change.
 - Multi-user accounts, sharing, team views.
@@ -92,8 +97,9 @@ you made and replies you owe are tracked until they are done, and every line lin
 mail or chat. Connect your mail, Telegram, ClickUp and calendars in one place and mark each as
 Personal or a project; drop in your constitution and 2026 plans and the assistant plans your weeks
 around your goals. Before each meeting you get a reminder and a prep sheet; after it, a summary and
-ready-to-approve tasks for the team. Replies to important mail are drafted for you — you approve,
-it lands in Gmail Drafts, you send.
+ready-to-approve tasks for the team. Replies to important mail are drafted for you — save it to
+Drafts or tap Send. Calls and meetings recorded with your own app land in the knowledge base by
+themselves.
 
 ## Capabilities
 
@@ -119,8 +125,9 @@ it lands in Gmail Drafts, you send.
 - New scheduled jobs in the index service (or a scheduler service).
 - OpenAI usage: briefs and loop detection ≈ $5–10/month; reply drafts (10/day), meeting prep and
   summaries, goals ≈ $8–12/month with `gpt-6.1-sol` — total ≈ $15–20/month, inside the $100 budget.
-- Writes outside the server for the first time: Gmail drafts (IMAP APPEND, same app password) and
-  ClickUp tasks (personal token) — both only after approval.
+- Writes outside the server for the first time: email drafts (IMAP APPEND), email sent via SMTP on
+  the owner's tap, ClickUp tasks (personal token) — all only after approval.
+- Device API for the recorder apps (pairing, per-device tokens, transcript upload).
 - Credentials entered in the web OS are stored encrypted (`KB_SECRET_KEY`).
 - Docker image gains a frontend build stage; `make check` covers TypeScript too.
 - Mockups: `mockups/*.html`, one per screen.

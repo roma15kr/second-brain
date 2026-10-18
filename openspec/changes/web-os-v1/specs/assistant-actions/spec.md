@@ -9,11 +9,19 @@ practices (GTD, Eisenhower, Covey, Newport, Grove, Drucker, McKeown; docs/resear
 ## ADDED Requirements
 
 ### Requirement: Propose, never act alone
-Every outward action (saving an email draft, creating a ClickUp task) SHALL wait in the approval queue until the owner approves it; the system SHALL never send email, never write to Telegram, and never act on a suggestion that was not approved.
+Every outward action (saving an email draft, sending an email, creating a ClickUp task) SHALL wait in the approval queue until the owner approves it. Email SHALL be sent only when the owner taps "Send" on that specific message — never automatically, in bulk or on a schedule — and a send SHALL be undoable for 10 seconds. The system SHALL never write to Telegram and never act on a suggestion that was not approved.
 
-#### Scenario: Nothing is sent
-- **WHEN** the owner approves an email reply draft
-- **THEN** it is saved as a draft in the original Gmail thread and is not sent
+#### Scenario: Save to drafts
+- **WHEN** the owner chooses "Save to Drafts" on a reply draft
+- **THEN** it is saved as a draft in the original thread of that mailbox and is not sent
+
+#### Scenario: Send on tap
+- **WHEN** the owner taps "Send" on a reply draft and does not undo within 10 seconds
+- **THEN** it is sent from the mailbox the email arrived in, in the same thread, a copy is in that mailbox's Sent folder, and the needs-reply loop closes
+
+#### Scenario: Undo
+- **WHEN** the owner taps "Undo" within 10 seconds of "Send"
+- **THEN** nothing is sent and the draft returns to the queue
 
 ### Requirement: Approval queue
 The Assistant page SHALL list pending suggestions (reply drafts, nudges, task drafts, delegation and decline suggestions) with the reason, the sources and the goal they serve, and SHALL offer approve, edit then approve, and discard with an optional reason.
@@ -30,7 +38,7 @@ Needs-reply and important email SHALL be ordered by importance (who the sender i
 - **THEN** that email is listed first with the reason "Quokka goal: marketplace launch"
 
 ### Requirement: Reply drafts
-For the top needs-reply emails (default 10 per day) the system SHALL draft a reply in the language of the thread and the owner's tone (learned from the owner's sent mail), using knowledge-base context with cited sources; approved drafts SHALL be saved to the email account's drafts in the same thread. For Telegram, drafts SHALL be shown for copying with a link that opens the chat.
+For the top needs-reply emails (default 10 per day) the system SHALL draft a reply in the language of the thread and the owner's tone (learned from the owner's sent mail), using knowledge-base context with cited sources; approved drafts SHALL be saved to that mailbox's drafts in the same thread or sent on the owner's tap. For Telegram, drafts SHALL be shown for copying with a link that opens the chat.
 
 #### Scenario: Draft with context
 - **WHEN** a dealer asks about delivery terms that were agreed in an earlier thread
