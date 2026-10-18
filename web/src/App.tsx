@@ -4,6 +4,7 @@ import { SignIn } from "./auth/SignIn";
 import { useMe } from "./auth/useMe";
 import { BriefPage } from "./pages/BriefPage";
 import { Briefs } from "./pages/Briefs";
+import { Inbox } from "./pages/Inbox";
 import { Today } from "./pages/Today";
 import { Notifications } from "./push/Notifications";
 
@@ -14,6 +15,7 @@ function Shell() {
         <NavLink to="/" end>
           Today
         </NavLink>
+        <NavLink to="/inbox">Inbox</NavLink>
         <NavLink to="/briefs">Briefs</NavLink>
       </nav>
       <Routes>
@@ -37,6 +39,15 @@ function Shell() {
           }
         />
         <Route path="/briefs/:id" element={<BriefPage />} />
+        <Route
+          path="/inbox"
+          element={
+            <>
+              <h1>Inbox</h1>
+              <Inbox />
+            </>
+          }
+        />
         <Route path="*" element={<p className="muted">Page not found.</p>} />
       </Routes>
     </main>

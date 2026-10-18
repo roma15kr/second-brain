@@ -19,7 +19,8 @@ from fastapi import Body, FastAPI, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from kb.api import auth, routes_briefs, routes_push, routes_today
+from kb.api import auth, routes_briefs, routes_inbox, routes_push, routes_today
+from kb.config import Config
 from kb.db import Conn
 
 PUBLIC_API = {
@@ -53,9 +54,11 @@ def build_app(
     connect: Connect | None = None,
     rp: auth.RelyingParty | None = None,
     clock: Clock = _now,
+    config: Config | None = None,
 ) -> FastAPI:
     app = FastAPI(title="second-brain web OS", docs_url=None, redoc_url=None)
     app.state.connect = connect
+    app.state.config = config or Config()
 
     @contextmanager
     def db() -> Iterator[Conn]:
@@ -196,6 +199,7 @@ def build_app(
     app.include_router(routes_today.router)
     app.include_router(routes_push.router)
     app.include_router(routes_briefs.router)
+    app.include_router(routes_inbox.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:

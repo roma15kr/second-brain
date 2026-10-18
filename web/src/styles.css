@@ -189,3 +189,17 @@ li.unread a strong::before {
   content: "● ";
   color: var(--accent);
 }
+.group {
+  margin-bottom: 12px;
+}
+.group h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.actions {
+  margin-top: 6px;
+}
+.actions .btn {
+  font-size: 12px;
+  padding: 3px 8px;
+}

@@ -46,6 +46,7 @@ def test_kb_web_entry_point_serves_built_spa(dist, monkeypatch):
 
     monkeypatch.setenv("KB_WEB_DIST", str(dist))
     monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
+    monkeypatch.setenv("KB_CONFIG_YAML", "sources: []")
     args = cli.build_parser().parse_args(["web"])
     assert args.func is cli.cmd_web and args.port == 8001
     assert "<div id=root>" in TestClient(cli.build_web_app()).get("/today").text

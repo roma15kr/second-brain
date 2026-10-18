@@ -332,6 +332,7 @@ def build_web_app() -> Any:
         Path(dist) if dist else None,
         connect=lambda: db.connect(url),
         rp=RelyingParty(origin) if origin else None,
+        config=load_config(),
     )
 
 
