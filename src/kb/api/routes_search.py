@@ -56,6 +56,7 @@ def local_searcher(connect: Callable[[], Conn], config: Any) -> Searcher:
                 params.get("date_to"),
                 params.get("limit", 10),
                 params.get("person"),
+                bool(params.get("include_private", False)),
             )
         except (SearchError, PeopleError, ValueError) as e:
             raise SearchFailed(str(e)) from e
@@ -85,6 +86,7 @@ def search(
         "date_from": date_from.isoformat() if date_from else None,
         "date_to": date_to.isoformat() if date_to else None,
         "limit": max(1, min(limit, 50)),
+        "include_private": True,  # the owner's own search sees private library documents
     }
     searcher: Searcher = request.app.state.searcher
     try:

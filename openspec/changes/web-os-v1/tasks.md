@@ -55,8 +55,8 @@ branch `change/web-os-v1`.
 
 ## 10. Personal base (Library)
 
-- [ ] 10.1 Add `pypdf` and `python-docx` (approved by the owner 2026-10-18); documents and notes with required mark, versions, text extraction, indexed for web search and MCP; verify `test_extract_md_pdf_docx`, `test_document_requires_mark`, `test_versions_latest_indexed`, `library.test.tsx`
-- [ ] 10.2 "AI may read" switch enforced in every prompt builder; goals proposed from core documents and confirmed by the owner; Library page per mockup; verify `test_ai_disallowed_document_never_in_prompt`, `test_goals_proposed_need_confirmation`
+- [x] 10.1 Add `pypdf` and `python-docx` (approved by the owner 2026-10-18); documents and notes with required mark, versions, text extraction, indexed for web search and MCP; verify `test_extract_md_pdf_docx`, `test_document_requires_mark`, `test_versions_latest_indexed`, `library.test.tsx`
+- [x] 10.2 "AI may read" switch enforced in every prompt builder; goals proposed from core documents and confirmed by the owner; Library page per mockup; verify `test_ai_disallowed_document_never_in_prompt`, `test_goals_proposed_need_confirmation`
 
 ## 11. ClickUp
 

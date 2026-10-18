@@ -399,6 +399,11 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
     llm = briefs.default_llm(config)
 
+    def propose_goals(conn: db.Conn, now: datetime) -> int:
+        from kb import goals
+
+        return goals.cycle(conn, config, llm, now)
+
     def detect_loops(conn: db.Conn, now: datetime) -> int:
         from kb import loop_detect
 
@@ -409,7 +414,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
         lambda: db.connect(url),
         runners,
         notify=push.notify_brief,
-        maintenance=[close_answered_loops, loops.wake_snoozed, detect_loops],
+        maintenance=[close_answered_loops, loops.wake_snoozed, detect_loops, propose_goals],
     )
 
 

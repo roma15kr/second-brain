@@ -29,6 +29,9 @@ class SearchFilters:
     person_keys: list[str] | None = None  # identity keys of one person (see kb.people)
     date_from: date | None = None
     date_to: date | None = None
+    # Library documents with "AI may read" off are found only by the owner's own web search,
+    # never by MCP clients (Claude is an AI service) — personal-base spec.
+    include_private: bool = False
 
     def validate(self, valid: tuple[str, ...] = VALID_SCOPES) -> None:
         for s in self.scopes or []:
@@ -62,6 +65,8 @@ class Evidence:
 
 def _filter_sql(filters: SearchFilters, params: dict[str, Any]) -> list[str]:
     where = ["NOT hidden"]
+    if not filters.include_private:
+        where.append("NOT coalesce((metadata->>'private')::boolean, false)")
     if filters.scopes:
         where.append("scopes && %(scopes)s")
         params["scopes"] = filters.scopes
@@ -120,7 +125,7 @@ def recent(conn: Conn, filters: SearchFilters | None = None, limit: int = 20) ->
     if not 1 <= limit <= MAX_LIMIT:
         raise SearchError(f"limit must be between 1 and {MAX_LIMIT}")
     params: dict[str, Any] = {"limit": limit}
-    where = [*_filter_sql(filters, params), "kind <> 'passage'"]
+    where = [*_filter_sql(filters, params), "kind NOT IN ('passage', 'document', 'doc_section')"]
     rows = conn.execute(
         f"""
         SELECT id, source_id, kind, scopes, title, participants, occurred_at, last_activity_at,

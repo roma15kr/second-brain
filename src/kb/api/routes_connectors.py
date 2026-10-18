@@ -299,14 +299,14 @@ def hub(request: Request, conn: Db) -> dict[str, Any]:
     counts = {
         r["source_id"]: r["n"]
         for r in conn.execute(
-            "SELECT source_id, count(*) AS n FROM items WHERE NOT hidden AND kind <> 'passage'"
-            " GROUP BY source_id"
+            "SELECT source_id, count(*) AS n FROM items WHERE NOT hidden"
+            " AND kind NOT IN ('passage', 'doc_section') GROUP BY source_id"
         )
     }
     by_scope: dict[str, dict[str, int]] = {}
     for r in conn.execute(
         "SELECT source_id, s, count(*) AS n FROM items, unnest(scopes) s WHERE NOT hidden"
-        " AND kind <> 'passage' GROUP BY source_id, s"
+        " AND kind NOT IN ('passage', 'doc_section') GROUP BY source_id, s"
     ):
         by_scope.setdefault(r["source_id"], {})[r["s"]] = r["n"]
     connected = {m["source_id"]: m for m in accounts.list_mailboxes(conn)}
