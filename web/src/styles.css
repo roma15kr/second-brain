@@ -430,3 +430,13 @@ blockquote.match {
   background: var(--accent);
   border-radius: 4px;
 }
+.settings-form {
+  display: grid;
+  gap: 8px;
+}
+.settings-form label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}

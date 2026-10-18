@@ -17,7 +17,7 @@ from email.utils import parseaddr
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from kb import distill, loops
+from kb import distill, loops, settings_store
 from kb.config import Config
 from kb.db import Conn
 from kb.distill import StructuredLlm
@@ -264,7 +264,9 @@ def detect_cycle(
     conn: Conn, config: Config, llm: StructuredLlm | None, now: datetime, limit: int = PER_CYCLE
 ) -> int:
     """Checks up to `limit` recently changed, settled conversations; returns how many."""
-    if llm is None or distill.month_spend_usd(conn, now.date()) >= config.llm.monthly_budget_usd:
+    if llm is None or distill.month_spend_usd(conn, now.date()) >= settings_store.budget_usd(
+        conn, config
+    ):
         return 0
     has_tg_owner = bool(loops.owner_telegram_ids(conn))
     kinds = ["email_thread", "tg_conversation"] if has_tg_owner else ["email_thread"]

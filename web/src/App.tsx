@@ -11,6 +11,7 @@ import { People } from "./pages/People";
 import { Person } from "./pages/Person";
 import { Scope } from "./pages/Scope";
 import { Search } from "./pages/Search";
+import { Settings } from "./pages/Settings";
 import { Today } from "./pages/Today";
 import { Week } from "./pages/Week";
 import { Notifications } from "./push/Notifications";
@@ -39,6 +40,7 @@ function Routed() {
         <Route path="/people" element={<People />} />
         <Route path="/people/:id" element={<Person />} />
         <Route path="/scopes/:scope" element={<Scope />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<p className="muted">Page not found.</p>} />
       </Routes>
     </Shell>

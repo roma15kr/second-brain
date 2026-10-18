@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from psycopg.types.json import Jsonb
 
-from kb import distill, loops
+from kb import distill, loops, settings_store
 from kb.config import Config
 from kb.db import Conn
 from kb.distill import StructuredLlm
@@ -221,7 +221,9 @@ def classify(
     note, cost = None, 0.0
     if todo and llm is None:
         note = "AI is off: these threads are listed without triage."
-    elif todo and distill.month_spend_usd(conn, now.date()) >= config.llm.monthly_budget_usd:
+    elif todo and distill.month_spend_usd(conn, now.date()) >= settings_store.budget_usd(
+        conn, config
+    ):
         note = "This month's AI budget is used up: these threads are listed without triage."
     elif todo:
         assert llm is not None

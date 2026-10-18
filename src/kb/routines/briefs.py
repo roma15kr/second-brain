@@ -16,7 +16,7 @@ from typing import Any, cast
 
 from psycopg.types.json import Jsonb
 
-from kb import distill
+from kb import distill, settings_store
 from kb.config import Config
 from kb.db import Conn
 from kb.distill import StructuredLlm, Usage
@@ -211,11 +211,9 @@ def loop_sections(pack: FactPack) -> list[Section]:
     return out
 
 
-def coming_up(now: datetime) -> Section | None:
+def coming_up(conn: Conn, now: datetime) -> Section | None:
     """The rest of today's routines (the morning brief lists them)."""
-    from kb.routines.scheduler import RoutineSettings
-
-    s = RoutineSettings()
+    s = settings_store.routine_settings(conn)
     local = now.astimezone(KYIV)
     names = {"revision": "Mail revision", "evening": "Evening wrap"}
     parts = []
@@ -344,11 +342,12 @@ def write_brief(
     has_activity = bool(pack.by_scope) or any(pack.loops.values())
     if has_activity and llm is not None:
         spent = distill.month_spend_usd(conn, now.date())
-        if spent >= config.llm.monthly_budget_usd:
+        budget = settings_store.budget_usd(conn, config)
+        if spent >= budget:
             sections.append(
                 Section(
                     "AI budget reached",
-                    f"This month's AI budget (${config.llm.monthly_budget_usd:.0f}) is used up;"
+                    f"This month's AI budget (${budget:.0f}) is used up;"
                     " this brief lists activity without AI summaries.",
                     kind="note",
                 )
@@ -372,7 +371,7 @@ def write_brief(
         text = "\n".join(f"{n}. {p['title']}" for n, p in enumerate(pack.priorities, 1))
         sections.append(Section("This week's priorities", text, kind="note"))
     sections.extend(loop_sections(pack))
-    if pack.routine == "morning" and (upcoming := coming_up(now)):
+    if pack.routine == "morning" and (upcoming := coming_up(conn, now)):
         sections.append(upcoming)
     sections.extend(data_only(pack))
     return store(conn, pack, sections, mode, cost)

@@ -105,7 +105,11 @@ def run_due(
 ) -> list[int]:
     """Runs every due, unclaimed slot of the routines that have a runner; returns run ids."""
     ran = []
-    for slot in due_slots(settings or RoutineSettings(), now):
+    if settings is None:
+        from kb import settings_store
+
+        settings = settings_store.routine_settings(conn)
+    for slot in due_slots(settings, now):
         runner = runners.get(slot.routine)
         if runner is None:
             continue
