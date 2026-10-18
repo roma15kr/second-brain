@@ -12,6 +12,7 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` — from my.telegram.org; session file on the `telegram` volume
   - `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` — Web Push (web-os-v1)
   - `KB_WEB_ORIGIN` — public origin of the web OS (passkey relying party), e.g. https://os.141-94-30-173.sslip.io
+  - `KB_WEB_DIST` — built SPA directory, set by the Docker image (`/app/web/dist`)
 - Third-party services and dashboards:
   - Coolify (on the owner's dedicated server) — deployment; dashboard reachable over Tailscale only.
     App `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), server ns31426159, deploy key `second-brain-deploy`.

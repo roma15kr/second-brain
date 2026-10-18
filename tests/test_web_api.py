@@ -26,8 +26,8 @@ def test_spa_fallback_serves_index(dist):
 def test_api_paths_never_fall_back_to_spa(dist):
     client = TestClient(build_app(dist))
     assert client.get("/api/health").json() == {"ok": True}
-    r = client.get("/api/nope")
-    assert r.status_code == 404 and r.json()["detail"] == "unknown API path /api/nope"
+    r = client.get("/api/nope")  # no session: refused before routing, never the SPA
+    assert r.status_code == 401 and "root" not in r.text
 
 
 def test_path_traversal_serves_index_not_file(dist, tmp_path_factory):
@@ -45,6 +45,7 @@ def test_kb_web_entry_point_serves_built_spa(dist, monkeypatch):
     from kb import cli
 
     monkeypatch.setenv("KB_WEB_DIST", str(dist))
+    monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
     args = cli.build_parser().parse_args(["web"])
     assert args.func is cli.cmd_web and args.port == 8001
     assert "<div id=root>" in TestClient(cli.build_web_app()).get("/today").text

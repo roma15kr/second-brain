@@ -318,16 +318,33 @@ def build_mcp_app(config: Config, url: str, token: str, preload: bool = True) ->
 
 
 def build_web_app() -> Any:
-    """The web OS app; the built SPA comes from KB_WEB_DIST (the Docker image sets it)."""
+    """The web OS app: SPA from KB_WEB_DIST (set by the Docker image), passkeys bound to
+    KB_WEB_ORIGIN, data from DATABASE_URL."""
     from pathlib import Path
 
     from kb.api.app import build_app
+    from kb.api.auth import RelyingParty
 
     dist = os.environ.get("KB_WEB_DIST")
-    return build_app(Path(dist) if dist else None)
+    origin = os.environ.get("KB_WEB_ORIGIN", "")
+    url = database_url()
+    return build_app(
+        Path(dist) if dist else None,
+        connect=lambda: db.connect(url),
+        rp=RelyingParty(origin) if origin else None,
+    )
 
 
 def cmd_web(args: argparse.Namespace) -> None:
+    if args.action == "setup-code":
+        from datetime import UTC, datetime
+
+        from kb.api import auth
+
+        with db.connect(database_url()) as conn:
+            code = auth.new_setup_code(conn, datetime.now(UTC))
+        print(f"setup code: {code}  (valid 1 hour, single use; enter it for the first passkey)")
+        return
     import uvicorn
 
     uvicorn.run(
@@ -428,6 +445,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=8765)
     p.set_defaults(func=cmd_mcp)
     p = sub.add_parser("web", help="serve the web OS (JSON API + SPA)")
+    p.add_argument("action", nargs="?", choices=["serve", "setup-code"], default="serve")
     p.add_argument("--host", default="0.0.0.0")
     p.add_argument("--port", type=int, default=8001)
     p.set_defaults(func=cmd_web)
