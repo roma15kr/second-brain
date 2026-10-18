@@ -18,7 +18,7 @@ export type BriefSection = {
   text: string;
   refs: string[];
   items: BriefItem[];
-  kind?: "ai" | "focus" | "data" | "note";
+  kind?: "ai" | "focus" | "data" | "note" | "group";
 };
 
 export type Brief = {

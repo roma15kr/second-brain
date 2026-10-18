@@ -114,8 +114,10 @@ def send(
 
 
 def notify_brief(conn: Conn, brief_id: int, now: datetime) -> int:
-    row = conn.execute("SELECT routine, headline FROM briefs WHERE id = %s", (brief_id,)).fetchone()
-    if row is None:
+    row = conn.execute(
+        "SELECT routine, headline, push FROM briefs WHERE id = %s", (brief_id,)
+    ).fetchone()
+    if row is None or not row["push"]:
         return 0
     return send(conn, row["routine"], row["headline"], f"/briefs/{brief_id}?via=push", now)
 

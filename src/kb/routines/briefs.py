@@ -308,6 +308,7 @@ def to_dict(row: dict[str, Any]) -> dict[str, Any]:
         "mode": row["mode"],
         "sections": row["sections"],
         "cost_usd": float(row["cost_usd"]),
+        "push": bool(row.get("push", True)),
         "created_at": row["created_at"].isoformat(),
     }
 
@@ -346,7 +347,14 @@ def runners(
     return {
         "morning": lambda conn, now: run_morning(conn, now, llm, cfg),
         "evening": lambda conn, now: run_evening(conn, now, llm, cfg),
+        "revision": lambda conn, now: _run_revision(conn, now, llm, cfg),
     }
+
+
+def _run_revision(conn: Conn, now: datetime, llm: StructuredLlm | None, config: Config) -> int:
+    from kb.routines import triage
+
+    return triage.run_pass(conn, now, llm, config)
 
 
 def default_llm(config: Config) -> StructuredLlm | None:

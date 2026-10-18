@@ -22,8 +22,8 @@ branch `change/web-os-v1`.
 
 ## 4. Mail revision (Inbox)
 
-- [ ] 4.1 Triage passes (sender prefs → `gpt-6-luna`), revision brief, push only on needs_reply/important; verify `test_revision_quiet_pass_no_push`, `test_revision_needs_reply_pushes`, `test_sender_noise_pref`
-- [ ] 4.2 Inbox page with groups and actions (open in Gmail, done, snooze, change scope, sender noise/important); verify `inbox.test.tsx`
+- [x] 4.1 Triage passes (sender prefs → `gpt-6-luna`), revision brief, push only on needs_reply/important; verify `test_revision_quiet_pass_no_push`, `test_revision_needs_reply_pushes`, `test_sender_noise_pref`
+- [x] 4.2 Inbox page with groups and actions (open in Gmail, done, snooze, change scope, sender noise/important); verify `inbox.test.tsx`
 
 ## 5. Open loops
 

@@ -138,4 +138,4 @@ def test_morning_lists_coming_up_routines(conn):
 
 
 def test_scheduler_runs_morning_and_evening():
-    assert set(briefs.runners(Config(), None)) == {"morning", "evening"}
+    assert set(briefs.runners(Config(), None)) == {"morning", "evening", "revision"}
