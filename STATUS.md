@@ -44,7 +44,12 @@ _Last updated: 2026-10-18 by Claude_
   Web Push verified on the owner's iPhone; domains os./kb.zhukovsky.biz via Cloudflare; MCP stays on kb.
   (OAuth for claude.ai connectors later → then consider os.zhukovsky.biz/mcp).
 
-## Next steps
+- web-os-v1 slices 3–5 (PRs #8, #9, next): AI morning brief + evening wrap (gpt-6.1-sol, refs validated,
+  $30/month cap → data-only), Briefs pages with rating; mail revision 11/14/17 (gpt-6-luna triage, sender
+  prefs, push only when needed) + Inbox; open loops: needs-reply from triage (auto-close on owner reply,
+  drafts ignored), promise detection i_owe/owed_to_me with due dates (uk/ru/en), snooze/dismiss/due/manual,
+  Loops page, loops in briefs. Telegram self id recorded automatically for ME detection.
+
 1. Owner: 30 evaluation questions → run `kb eval` → tune if recall@10 < 0.8 (task 10.3), then archive the change.
 2. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key); optionally rotate MCP token.
 3. Owner: add reserve storage → off-site copy of `/backups` (backup service) + Vaultwarden export (ADR 0013).
@@ -59,6 +64,8 @@ _Last updated: 2026-10-18 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
+- `make check` takes ~12 min (each DB test recreates the schema); run targeted tests while working.
+- Gmail All Mail includes drafts (label `\Draft`): never treat them as the owner's reply.
 - Domains moved to os./kb.zhukovsky.biz (Cloudflare-proxied) on 2026-10-18: passkeys and Home Screen apps are per domain, so re-enrol (`kb web setup-code`) and reinstall after any domain change.
 - Coolify compose domains for a NEW service can only be set after one deploy has loaded the new compose file.
 - First passkey: `kb web setup-code` in the Coolify terminal (web container); codes expire in 1 h.

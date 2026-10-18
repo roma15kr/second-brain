@@ -394,7 +394,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
         lambda: db.connect(url),
         runners,
         notify=push.notify_brief,
-        maintenance=[close_answered_loops, detect_loops],
+        maintenance=[close_answered_loops, loops.wake_snoozed, detect_loops],
     )
 
 

@@ -7,7 +7,7 @@ count). Promise loops come from detection (later task). Every change is a loop_e
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from psycopg.types.json import Jsonb
@@ -161,3 +161,183 @@ def close_for_item(conn: Conn, item_id: int, now: datetime, by: str = "owner") -
     for r in rows:
         _event(conn, r["id"], "done", by, via="inbox")
     return len(rows)
+
+
+# --- owner actions, listing -----------------------------------------------------------------
+
+LoopAction = Literal["done", "dismiss", "snooze", "due", "reopen"]
+
+
+class LoopError(ValueError):
+    pass
+
+
+def kyiv_today(now: datetime) -> date:
+    from kb.routines import KYIV
+
+    return now.astimezone(KYIV).date()
+
+
+def act(
+    conn: Conn,
+    loop_id: int,
+    action: LoopAction,
+    now: datetime,
+    until: date | None = None,
+    due: date | None = None,
+    by: str = "owner",
+) -> None:
+    loop = conn.execute("SELECT * FROM loops WHERE id = %s", (loop_id,)).fetchone()
+    if loop is None:
+        raise LoopError(f"no loop {loop_id}")
+    if action == "done":
+        conn.execute(
+            "UPDATE loops SET status = 'done', closed_at = %s WHERE id = %s", (now, loop_id)
+        )
+    elif action == "dismiss":
+        conn.execute(
+            "UPDATE loops SET status = 'dismissed', closed_at = %s WHERE id = %s", (now, loop_id)
+        )
+        if loop["source_message_key"]:
+            conn.execute(
+                "INSERT INTO loop_dismissed_sources (source_message_key) VALUES (%s)"
+                " ON CONFLICT DO NOTHING",
+                (loop["source_message_key"],),
+            )
+    elif action == "snooze":
+        if until is None or until <= kyiv_today(now):
+            raise LoopError("snooze needs a future date")
+        conn.execute(
+            "UPDATE loops SET status = 'snoozed', snoozed_until = %s WHERE id = %s",
+            (until, loop_id),
+        )
+    elif action == "due":
+        conn.execute("UPDATE loops SET due_date = %s WHERE id = %s", (due, loop_id))
+    elif action == "reopen":
+        conn.execute(
+            "UPDATE loops SET status = 'open', closed_at = NULL, snoozed_until = NULL"
+            " WHERE id = %s",
+            (loop_id,),
+        )
+    else:
+        raise LoopError(f"unknown action {action!r}")
+    detail = {k: v.isoformat() for k, v in (("until", until), ("due", due)) if v}
+    _event(conn, loop_id, action, by, **detail)
+    from kb import events
+
+    kind = {"done": "loop_done", "dismiss": "loop_dismissed", "snooze": "loop_snoozed"}.get(action)
+    if kind and by == "owner":
+        events.record(conn, kind, f"loop:{loop_id}")
+
+
+def add_manual(
+    conn: Conn,
+    title: str,
+    now: datetime,
+    due: date | None = None,
+    counterpart: str = "",
+    scopes: list[str] | None = None,
+) -> int:
+    if not title.strip():
+        raise LoopError("a loop needs a title")
+    row = conn.execute(
+        "INSERT INTO loops (kind, title, counterpart, scopes, due_date, opened_at, created_at)"
+        " VALUES ('manual', %s, %s, %s, %s, %s, %s) RETURNING id",
+        (title.strip()[:200], counterpart[:200], scopes or [], due, now, now),
+    ).fetchone()
+    assert row is not None
+    _event(conn, row["id"], "opened", "owner", source="manual")
+    return int(row["id"])
+
+
+def wake_snoozed(conn: Conn, now: datetime) -> int:
+    """Snoozed loops return on their date."""
+    rows = conn.execute(
+        "UPDATE loops SET status = 'open', snoozed_until = NULL WHERE status = 'snoozed'"
+        " AND snoozed_until <= %s RETURNING id",
+        (kyiv_today(now),),
+    ).fetchall()
+    for r in rows:
+        _event(conn, r["id"], "woke", "system")
+    return len(rows)
+
+
+def to_dict(row: dict[str, Any], today: date) -> dict[str, Any]:
+    due = row["due_date"]
+    opened = row["opened_at"]
+    return {
+        "ref": f"loop:{row['id']}",
+        "id": row["id"],
+        "kind": row["kind"],
+        "title": row["title"],
+        "counterpart": row["counterpart"],
+        "scopes": list(row["scopes"]),
+        "status": row["status"],
+        "due_date": due.isoformat() if due else None,
+        "overdue": bool(due and row["status"] == "open" and due < today),
+        "due_today": bool(due and row["status"] == "open" and due == today),
+        "age_days": (today - opened.date()).days if opened else None,
+        "snoozed_until": row["snoozed_until"].isoformat() if row["snoozed_until"] else None,
+        "item_id": row["item_id"],
+        "item_title": row.get("item_title"),
+        "link": row["source_link"],
+        "opened_at": opened.isoformat() if opened else None,
+        "closed_at": row["closed_at"].isoformat() if row["closed_at"] else None,
+    }
+
+
+def list_loops(
+    conn: Conn,
+    now: datetime,
+    status: str = "open",
+    kind: str | None = None,
+    scope: str | None = None,
+    person: str | None = None,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    """Filtered loops; open ones sorted overdue first, then by due date, then oldest."""
+    today = kyiv_today(now)
+    rows = conn.execute(
+        """
+        SELECT l.*, i.title AS item_title FROM loops l LEFT JOIN items i ON i.id = l.item_id
+        WHERE l.status = %(status)s
+          AND (%(kind)s::text IS NULL OR l.kind = %(kind)s)
+          AND (%(scope)s::text IS NULL OR %(scope)s = ANY(l.scopes))
+          AND (%(person)s::text IS NULL OR l.counterpart ILIKE '%%' || %(person)s || '%%')
+        ORDER BY l.due_date NULLS LAST, l.opened_at
+        LIMIT %(limit)s
+        """,
+        {"status": status, "kind": kind, "scope": scope, "person": person, "limit": limit},
+    ).fetchall()
+    return [to_dict(r, today) for r in rows]
+
+
+def for_brief(
+    conn: Conn, routine: str, window: tuple[datetime, datetime], now: datetime
+) -> dict[str, list[dict[str, Any]]]:
+    """Loops a brief should mention: morning → due today/overdue and waiting replies;
+    evening → opened and closed today plus replies still owed."""
+    today = kyiv_today(now)
+    open_rows = list_loops(conn, now, "open")
+    out: dict[str, list[dict[str, Any]]] = {}
+    due = [lp for lp in open_rows if lp["overdue"] or lp["due_today"]]
+    replies = [lp for lp in open_rows if lp["kind"] == "needs_reply"]
+    if routine == "morning":
+        out["due"] = due
+        out["needs_reply"] = replies
+    elif routine == "evening":
+        start = window[0]
+        opened = conn.execute(
+            "SELECT l.*, NULL AS item_title FROM loops l WHERE l.created_at >= %s ORDER BY id",
+            (start,),
+        ).fetchall()
+        closed = conn.execute(
+            "SELECT l.*, NULL AS item_title FROM loops l WHERE l.closed_at >= %s"
+            " AND l.status = 'done' ORDER BY id",
+            (start,),
+        ).fetchall()
+        out["opened"] = [to_dict(r, today) for r in opened]
+        out["closed"] = [to_dict(r, today) for r in closed]
+        out["needs_reply"] = replies
+        out["due"] = due
+    return out
