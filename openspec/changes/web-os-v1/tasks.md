@@ -37,7 +37,7 @@ branch `change/web-os-v1`.
 
 ## 7. Knowledge pages and OS shell
 
-- [ ] 7.1 OS shell: dock / bottom bar, ⌘K command palette (people, briefs, pages, search), notification center; verify `shell.test.tsx`
+- [x] 7.1 OS shell: dock / bottom bar, ⌘K command palette (people, briefs, pages, search), notification center; verify `shell.test.tsx`
 - [ ] 7.2 Search and Conversation pages over existing `kb.search` and items (matched message highlighted, scope edit, related loops); briefs searchable; verify `search.test.tsx` and `test_brief_found_by_search`
 - [ ] 7.3 People, Person (link/merge/undo merge) and Scope (activity, loops, archive) pages; verify `people.test.tsx` and API tests for merge/undo
 

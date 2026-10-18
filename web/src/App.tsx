@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, NavLink, Route, Routes } from "react-router";
+import { BrowserRouter, Route, Routes } from "react-router";
 import { SignIn } from "./auth/SignIn";
 import { useMe } from "./auth/useMe";
 import { BriefPage } from "./pages/BriefPage";
@@ -9,70 +9,29 @@ import { Loops } from "./pages/Loops";
 import { Today } from "./pages/Today";
 import { Week } from "./pages/Week";
 import { Notifications } from "./push/Notifications";
+import { Shell } from "./shell/Shell";
 
-function Shell() {
+function Routed() {
   return (
-    <main className="page">
-      <nav className="topnav">
-        <NavLink to="/" end>
-          Today
-        </NavLink>
-        <NavLink to="/inbox">Inbox</NavLink>
-        <NavLink to="/loops">Loops</NavLink>
-        <NavLink to="/briefs">Briefs</NavLink>
-        <NavLink to="/week">Week</NavLink>
-      </nav>
+    <Shell>
       <Routes>
         <Route
           path="/"
           element={
             <>
-              <h1>Today</h1>
               <Notifications />
               <Today />
             </>
           }
         />
-        <Route
-          path="/briefs"
-          element={
-            <>
-              <h1>Briefs</h1>
-              <Briefs />
-            </>
-          }
-        />
+        <Route path="/inbox" element={<Inbox />} />
+        <Route path="/loops" element={<Loops />} />
+        <Route path="/briefs" element={<Briefs />} />
         <Route path="/briefs/:id" element={<BriefPage />} />
-        <Route
-          path="/week"
-          element={
-            <>
-              <h1>Week</h1>
-              <Week />
-            </>
-          }
-        />
-        <Route
-          path="/loops"
-          element={
-            <>
-              <h1>Open loops</h1>
-              <Loops />
-            </>
-          }
-        />
-        <Route
-          path="/inbox"
-          element={
-            <>
-              <h1>Inbox</h1>
-              <Inbox />
-            </>
-          }
-        />
+        <Route path="/week" element={<Week />} />
         <Route path="*" element={<p className="muted">Page not found.</p>} />
       </Routes>
-    </main>
+    </Shell>
   );
 }
 
@@ -82,7 +41,7 @@ function Gate() {
   if (me.isError)
     return <p className="error center">Cannot reach the server: {me.error.message}</p>;
   if (!me.data.signed_in) return <SignIn hasPasskeys={me.data.has_passkeys} />;
-  return <Shell />;
+  return <Routed />;
 }
 
 export function App({ client = new QueryClient() }: { client?: QueryClient }) {
