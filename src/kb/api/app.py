@@ -26,6 +26,7 @@ from kb.api import (
     routes_briefs,
     routes_calendar,
     routes_connectors,
+    routes_devices,
     routes_dictations,
     routes_goals,
     routes_inbox,
@@ -138,7 +139,8 @@ def build_app(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         path = request.url.path
-        if not path.startswith("/api/"):
+        if not path.startswith("/api/") or path.startswith(routes_devices.DEVICE_PREFIX):
+            # recorder apps authenticate per route with a device token (upload only, no cookies)
             return await call_next(request)
         if request.method in UNSAFE_METHODS and request.headers.get(CSRF_HEADER) != "1":
             return JSONResponse({"detail": "missing X-KB-Request header"}, status_code=403)
@@ -313,6 +315,7 @@ def build_app(
     app.include_router(routes_requests.router)
     app.include_router(routes_dictations.router)
     app.include_router(routes_calendar.router)
+    app.include_router(routes_devices.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:

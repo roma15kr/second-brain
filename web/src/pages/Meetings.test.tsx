@@ -80,3 +80,47 @@ test("the meeting page shows the prep with sourced agenda points", async () => {
   expect(screen.getByText("Send the price list")).toBeInTheDocument();
   expect(screen.getByText(/you promised/)).toBeInTheDocument();
 });
+
+test("a processed recording shows summary, decisions, actions and the transcript", async () => {
+  window.history.pushState({}, "", "/meetings/3");
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/meetings/3": {
+      ...meeting,
+      recordings: [
+        {
+          id: 9,
+          kind: "call",
+          source: "Zoom",
+          title: "RDIM sync",
+          event_id: 3,
+          started_at: "2026-10-20T12:00:00Z",
+          ended_at: "2026-10-20T12:30:00Z",
+          segments: [
+            {
+              speaker: "Олена",
+              is_owner: false,
+              start: 62,
+              end: 70,
+              text: "I will update the listings",
+            },
+          ],
+          notes: "",
+          item_id: 40,
+          result: {
+            summary: "Prices agreed.",
+            decisions: ["Prices stay the same"],
+            actions: [{ text: "Update the listings", owner: "Олена", is_me: false, due: "Friday" }],
+          },
+          processed: true,
+        },
+      ],
+    },
+  });
+  renderApp();
+  expect(await screen.findByText("Prices agreed.")).toBeInTheDocument();
+  expect(screen.getByText("Prices stay the same")).toBeInTheDocument();
+  expect(screen.getByText("Update the listings")).toBeInTheDocument();
+  expect(screen.getByText("01:02")).toBeInTheDocument();
+  expect(screen.getByText("Attach notes or a transcript")).toBeInTheDocument();
+});

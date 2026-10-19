@@ -32,6 +32,7 @@ KIND_WORDS = {
     "tg_conversation": ("chat", "chats"),
     "clickup_task": ("ClickUp task", "ClickUp tasks"),
     "clickup_chat": ("ClickUp chat day", "ClickUp chat days"),
+    "meeting": ("meeting", "meetings"),
 }
 TITLES = {
     "morning": "Morning brief",

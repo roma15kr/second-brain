@@ -530,6 +530,11 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
         return meetings.remind_due(conn, now)
 
+    def process_recordings(conn: db.Conn, now: datetime) -> int:
+        from kb import recordings
+
+        return recordings.process_due(conn, config, llm, now)
+
     def prepare_meetings(conn: db.Conn, now: datetime) -> int:
         from kb import meetings
 
@@ -556,6 +561,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
             push_clickup,
             prepare_meetings,
             remind_meetings,
+            process_recordings,
             apply_mail,
             draft_replies,
             propose_actions,

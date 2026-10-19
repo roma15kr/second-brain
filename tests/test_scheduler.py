@@ -147,6 +147,7 @@ def test_kb_routines_starts_scheduler_with_morning_runner(argv, monkeypatch):
         "push_clickup",
         "prepare_meetings",
         "remind_meetings",
+        "process_recordings",
         "apply_mail",
         "draft_replies",
         "propose_actions",

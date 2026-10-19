@@ -27,6 +27,7 @@ UNIT_KINDS = (
     "clickup_task",
     "clickup_comments",
     "clickup_chat",
+    "meeting",
 )
 
 

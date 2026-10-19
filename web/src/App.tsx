@@ -3,7 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router";
 import { NeedsPasskey } from "./auth/NeedsPasskey";
 import { CalendarConnector } from "./connectors/CalendarConnector";
 import { ClickUpConnector } from "./connectors/ClickUpConnector";
-import { MeetingPage, Meetings } from "./pages/Meetings";
+import { MeetingPage, Meetings, RecordingPage } from "./pages/Meetings";
 import { Connectors } from "./connectors/Connectors";
 import { MailConnector } from "./connectors/MailConnector";
 import { TelegramConnector } from "./connectors/TelegramConnector";
@@ -73,6 +73,7 @@ function Routed({ needsPasskey }: { needsPasskey: boolean }) {
         <Route path="/connectors/calendars" element={<CalendarConnector />} />
         <Route path="/meetings" element={<Meetings />} />
         <Route path="/meetings/:id" element={<MeetingPage />} />
+        <Route path="/recordings/:id" element={<RecordingPage />} />
         <Route path="*" element={<p className="muted">Page not found.</p>} />
       </Routes>
     </Shell>
