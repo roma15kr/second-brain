@@ -166,6 +166,21 @@ def _weekly_loops(conn: Conn, now: datetime) -> dict[str, list[dict[str, Any]]]:
     }
 
 
+def _audit(conn: Conn, now: datetime, pack: FactPack) -> list[Section]:
+    """Where attention went vs goals, goals without progress, and the week's decisions."""
+    from kb import focus
+
+    out = []
+    if lines := focus.attention(conn, *pack.window):
+        out.append(Section("Where attention went", "\n".join(lines), kind="note"))
+    if neglected := focus.neglected_goals(conn, now):
+        text = "\n".join(f"{g['title']} ({g['scope']}) — {g['first_step']}" for g in neglected)
+        out.append(Section("No progress (14 days)", text, kind="note"))
+    for scope, items in focus.decisions(conn, *pack.window).items():
+        out.append(Section(f"Decisions · {scope}", "", items, kind="group"))
+    return out
+
+
 def run_review(conn: Conn, now: datetime, llm: StructuredLlm | None, config: Config) -> int:
     pack = factpack.build(conn, "weekly_review", review_window(now))
     pack.loops = _weekly_loops(conn, now)
@@ -174,6 +189,7 @@ def run_review(conn: Conn, now: datetime, llm: StructuredLlm | None, config: Con
     if data:
         sections += validate_refs(data, pack)
     sections.append(_numbers(conn, pack))
+    sections += _audit(conn, now, pack)
     for key, title in (("due", "Due this week"), ("aging", "Open loops by age")):
         if rows := sorted(pack.loops.get(key, []), key=lambda lp: -(lp["age_days"] or 0)):
             sections.append(Section(title, "", [loop_item(lp) for lp in rows], kind="group"))

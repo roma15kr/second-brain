@@ -284,4 +284,10 @@ def cycle(conn: Conn, config: Config, llm: StructuredLlm | None, now: datetime) 
             n += nudges(conn, config, llm, now)
         except Exception:
             log.exception("nudge drafting failed")
+    from kb import focus
+
+    try:
+        n += focus.decline_suggestions(conn, config, llm if within else None, now)
+    except Exception:
+        log.exception("decline suggestions failed")
     return n
