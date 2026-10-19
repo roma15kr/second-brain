@@ -92,6 +92,35 @@ def acceptance(conn: Conn, now: datetime, days: int = 28) -> list[dict[str, Any]
     return out
 
 
+def assistant_metric(conn: Conn, now: datetime) -> dict[str, Any]:
+    """assistant-command-v1 success metric: requests per week, and the share of drafts and tasks
+    made from requests that were approved (target: 15 a week, 60%)."""
+    week = conn.execute(
+        "SELECT count(*) AS n FROM assistant_requests WHERE started_at > %s",
+        (now - timedelta(days=7),),
+    ).fetchone()
+    by_origin = conn.execute(
+        """
+        SELECT origin,
+               count(*) FILTER (WHERE status IN ('approved', 'applying', 'applied')) AS accepted,
+               count(*) FILTER (WHERE status = 'discarded') AS discarded
+        FROM suggestions WHERE decided_at > %s GROUP BY origin
+        """,
+        (now - timedelta(days=28),),
+    ).fetchall()
+    rates = {}
+    for r in by_origin:
+        decided = r["accepted"] + r["discarded"]
+        rates[r["origin"]] = round(r["accepted"] / decided, 2) if decided else None
+    return {
+        "requests_7d": int(week["n"]) if week else 0,
+        "requests_target": 15,
+        "approved_from_requests": rates.get("command"),
+        "approved_from_routines": rates.get("routine"),
+        "approved_target": 0.6,
+    }
+
+
 # --- nudges -----------------------------------------------------------------------------------
 
 

@@ -6,7 +6,7 @@ import { api } from "../api/client";
 import { kyivTime } from "../briefs/BriefView";
 import { ScopeTag } from "../shell/ScopeTag";
 
-type Suggestion = {
+export type Suggestion = {
   id: number;
   kind: string;
   payload: Record<string, unknown>;
@@ -51,7 +51,7 @@ function isTask(s: Suggestion): boolean {
   return s.kind === "task" || s.kind === "delegate";
 }
 
-function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
+export function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
   const [body, setBody] = useState(str(s.payload.body));
   const [name, setName] = useState(str(s.payload.name));
   const [due, setDue] = useState(str(s.payload.due_date));

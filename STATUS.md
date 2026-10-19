@@ -15,6 +15,10 @@ _Last updated: 2026-10-18 by Claude_
   requests run in the web service (2 workers, 8 tool calls / 90 s), tools search/get_item/person, answers cite only
   items the tools returned, private documents never read, threads with follow-ups. The web service now gets
   OPENAI_API_KEY.
+- assistant-command-v1 slice 2: requests draft email replies, new emails, Telegram replies and ClickUp tasks
+  (approval queue, inline in the thread), update their own drafts on follow-ups, add reminders and close/snooze
+  loops with Undo; search shows its filters with "Open in Search"; Status shows requests/week and approval rate
+  of drafts from requests (targets 15 and 60%).
 - gmail-digisoft: status shows each folder's cursor vs the server's next UID; no mail since 2026-10-17 is Gmail's own
   state for digisoftou@gmail.com (the owner's new Digisoft mail goes to another, unconnected address).
 

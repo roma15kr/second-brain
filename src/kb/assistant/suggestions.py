@@ -35,11 +35,22 @@ def propose(
     scopes: list[str] | None = None,
     item_id: int | None = None,
     goal_id: int | None = None,
+    request_id: int | None = None,
 ) -> int:
     row = conn.execute(
-        "INSERT INTO suggestions (kind, payload, reason, refs, scopes, item_id, goal_id)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-        (kind, Jsonb(payload), reason, refs or [], scopes or [], item_id, goal_id),
+        "INSERT INTO suggestions (kind, payload, reason, refs, scopes, item_id, goal_id, origin,"
+        " request_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+        (
+            kind,
+            Jsonb(payload),
+            reason,
+            refs or [],
+            scopes or [],
+            item_id,
+            goal_id,
+            "command" if request_id else "routine",
+            request_id,
+        ),
     ).fetchone()
     assert row is not None
     return int(row["id"])
@@ -47,7 +58,9 @@ def propose(
 
 def is_email(kind: str, payload: dict[str, Any]) -> bool:
     """Email replies and email nudges go through the mailbox executors."""
-    return kind == "reply_email" or (kind == "nudge" and payload.get("channel") == "email")
+    return kind in ("reply_email", "email") or (
+        kind == "nudge" and payload.get("channel") == "email"
+    )
 
 
 def reply_draft(conn: Conn, item_id: int, body: str = "", reason: str = "") -> int:
@@ -210,7 +223,8 @@ def apply_mail(
     done = 0
     drafts = conn.execute(
         "SELECT * FROM suggestions WHERE status = 'approved'"
-        " AND (kind = 'reply_email' OR (kind = 'nudge' AND payload->>'channel' = 'email'))"
+        " AND (kind IN ('reply_email', 'email')"
+        " OR (kind = 'nudge' AND payload->>'channel' = 'email'))"
         " AND coalesce(payload->>'action', 'draft') = 'draft' ORDER BY decided_at LIMIT 10"
     ).fetchall()
     for s in drafts:
@@ -218,9 +232,7 @@ def apply_mail(
         _applying(conn, sid, now)
         client = None
         try:
-            thread = mail.thread_headers(conn, int(payload["item_id"]))
-            box = mail.mailbox(conn, config, thread["source_id"])
-            msg = mail.build_reply(conn, sid, payload, box, now)
+            box, msg = mail.compose(conn, config, sid, s["kind"], payload, now)
             client = imap_opener(box)
             ref = mail.save_draft(client, msg, now)
         except Exception as e:
@@ -238,9 +250,7 @@ def apply_mail(
     for s in due:
         sid, payload = s["id"], s["payload"]
         try:  # everything that can fail before the message leaves
-            thread = mail.thread_headers(conn, int(payload["item_id"]))
-            box = mail.mailbox(conn, config, thread["source_id"])
-            msg = mail.build_reply(conn, sid, payload, box, now)
+            box, msg = mail.compose(conn, config, sid, s["kind"], payload, now)
         except Exception as e:
             _send_failed(conn, s["outbox_id"], sid, e)
             continue
@@ -264,7 +274,8 @@ def apply_mail(
         _applied(conn, sid, str(msg["Message-ID"]))
         from kb import loops
 
-        loops.close_for_item(conn, int(payload["item_id"]), now, via="sent reply")
+        if payload.get("item_id"):
+            loops.close_for_item(conn, int(payload["item_id"]), now, via="sent reply")
         if not box.gmail:
             client = None
             try:

@@ -49,6 +49,12 @@ type StatusData = {
     briefs: { total: number; used: number; share: number | null; target: number };
     loops: { total: number; resolved: number; share: number | null; target: number };
   };
+  assistant?: {
+    requests_7d: number;
+    requests_target: number;
+    approved_from_requests: number | null;
+    approved_target: number;
+  };
   suggestions?: {
     kind: string;
     accepted: number;
@@ -130,6 +136,14 @@ export function Status() {
             detail={`${accepted} of ${decided}`}
           />
         </div>
+        {status.data.assistant && (
+          <p>
+            Assistant: {status.data.assistant.requests_7d} requests this week (target{" "}
+            {status.data.assistant.requests_target}) ·{" "}
+            {pct(status.data.assistant.approved_from_requests)} of drafts from requests approved
+            (target {pct(status.data.assistant.approved_target)})
+          </p>
+        )}
         {kinds.length > 0 && (
           <ul className="list">
             {kinds.map((k) => (
