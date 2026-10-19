@@ -11,6 +11,9 @@ _Last updated: 2026-10-18 by Claude_
   Web OS https://os.zhukovsky.biz (passkeys) · MCP https://kb.zhukovsky.biz/mcp (token + lockout) · Cloudflare-proxied.
 
 ## Done recently (2026-10-18)
+- Priority (12.3): needs-reply/important mail ordered by importance × urgency with a reason (goal link by
+  meaning, important/frequent sender, money, deadline words, waiting time) and a quadrant; "Two-minute
+  replies" group; morning brief and automatic drafts use the same order. Goal links need confirmed goals.
 - Assistant (12.1, 12.2, 12.4 email): Assistant page = approval queue; "Draft reply" in Inbox; up to 5 AI
   reply drafts a day (Settings) in the thread's language and the owner's tone, KB context with checked refs;
   Save to Drafts (IMAP, threaded) or Send on tap with 10 s undo (SMTP from the receiving mailbox). Fixed: Gmail

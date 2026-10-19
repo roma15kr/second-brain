@@ -183,10 +183,12 @@ def drafted_today(conn: Conn, now: datetime) -> int:
     return int(row["n"]) if row else 0
 
 
-def candidates(conn: Conn, limit: int) -> list[dict[str, Any]]:
-    """Open needs-reply emails without a reply suggestion: important senders first, then the
-    longest waiting."""
-    return [
+def candidates(conn: Conn, config: Config, now: datetime, limit: int) -> list[dict[str, Any]]:
+    """Open needs-reply emails without a reply suggestion (and not discarded since the loop
+    opened), highest priority first."""
+    from kb.assistant import priority
+
+    rows = [
         dict(r)
         for r in conn.execute(
             """
@@ -198,14 +200,15 @@ def candidates(conn: Conn, limit: int) -> list[dict[str, Any]]:
               AND NOT EXISTS (SELECT 1 FROM suggestions s WHERE s.kind = 'reply_email'
                               AND s.item_id = l.item_id AND s.status = 'discarded'
                               AND s.decided_at > l.opened_at)
-            ORDER BY EXISTS (SELECT 1 FROM sender_prefs p WHERE p.pref = 'important'
-                             AND l.counterpart ILIKE '%%' || p.address || '%%') DESC,
-                     l.opened_at
-            LIMIT %s
-            """,
-            (limit,),
+            ORDER BY l.opened_at
+            LIMIT 50
+            """
         ).fetchall()
     ]
+    ids = [r["item_id"] for r in rows]
+    prio = priority.assess(conn, ids, loops.owner_emails(conn, config), now)
+    by_id = {r["item_id"]: r | {"reason": prio[r["item_id"]].reason} for r in rows}
+    return [by_id[i] for i in priority.ordered(prio, ids)][:limit]
 
 
 def cycle(
@@ -227,7 +230,7 @@ def cycle(
         done += _fill(conn, config, llm, s["id"], s["item_id"], now, searcher)
     cap = settings_store.load(conn).reply_drafts_per_day
     if drafted_today(conn, now) < cap:
-        for c in candidates(conn, 1):
+        for c in candidates(conn, config, now, 1):
             from kb.assistant import suggestions
 
             sid = suggestions.propose(
@@ -240,7 +243,7 @@ def cycle(
                     "ai_pending": True,
                     "drafted_on": loops.kyiv_today(now).isoformat(),
                 },
-                reason="Needs your reply",
+                reason=f"Needs your reply · {c['reason']}" if c["reason"] else "Needs your reply",
                 refs=[f"item:{c['item_id']}"],
                 item_id=c["item_id"],
                 scopes=_scopes(conn, c["item_id"]),

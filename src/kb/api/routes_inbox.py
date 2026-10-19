@@ -21,7 +21,7 @@ def _now() -> datetime:
 
 
 @router.get("/api/inbox")
-def inbox(conn: Db) -> dict[str, Any]:
+def inbox(request: Request, conn: Db) -> dict[str, Any]:
     latest = conn.execute(
         "SELECT id, headline, created_at FROM briefs WHERE routine = 'revision'"
         " ORDER BY id DESC LIMIT 1"
@@ -54,6 +54,17 @@ def inbox(conn: Db) -> dict[str, Any]:
                 "last_activity_at": r["last_activity_at"].isoformat(),
             }
         )
+    # needs-reply and important mail: priority with reasons, highest first (assistant-actions)
+    from kb.assistant import priority
+
+    ranked = [i["item_id"] for c in ("needs_reply", "important") for i in groups[c]]
+    owner = loops.owner_emails(conn, request.app.state.config)
+    prio = priority.assess(conn, ranked, owner, _now())
+    for c in ("needs_reply", "important"):
+        by_id = {i["item_id"]: i for i in groups[c]}
+        for item_id, item in by_id.items():
+            item["priority"] = prio[item_id].to_dict()
+        groups[c] = [by_id[i] for i in priority.ordered(prio, list(by_id))]
     return {
         "pass": {
             "id": latest["id"],

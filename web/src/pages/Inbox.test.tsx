@@ -75,3 +75,30 @@ test("snooze sends a future time", async () => {
   const until = new Date(JSON.parse(String(call?.init?.body)).until);
   expect(until.getTime()).toBeGreaterThan(Date.now());
 });
+
+test("needs-reply mail shows its quadrant and reason, quick replies first", async () => {
+  window.history.pushState({}, "", "/inbox");
+  const prio = (quadrant: string, reason: string, quick = false) => ({
+    priority: { quadrant, reason, quick, score: 4, goal_id: null },
+  });
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/inbox": {
+      pass: { id: 3, headline: "h", created_at: "2026-10-20T08:00:00Z" },
+      groups: {
+        needs_reply: [
+          { ...item(7, "Launch plan"), ...prio("schedule", "Quokka goal: marketplace launch") },
+          { ...item(8, "Is 10:00 ok?"), ...prio("drop", "", true) },
+        ],
+        important: [],
+        fyi: [],
+        noise: [],
+      },
+    },
+  });
+  renderApp();
+  expect(await screen.findByText("Quokka goal: marketplace launch")).toBeInTheDocument();
+  expect(screen.getByText("Schedule")).toBeInTheDocument();
+  const headings = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+  expect(headings).toEqual(["Two-minute replies (1)", "Needs reply (1)"]);
+});
