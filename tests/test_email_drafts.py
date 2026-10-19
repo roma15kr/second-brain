@@ -29,9 +29,15 @@ def thread(conn, key="q", author="Olga <olga@dealer.example>"):
     ).fetchone()["id"]
     conn.execute(
         "INSERT INTO messages (source_id, message_key, kind, unit_key, author, participants,"
-        " sent_at, body, subject, refs) VALUES ('mail-test', '<m1@dealer.example>', 'email', %s,"
+        " sent_at, body, subject, refs) VALUES ('mail-test', %s, 'email', %s,"
         " %s, %s, %s, 'Can you confirm?', 'Terms', '{<m0@dealer.example>}')",
-        (key, author, [author, "me@example.com"], NOW - timedelta(hours=1)),
+        (
+            "<m1@dealer.example>" if key == "q" else f"<{key}@dealer.example>",
+            key,
+            author,
+            [author, "me@example.com"],
+            NOW - timedelta(hours=1),
+        ),
     )
     return item
 

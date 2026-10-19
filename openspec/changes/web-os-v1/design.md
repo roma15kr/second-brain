@@ -169,7 +169,7 @@ Urgency: explicit deadline proximity, waiting time. Quadrant from thresholds; th
 built from the features (no AI), so it is cheap and testable.
 
 ### D19. Reply drafts and tone
-For the top N needs-reply email per day (default 10, budget-checked), `gpt-6.1-sol` receives: the
+For the top N needs-reply email per day (default 5, owner decision 2026-10-18; budget-checked; one per routines cycle; "Draft reply" fills on request), `gpt-6.1-sol` receives: the
 redacted thread, KB context (top 5 search results for the thread's question, excluding
 `ai_allowed=false` documents), 5–10 of the owner's previous sent replies to the same person or
 scope as tone examples, and the language of the thread; returns draft + cited refs (validated

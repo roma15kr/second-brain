@@ -477,6 +477,13 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
         return suggestions.apply_mail(conn, config, now)
 
+    searcher = _web_searcher()
+
+    def draft_replies(conn: db.Conn, now: datetime) -> int:
+        from kb.assistant import drafting
+
+        return drafting.cycle(conn, config, llm, now, searcher)
+
     def detect_loops(conn: db.Conn, now: datetime) -> int:
         from kb import loop_detect
 
@@ -492,6 +499,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
             loops.wake_snoozed,
             push_clickup,
             apply_mail,
+            draft_replies,
             detect_loops,
             propose_goals,
         ],

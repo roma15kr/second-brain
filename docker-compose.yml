@@ -97,6 +97,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       KB_DISTILL_MODEL: ${KB_DISTILL_MODEL:-}
       KB_SECRET_KEY: ${SERVICE_PASSWORD_64_SECRETKEY}
+      # reply drafts use the same search as the web OS (models live in the mcp service)
+      KB_SEARCH_URL: http://mcp:8765/internal/search
+      KB_MCP_TOKEN: ${SERVICE_PASSWORD_64_MCPTOKEN}
       # approved replies are saved to the mailbox's Drafts from here (assistant-actions)
       IMAP_USER_MAIN: ${IMAP_USER_MAIN:-}
       IMAP_PASSWORD_MAIN: ${IMAP_PASSWORD_MAIN:-}

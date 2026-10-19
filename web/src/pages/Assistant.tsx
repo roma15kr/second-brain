@@ -97,6 +97,9 @@ function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
         ))}
       </div>
       {s.reason && <div className="muted">{s.reason}</div>}
+      {s.kind === "reply_email" && s.payload.ai_pending === true && (
+        <div className="muted">Drafting a reply…</div>
+      )}
       {s.kind === "reply_email" && (
         <textarea
           aria-label="Reply"
@@ -197,6 +200,8 @@ export function Assistant() {
   const pending = useQuery({
     queryKey: ["suggestions", "proposed"],
     queryFn: () => api<{ suggestions: Suggestion[] }>("/api/suggestions"),
+    refetchInterval: (q) =>
+      q.state.data?.suggestions.some((s) => s.payload.ai_pending === true) ? 5_000 : false,
   });
   const recent = useQuery({
     queryKey: ["suggestions", "recent"],
@@ -215,7 +220,8 @@ export function Assistant() {
         <h3>Waiting for you</h3>
         <ul className="list">
           {pending.data.suggestions.map((s) => (
-            <Card key={s.id} s={s} onChanged={refresh} />
+            // remount when the AI draft arrives, so the editor starts from it
+            <Card key={`${s.id}:${String(s.payload.ai_pending)}`} s={s} onChanged={refresh} />
           ))}
           {pending.data.suggestions.length === 0 && <li className="muted">Nothing to approve.</li>}
         </ul>

@@ -61,7 +61,7 @@ def reply_draft(conn: Conn, item_id: int, body: str = "", reason: str = "") -> i
     return propose(
         conn,
         "reply_email",
-        {"item_id": item_id, "body": body},
+        {"item_id": item_id, "body": body, "ai_pending": not body},
         reason=reason or "Reply requested",
         refs=[f"item:{item_id}"],
         scopes=list(scopes_["scopes"]) if scopes_ else [],
