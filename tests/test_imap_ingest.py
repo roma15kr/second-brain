@@ -61,3 +61,14 @@ def test_indexing_creates_one_item_per_message(conn, source, config):
     assert items[0]["title"] == "Invoice 4471"
     assert items[0]["scopes"] == ["digisoft"]
     assert items[0]["locator"].startswith("imap://mail-test/INBOX;UID=")
+
+
+def test_status_shows_cursor_and_server_next(conn, source):
+    fake = FakeImap()
+    fake.add(1, make_email("Hello", "first"), datetime(2026, 9, 1))
+    imap.sync_folder(conn, fake, source, "INBOX", today=date(2026, 10, 10))
+    fake.add(2, make_email("New", "second"), datetime(2026, 10, 10))
+    imap.sync_folder(conn, fake, source, "INBOX", today=date(2026, 10, 10))
+    assert imap.folder_cursors(conn, source.id) == [
+        {"folder": "INBOX", "uidvalidity": 1, "cursor": 2, "server_next": 3}
+    ]

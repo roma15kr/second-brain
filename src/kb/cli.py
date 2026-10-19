@@ -50,7 +50,13 @@ def cmd_ingest(args: argparse.Namespace) -> None:
                 try:
                     with db.connect(database_url()) as conn:
                         new, backfilling = imap.sync(conn, client, source)
-                        health.record_ok(conn, source.id, new=new, backfilling=backfilling)
+                        health.record_ok(
+                            conn,
+                            source.id,
+                            new=new,
+                            backfilling=backfilling,
+                            folders=imap.folder_cursors(conn, source.id),
+                        )
                     if backfilling:  # keep going quickly until the backfill is done
                         last_run[source.id] -= source.poll_seconds - 5
                 finally:

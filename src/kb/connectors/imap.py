@@ -149,6 +149,10 @@ def sync_folder(
         state = _new_state(uidvalidity, uidnext, since)
         set_state(conn, source.id, key, state)
 
+    # what the server says comes next, kept for status (cursor vs server, see folder_cursors)
+    state["server_next"] = int(info.get(b"UIDNEXT") or 0) or None
+    set_state(conn, source.id, key, state)
+
     stored = 0
     # 1. live: anything above the live cursor (servers return the top UID for "N:*" even when
     #    nothing is newer, hence the filter)
@@ -174,6 +178,24 @@ def sync_folder(
         state["bf_pos"] = chunk[-1] if len(window) > len(chunk) else upto
         set_state(conn, source.id, key, state)
     return stored
+
+
+def folder_cursors(conn: Conn, source_id: str) -> list[dict[str, Any]]:
+    """Per folder: the live cursor and the server's next UID (status shows when mail is stuck)."""
+    rows = conn.execute(
+        "SELECT key, value FROM sync_state WHERE source_id = %s AND key LIKE 'folder:%%'"
+        " ORDER BY key",
+        (source_id,),
+    ).fetchall()
+    return [
+        {
+            "folder": r["key"].removeprefix("folder:"),
+            "uidvalidity": r["value"].get("uidvalidity"),
+            "cursor": r["value"].get("last_uid"),
+            "server_next": r["value"].get("server_next"),
+        }
+        for r in rows
+    ]
 
 
 def backfill_done(conn: Conn, source_id: str, folder: str) -> bool:
