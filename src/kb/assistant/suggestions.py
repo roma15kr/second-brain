@@ -108,14 +108,11 @@ def approve(
     )
     if s["kind"] == "reply_email":
         # saved by the routines service (it holds the mailbox credentials): apply_mail
-        action = payload.get("action") or "draft"
-        if action != "draft":
-            raise SuggestionError(f"unknown email action {action!r}")
         if not (payload.get("body") or "").strip():
             raise SuggestionError("the reply is empty")
         conn.execute(
             "UPDATE suggestions SET payload = payload || %s WHERE id = %s",
-            (Jsonb({"action": action}), sid),
+            (Jsonb({"action": "draft"}), sid),
         )
         return "queued"
     if s["kind"] in ("task", "delegate"):
@@ -133,50 +130,172 @@ def approve(
     raise SuggestionError(f"no executor for {s['kind']} yet")
 
 
+UNDO_SECONDS = 10
+
+
+def send_on_tap(
+    conn: Conn, sid: int, now: datetime, edited: dict[str, Any] | None = None
+) -> datetime:
+    """The owner tapped Send on one reply: it is sent after the undo window, unless undone.
+    There is deliberately no way to send several at once or on a schedule."""
+    s = get(conn, sid)
+    if s["kind"] != "reply_email":
+        raise SuggestionError("only email replies can be sent")
+    if s["status"] not in ("proposed", "failed"):
+        raise SuggestionError(f"suggestion {sid} is {s['status']}")
+    payload = {**s["payload"], **(edited or {}), "action": "send"}
+    if not (payload.get("body") or "").strip():
+        raise SuggestionError("the reply is empty")
+    send_after = now + timedelta(seconds=UNDO_SECONDS)
+    conn.execute(
+        "UPDATE suggestions SET payload = %s, edited = edited OR %s, status = 'approved',"
+        " decided_at = %s, error = NULL WHERE id = %s",
+        (Jsonb(payload), payload.get("body") != s["payload"].get("body"), now, sid),
+    )
+    conn.execute(
+        "INSERT INTO outbox (suggestion_id, send_after) VALUES (%s, %s)"
+        " ON CONFLICT (suggestion_id) DO UPDATE SET status = 'pending_send',"
+        " send_after = EXCLUDED.send_after, error = NULL",
+        (sid, send_after),
+    )
+    return send_after
+
+
+def undo_send(conn: Conn, sid: int) -> None:
+    row = conn.execute(
+        "UPDATE outbox SET status = 'cancelled' WHERE suggestion_id = %s"
+        " AND status = 'pending_send' RETURNING id",
+        (sid,),
+    ).fetchone()
+    if row is None:
+        raise SuggestionError("too late to undo: the message is being sent or was sent")
+    conn.execute(
+        "UPDATE suggestions SET status = 'proposed', decided_at = NULL WHERE id = %s", (sid,)
+    )
+
+
 def apply_mail(
     conn: Conn,
     config: Any,
     now: datetime,
     open_imap: Callable[[Any], Any] | None = None,
+    open_smtp: Callable[[Any], Any] | None = None,
 ) -> int:
-    """Saves approved email replies to their mailbox's Drafts (never sends)."""
+    """Saves approved replies to their mailbox's Drafts, and sends replies whose undo window
+    has passed (once: a send interrupted by a crash is marked failed, never repeated)."""
     from kb.assistant import mail
 
-    opener = open_imap or mail.open_imap
+    imap_opener = open_imap or mail.open_imap
+    smtp_opener = open_smtp or mail.open_smtp
+    conn.execute(
+        "UPDATE outbox SET status = 'failed', error = 'interrupted while sending: check the Sent"
+        " folder before sending again' WHERE status = 'sending'"
+    )
+    conn.execute(
+        "UPDATE suggestions s SET status = 'failed', error = o.error FROM outbox o"
+        " WHERE o.suggestion_id = s.id AND o.status = 'failed' AND s.status = 'applying'"
+    )
     done = 0
-    for s in conn.execute(
+    drafts = conn.execute(
         "SELECT * FROM suggestions WHERE kind = 'reply_email' AND status = 'approved'"
-        " ORDER BY decided_at LIMIT 10"
-    ).fetchall():
+        " AND coalesce(payload->>'action', 'draft') = 'draft' ORDER BY decided_at LIMIT 10"
+    ).fetchall()
+    for s in drafts:
         sid, payload = s["id"], s["payload"]
-        conn.execute(
-            "UPDATE suggestions SET status = 'applying', attempt_started_at = %s WHERE id = %s",
-            (now, sid),
-        )
+        _applying(conn, sid, now)
         client = None
         try:
             thread = mail.thread_headers(conn, int(payload["item_id"]))
             box = mail.mailbox(conn, config, thread["source_id"])
             msg = mail.build_reply(conn, sid, payload, box, now)
-            client = opener(box)
+            client = imap_opener(box)
             ref = mail.save_draft(client, msg, now)
         except Exception as e:
-            log.warning("email suggestion %s failed: %s", sid, e)
-            conn.execute(
-                "UPDATE suggestions SET status = 'failed', error = %s WHERE id = %s",
-                (str(e)[:500], sid),
-            )
+            _failed(conn, sid, e)
             continue
         finally:
-            if client is not None:
+            _logout(client)
+        _applied(conn, sid, ref)
+        done += 1
+    due = conn.execute(
+        "SELECT o.id AS outbox_id, s.* FROM outbox o JOIN suggestions s ON s.id = o.suggestion_id"
+        " WHERE o.status = 'pending_send' AND o.send_after <= %s ORDER BY o.send_after LIMIT 10",
+        (now,),
+    ).fetchall()
+    for s in due:
+        sid, payload = s["id"], s["payload"]
+        try:  # everything that can fail before the message leaves
+            thread = mail.thread_headers(conn, int(payload["item_id"]))
+            box = mail.mailbox(conn, config, thread["source_id"])
+            msg = mail.build_reply(conn, sid, payload, box, now)
+        except Exception as e:
+            _send_failed(conn, s["outbox_id"], sid, e)
+            continue
+        # stored (autocommit) before sending: after a crash the row is failed, never resent
+        conn.execute("UPDATE outbox SET status = 'sending' WHERE id = %s", (s["outbox_id"],))
+        _applying(conn, sid, now)
+        try:
+            server = smtp_opener(box)
+            try:
+                server.send_message(msg)
+            finally:
                 with contextlib.suppress(Exception):
-                    client.logout()
+                    server.quit()
+        except Exception as e:
+            _send_failed(conn, s["outbox_id"], sid, e)
+            continue
         conn.execute(
-            "UPDATE suggestions SET status = 'applied', applied_ref = %s WHERE id = %s",
-            (ref, sid),
+            "UPDATE outbox SET status = 'sent', sent_at = %s, message_id = %s WHERE id = %s",
+            (now, str(msg["Message-ID"]), s["outbox_id"]),
         )
+        _applied(conn, sid, str(msg["Message-ID"]))
+        from kb import loops
+
+        loops.close_for_item(conn, int(payload["item_id"]), now, via="sent reply")
+        if not box.gmail:
+            client = None
+            try:
+                client = imap_opener(box)
+                mail.copy_to_sent(client, msg, now)
+            except Exception as e:  # the mail is sent; only the copy is missing
+                log.warning("sent reply %s not copied to Sent: %s", sid, e)
+            finally:
+                _logout(client)
         done += 1
     return done
+
+
+def _applying(conn: Conn, sid: int, now: datetime) -> None:
+    conn.execute(
+        "UPDATE suggestions SET status = 'applying', attempt_started_at = %s WHERE id = %s",
+        (now, sid),
+    )
+
+
+def _applied(conn: Conn, sid: int, ref: str) -> None:
+    conn.execute(
+        "UPDATE suggestions SET status = 'applied', applied_ref = %s WHERE id = %s", (ref, sid)
+    )
+
+
+def _failed(conn: Conn, sid: int, e: Exception) -> None:
+    log.warning("email suggestion %s failed: %s", sid, e)
+    conn.execute(
+        "UPDATE suggestions SET status = 'failed', error = %s WHERE id = %s", (str(e)[:500], sid)
+    )
+
+
+def _send_failed(conn: Conn, outbox_id: int, sid: int, e: Exception) -> None:
+    conn.execute(
+        "UPDATE outbox SET status = 'failed', error = %s WHERE id = %s", (str(e)[:500], outbox_id)
+    )
+    _failed(conn, sid, e)
+
+
+def _logout(client: Any) -> None:
+    if client is not None:
+        with contextlib.suppress(Exception):
+            client.logout()
 
 
 def _marker(sid: int) -> str:

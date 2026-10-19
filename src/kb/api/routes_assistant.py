@@ -37,6 +37,29 @@ def approve(
     return {"applied_ref": ref}
 
 
+@router.post("/api/suggestions/{sid}/send")
+def send(
+    conn: Db,
+    sid: int,
+    payload: Annotated[dict[str, Any] | None, Body(embed=True)] = None,
+) -> dict[str, str]:
+    """Sends ONE reply after a 10-second undo window (no bulk or scheduled sending)."""
+    try:
+        after = suggestions.send_on_tap(conn, sid, datetime.now(UTC), payload)
+    except suggestions.SuggestionError as e:
+        raise HTTPException(404 if str(e).startswith("no suggestion") else 400, str(e)) from e
+    return {"send_after": after.isoformat()}
+
+
+@router.post("/api/suggestions/{sid}/undo")
+def undo(conn: Db, sid: int) -> dict[str, bool]:
+    try:
+        suggestions.undo_send(conn, sid)
+    except suggestions.SuggestionError as e:
+        raise HTTPException(409, str(e)) from e
+    return {"ok": True}
+
+
 @router.post("/api/items/{item_id}/reply-draft")
 def reply_draft(conn: Db, item_id: int) -> dict[str, int]:
     from kb.assistant import mail
