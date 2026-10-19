@@ -127,3 +127,110 @@ def test_reply_draft_api_and_queue(client, conn):
         " 'tg_conversation', 'chat') RETURNING id"
     ).fetchone()["id"]
     assert client.post(f"/api/items/{tg}/reply-draft", headers=CSRF).status_code == 400
+
+
+# --- send on tap (12.2) -------------------------------------------------------------------------
+
+
+class FakeSmtp:
+    def __init__(self):
+        self.sent = []
+
+    def send_message(self, msg):
+        self.sent.append(msg)
+
+    def quit(self):
+        pass
+
+
+def test_send_only_after_tap_single_message(conn, config, server):
+    item = thread(conn)
+    loops.open_needs_reply(conn, item, "Answer Olga", NOW)
+    sid = suggestions.reply_draft(conn, item)
+    smtp = FakeSmtp()
+
+    def run(at):
+        suggestions.apply_mail(
+            conn, config, at, open_imap=lambda b: server, open_smtp=lambda b: smtp
+        )
+
+    run(NOW)
+    assert smtp.sent == []  # proposing sends nothing
+    after = suggestions.send_on_tap(conn, sid, NOW, {"body": "Confirmed."})
+    assert after == NOW + timedelta(seconds=10)
+    run(NOW + timedelta(seconds=5))
+    assert smtp.sent == []  # still inside the undo window
+    run(NOW + timedelta(seconds=11))
+    [msg] = smtp.sent
+    assert msg["In-Reply-To"] == "<m1@dealer.example>" and msg["From"] == "me@example.com"
+    run(NOW + timedelta(seconds=40))
+    assert len(smtp.sent) == 1  # once
+    assert suggestions.get(conn, sid)["status"] == "applied"
+    assert conn.execute("SELECT status FROM loops").fetchone()["status"] == "done"
+    assert server.folders["Drafts"] == {}  # sent, not saved as a draft
+
+
+def test_sent_threaded_and_copied_to_sent_non_gmail(conn, config, server):
+    server.add_folder("Sent", (b"\\Sent",))
+    sid = suggestions.reply_draft(conn, thread(conn))
+    smtp = FakeSmtp()
+    suggestions.send_on_tap(conn, sid, NOW, {"body": "Confirmed."})
+    suggestions.apply_mail(
+        conn,
+        config,
+        NOW + timedelta(seconds=11),
+        open_imap=lambda b: server,
+        open_smtp=lambda b: smtp,
+    )
+    [(raw, _, extra)] = server.folders["Sent"].values()
+    assert extra[b"FLAGS"] == (b"\\Seen",)
+    assert message_from_bytes(raw)["Message-ID"] == smtp.sent[0]["Message-ID"]
+
+
+def test_undo_within_10s_nothing_sent(conn, config, server):
+    sid = suggestions.reply_draft(conn, thread(conn))
+    smtp = FakeSmtp()
+    suggestions.send_on_tap(conn, sid, NOW, {"body": "Confirmed."})
+    suggestions.undo_send(conn, sid)
+    suggestions.apply_mail(
+        conn,
+        config,
+        NOW + timedelta(minutes=1),
+        open_imap=lambda b: server,
+        open_smtp=lambda b: smtp,
+    )
+    assert smtp.sent == []
+    s = suggestions.get(conn, sid)
+    assert s["status"] == "proposed" and s["payload"]["body"] == "Confirmed."  # back in the queue
+
+
+def test_interrupted_send_is_not_repeated(conn, config, server):
+    sid = suggestions.reply_draft(conn, thread(conn))
+    suggestions.send_on_tap(conn, sid, NOW, {"body": "Confirmed."})
+    conn.execute("UPDATE outbox SET status = 'sending'")  # crashed mid-send
+    conn.execute("UPDATE suggestions SET status = 'applying'")
+    smtp = FakeSmtp()
+    suggestions.apply_mail(
+        conn,
+        config,
+        NOW + timedelta(minutes=1),
+        open_imap=lambda b: server,
+        open_smtp=lambda b: smtp,
+    )
+    assert smtp.sent == []
+    s = suggestions.get(conn, sid)
+    assert s["status"] == "failed" and "Sent folder" in s["error"]
+    with pytest.raises(suggestions.SuggestionError, match="too late"):
+        suggestions.undo_send(conn, sid)
+
+
+def test_no_bulk_send_endpoint(client):
+    paths = client.app.openapi()["paths"]
+    sending = sorted(
+        p
+        for p in paths
+        if any(seg.startswith("send") and "sender" not in seg for seg in p.split("/"))
+    )
+    assert sending == ["/api/suggestions/{sid}/send"]
+    r = client.post("/api/suggestions/send", json={"ids": [1, 2]}, headers=CSRF)
+    assert r.status_code in (404, 405)

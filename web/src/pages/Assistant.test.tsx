@@ -49,3 +49,29 @@ test("a reply is written, saved to Drafts and listed as saved", async () => {
     true,
   );
 });
+
+test("Send waits 10 seconds and can be undone", async () => {
+  window.history.pushState({}, "", "/assistant");
+  let undone = false;
+  const calls = mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/suggestions": { suggestions: [{ ...reply, payload: { item_id: 5, body: "Ok" } }] },
+    "GET /api/suggestions?status=recent": { suggestions: [] },
+    "POST /api/suggestions/7/send": () => ({
+      send_after: new Date(Date.now() + 10_000).toISOString(),
+    }),
+    "POST /api/suggestions/7/undo": () => {
+      undone = true;
+      return { ok: true };
+    },
+  });
+  renderApp();
+  await userEvent.click(await screen.findByRole("button", { name: "Send" }));
+  expect(await screen.findByText(/Sending in (10|9) s/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+  await waitFor(() => expect(undone).toBe(true));
+  expect(await screen.findByRole("button", { name: "Send" })).toBeInTheDocument();
+  const sends = calls.filter((c) => c.path === "/api/suggestions/7/send");
+  expect(sends).toHaveLength(1);
+  expect(JSON.parse(String(sends[0].init?.body))).toEqual({ payload: { body: "Ok" } });
+});

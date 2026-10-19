@@ -21,6 +21,14 @@ from kb.db import Conn
 log = logging.getLogger(__name__)
 
 GMAIL_IMAP = "imap.gmail.com"
+SENT_FOLDER_NAMES = (
+    "Sent",
+    "Sent Items",
+    "Sent Messages",
+    "INBOX.Sent",
+    "Надіслані",
+    "Отправленные",
+)
 DRAFT_FOLDER_NAMES = ("[Gmail]/Drafts", "Drafts", "INBOX.Drafts", "Чернетки", "Черновики")
 
 
@@ -145,16 +153,44 @@ def build_reply(
     return msg
 
 
-def drafts_folder(client: Any) -> str:
-    names = []
+def special_folder(client: Any, flag: bytes, names: tuple[str, ...], what: str) -> str:
+    seen = []
     for flags, _, name in client.list_folders():
-        if b"\\Drafts" in flags:
+        if flag in flags:
             return str(name)
-        names.append(str(name))
-    for candidate in DRAFT_FOLDER_NAMES:
-        if candidate in names:
+        seen.append(str(name))
+    for candidate in names:
+        if candidate in seen:
             return candidate
-    raise MailError("no Drafts folder in this mailbox")
+    raise MailError(f"no {what} folder in this mailbox")
+
+
+def drafts_folder(client: Any) -> str:
+    return special_folder(client, b"\\Drafts", DRAFT_FOLDER_NAMES, "Drafts")
+
+
+def copy_to_sent(client: Any, msg: EmailMessage, now: datetime) -> None:
+    """Gmail files sent mail itself; other servers need the copy appended to Sent."""
+    folder = special_folder(client, b"\\Sent", SENT_FOLDER_NAMES, "Sent")
+    client.append(folder, msg.as_bytes(), flags=[b"\\Seen"], msg_time=now)
+
+
+def open_smtp(box: Mailbox) -> Any:
+    import smtplib
+    import ssl
+
+    if not box.smtp_host:
+        raise MailError(f"sending is not set up for {box.address} (no SMTP server)")
+    context = ssl.create_default_context()
+    if box.smtp_security == "ssl":
+        server: smtplib.SMTP = smtplib.SMTP_SSL(
+            box.smtp_host, box.smtp_port, timeout=30, context=context
+        )
+    else:
+        server = smtplib.SMTP(box.smtp_host, box.smtp_port, timeout=30)
+        server.starttls(context=context)
+    server.login(box.smtp_username or box.address, box.smtp_password)
+    return server
 
 
 def save_draft(client: Any, msg: EmailMessage, now: datetime) -> str:

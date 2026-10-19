@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
 import { kyivTime } from "../briefs/BriefView";
@@ -52,6 +52,36 @@ function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
     onSuccess: onChanged,
     onError: (e) => setError(e.message),
   });
+  const [sendAt, setSendAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (sendAt === null) return;
+    const t = setInterval(() => {
+      setNow(Date.now());
+      if (Date.now() >= sendAt) {
+        clearInterval(t);
+        onChanged();
+      }
+    }, 250);
+    return () => clearInterval(t);
+  }, [sendAt, onChanged]);
+  const send = useMutation({
+    mutationFn: () =>
+      api<{ send_after: string }>(`/api/suggestions/${s.id}/send`, {
+        method: "POST",
+        body: { payload: { body } },
+      }),
+    onSuccess: (r) => {
+      setNow(Date.now());
+      setSendAt(Date.parse(r.send_after));
+    },
+    onError: (e) => setError(e.message),
+  });
+  const undo = useMutation({
+    mutationFn: () => api(`/api/suggestions/${s.id}/undo`, { method: "POST" }),
+    onSuccess: () => setSendAt(null),
+    onError: (e) => setError(e.message),
+  });
   const discard = useMutation({
     mutationFn: () => api(`/api/suggestions/${s.id}/discard`, { method: "POST", body: {} }),
     onSuccess: onChanged,
@@ -97,18 +127,32 @@ function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
           )}
         </div>
       )}
-      <div className="row actions">
-        <button className="btn" disabled={approve.isPending} onClick={() => approve.mutate()}>
-          {s.kind === "reply_email"
-            ? "Save to Drafts"
-            : s.kind === "task"
-              ? "Create task"
-              : "Approve"}
-        </button>
-        <button className="btn" onClick={() => discard.mutate()}>
-          Discard
-        </button>
-      </div>
+      {sendAt !== null ? (
+        <div className="row actions" role="status">
+          <span>Sending in {Math.max(0, Math.ceil((sendAt - now) / 1000))} s…</span>
+          <button className="btn" onClick={() => undo.mutate()}>
+            Undo
+          </button>
+        </div>
+      ) : (
+        <div className="row actions">
+          {s.kind === "reply_email" && (
+            <button className="btn primary" disabled={send.isPending} onClick={() => send.mutate()}>
+              Send
+            </button>
+          )}
+          <button className="btn" disabled={approve.isPending} onClick={() => approve.mutate()}>
+            {s.kind === "reply_email"
+              ? "Save to Drafts"
+              : s.kind === "task"
+                ? "Create task"
+                : "Approve"}
+          </button>
+          <button className="btn" onClick={() => discard.mutate()}>
+            Discard
+          </button>
+        </div>
+      )}
       {error && (
         <div role="alert" className="error">
           {error}
@@ -123,10 +167,15 @@ function Recent({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
     mutationFn: () => api(`/api/suggestions/${s.id}/approve`, { method: "POST", body: {} }),
     onSuccess: onChanged,
   });
+  const sent = s.payload.action === "send";
   const what =
     s.kind === "reply_email" && s.status === "applied"
-      ? "Saved to Drafts"
-      : (DONE[s.status] ?? s.status);
+      ? sent
+        ? "Sent"
+        : "Saved to Drafts"
+      : sent && s.status !== "failed"
+        ? "Sending…"
+        : (DONE[s.status] ?? s.status);
   return (
     <li>
       <span className={s.status === "failed" ? "state error" : "state ok"}>{what}</span>{" "}
