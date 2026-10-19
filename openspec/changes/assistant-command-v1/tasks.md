@@ -5,8 +5,8 @@ Each slice ends runnable with its tests passing (`make check`), is committed sep
 
 ## 1. Tracer bullet: ask a question in text, get a cited answer
 
-- [ ] 1.1 Migration: `assistant_threads`, `assistant_requests`; `kb.assistant.agent` tool loop (cap 8 calls / 90 s) with `search`, `get_item`, `person` tools, ref validation and redacted storage; verify `test_agent_answer_cites_only_tool_results`, `test_agent_stops_at_tool_cap`, `test_private_document_never_read` (with a scripted fake LLM)
-- [ ] 1.2 `POST /api/assistant/requests` + `GET .../{id}` with steps, thread pool, interrupted requests marked failed on startup; verify `test_request_runs_in_background_and_reports_steps`, `test_running_requests_failed_after_restart`, `test_assistant_routes_require_session`
+- [x] 1.1 Migration: `assistant_threads`, `assistant_requests`; `kb.assistant.agent` tool loop (cap 8 calls / 90 s) with `search`, `get_item`, `person` tools, ref validation and redacted storage; verify `test_agent_answer_cites_only_tool_results`, `test_agent_stops_at_tool_cap`, `test_private_document_never_read` (with a scripted fake LLM)
+- [x] 1.2 `POST /api/assistant/requests` + `GET .../{id}` with steps, thread pool, interrupted requests marked failed on startup; verify `test_request_runs_in_background_and_reports_steps`, `test_running_requests_failed_after_restart`, `test_assistant_routes_require_session`
 - [ ] 1.3 Assistant page (threads, thread view, answer with ref chips) and palette "Ask the assistant" mode; verify `Assistant.test.tsx` (palette request opens thread, polling shows steps then answer) and a real question answered on production
 
 ## 2. Actions from requests

@@ -114,6 +114,9 @@ services:
       DATABASE_URL: postgresql://kb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kb
       KB_CONFIG_YAML: ${KB_CONFIG_YAML}
       KB_WEB_ORIGIN: ${KB_WEB_ORIGIN:-}
+      # the assistant answers requests from the web OS (assistant-requests)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      KB_DISTILL_MODEL: ${KB_DISTILL_MODEL:-}
       KB_SECRET_KEY: ${SERVICE_PASSWORD_64_SECRETKEY}
       # search runs in the mcp service, which holds the embedding/reranking models
       KB_SEARCH_URL: http://mcp:8765/internal/search
