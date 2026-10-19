@@ -45,6 +45,11 @@ def propose(
     return int(row["id"])
 
 
+def is_email(kind: str, payload: dict[str, Any]) -> bool:
+    """Email replies and email nudges go through the mailbox executors."""
+    return kind == "reply_email" or (kind == "nudge" and payload.get("channel") == "email")
+
+
 def reply_draft(conn: Conn, item_id: int, body: str = "", reason: str = "") -> int:
     """A reply suggestion for an email thread; reuses the pending one for the same thread."""
     from kb.assistant import mail
@@ -106,7 +111,14 @@ def approve(
         " decided_at = %s, error = NULL WHERE id = %s",
         (Jsonb(payload), bool(edited) and payload != s["payload"], now, sid),
     )
-    if s["kind"] == "reply_email":
+    if s["kind"] in ("reply_tg", "nudge") and not is_email(s["kind"], payload):
+        # Telegram: the owner copies the text and sends it; the system never writes to Telegram
+        conn.execute(
+            "UPDATE suggestions SET status = 'applied', applied_ref = 'copied' WHERE id = %s",
+            (sid,),
+        )
+        return "copied"
+    if is_email(s["kind"], payload):
         # saved by the routines service (it holds the mailbox credentials): apply_mail
         if not (payload.get("body") or "").strip():
             raise SuggestionError("the reply is empty")
@@ -139,7 +151,7 @@ def send_on_tap(
     """The owner tapped Send on one reply: it is sent after the undo window, unless undone.
     There is deliberately no way to send several at once or on a schedule."""
     s = get(conn, sid)
-    if s["kind"] != "reply_email":
+    if not is_email(s["kind"], s["payload"]):
         raise SuggestionError("only email replies can be sent")
     if s["status"] not in ("proposed", "failed"):
         raise SuggestionError(f"suggestion {sid} is {s['status']}")
@@ -197,7 +209,8 @@ def apply_mail(
     )
     done = 0
     drafts = conn.execute(
-        "SELECT * FROM suggestions WHERE kind = 'reply_email' AND status = 'approved'"
+        "SELECT * FROM suggestions WHERE status = 'approved'"
+        " AND (kind = 'reply_email' OR (kind = 'nudge' AND payload->>'channel' = 'email'))"
         " AND coalesce(payload->>'action', 'draft') = 'draft' ORDER BY decided_at LIMIT 10"
     ).fetchall()
     for s in drafts:
