@@ -485,6 +485,11 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
         return drafting.cycle(conn, config, llm, now, searcher)
 
+    def propose_actions(conn: db.Conn, now: datetime) -> int:
+        from kb.assistant import proactive
+
+        return proactive.cycle(conn, config, llm, now)
+
     def detect_loops(conn: db.Conn, now: datetime) -> int:
         from kb import loop_detect
 
@@ -501,6 +506,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
             push_clickup,
             apply_mail,
             draft_replies,
+            propose_actions,
             detect_loops,
             propose_goals,
         ],

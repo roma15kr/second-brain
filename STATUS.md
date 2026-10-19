@@ -11,6 +11,9 @@ _Last updated: 2026-10-18 by Claude_
   Web OS https://os.zhukovsky.biz (passkeys) · MCP https://kb.zhukovsky.biz/mcp (token + lockout) · Cloudflare-proxied.
 
 ## Done recently (2026-10-18)
+- Nudges and delegation (12.5): overdue promises owed to the owner get a polite follow-up draft (email: Drafts/Send;
+  Telegram: copy and open chat); emails resembling a teammate's ClickUp work get a task draft for them; a kind
+  discarded 5 times in a row slows to one a day; acceptance per kind on Status. Declines wait for calendars (13.5).
 - Priority (12.3): needs-reply/important mail ordered by importance × urgency with a reason (goal link by
   meaning, important/frequent sender, money, deadline words, waiting time) and a quadrant; "Two-minute
   replies" group; morning brief and automatic drafts use the same order. Goal links need confirmed goals.

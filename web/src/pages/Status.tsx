@@ -49,6 +49,23 @@ type StatusData = {
     briefs: { total: number; used: number; share: number | null; target: number };
     loops: { total: number; resolved: number; share: number | null; target: number };
   };
+  suggestions?: {
+    kind: string;
+    accepted: number;
+    edited: number;
+    discarded: number;
+    rate: number | null;
+    cooling: boolean;
+  }[];
+};
+
+const SUGGESTION_KINDS: Record<string, string> = {
+  reply_email: "email replies",
+  reply_tg: "Telegram replies",
+  task: "task drafts",
+  delegate: "delegations",
+  nudge: "nudges",
+  decline: "declines",
 };
 
 const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)}%`);
@@ -86,6 +103,9 @@ export function Status() {
   if (status.isPending) return <p className="muted">Loading…</p>;
   if (status.isError) return <p className="error">{status.error.message}</p>;
   const { system, routine_runs, ai, usefulness } = status.data;
+  const kinds = status.data.suggestions ?? [];
+  const accepted = kinds.reduce((n, k) => n + k.accepted, 0);
+  const decided = accepted + kinds.reduce((n, k) => n + k.discarded, 0);
   return (
     <div className="grid">
       <section className="card">
@@ -103,7 +123,27 @@ export function Status() {
             target={usefulness.loops.target}
             detail={`${usefulness.loops.resolved} of ${usefulness.loops.total}`}
           />
+          <Metric
+            label="assistant suggestions approved"
+            share={decided ? accepted / decided : null}
+            target={0.6}
+            detail={`${accepted} of ${decided}`}
+          />
         </div>
+        {kinds.length > 0 && (
+          <ul className="list">
+            {kinds.map((k) => (
+              <li key={k.kind}>
+                {SUGGESTION_KINDS[k.kind] ?? k.kind}: {pct(k.rate)} approved
+                <span className="muted">
+                  {" "}
+                  · {k.accepted} approved ({k.edited} edited) · {k.discarded} discarded
+                  {k.cooling && " · fewer for now: the last 5 were discarded"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
       <section className="card">
         <h3>{system.healthy ? "✅ Sources healthy" : "⚠ Needs attention"}</h3>

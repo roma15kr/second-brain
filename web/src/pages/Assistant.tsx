@@ -39,13 +39,23 @@ function str(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
+// Email replies and email nudges are saved to Drafts or sent; Telegram texts are copied.
+function isEmail(s: Suggestion): boolean {
+  return s.kind === "reply_email" || (s.kind === "nudge" && s.payload.channel === "email");
+}
+function isText(s: Suggestion): boolean {
+  return ["reply_email", "reply_tg", "nudge"].includes(s.kind);
+}
+function isTask(s: Suggestion): boolean {
+  return s.kind === "task" || s.kind === "delegate";
+}
+
 function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
   const [body, setBody] = useState(str(s.payload.body));
   const [name, setName] = useState(str(s.payload.name));
   const [due, setDue] = useState(str(s.payload.due_date));
   const [error, setError] = useState<string | null>(null);
-  const edited =
-    s.kind === "reply_email" ? { body } : s.kind === "task" ? { name, due_date: due || null } : {};
+  const edited = isText(s) ? { body } : isTask(s) ? { name, due_date: due || null } : {};
   const approve = useMutation({
     mutationFn: () =>
       api(`/api/suggestions/${s.id}/approve`, { method: "POST", body: { payload: edited } }),
@@ -97,12 +107,10 @@ function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
         ))}
       </div>
       {s.reason && <div className="muted">{s.reason}</div>}
-      {s.kind === "reply_email" && s.payload.ai_pending === true && (
-        <div className="muted">Drafting a reply…</div>
-      )}
-      {s.kind === "reply_email" && (
+      {isText(s) && s.payload.ai_pending === true && <div className="muted">Drafting a reply…</div>}
+      {isText(s) && (
         <textarea
-          aria-label="Reply"
+          aria-label={s.kind === "nudge" ? "Nudge" : "Reply"}
           className="btn wide"
           rows={6}
           value={body}
@@ -110,7 +118,7 @@ function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
           onChange={(e) => setBody(e.target.value)}
         />
       )}
-      {s.kind === "task" && (
+      {isTask(s) && (
         <div className="row">
           <input
             aria-label="Task name"
@@ -139,18 +147,27 @@ function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
         </div>
       ) : (
         <div className="row actions">
-          {s.kind === "reply_email" && (
+          {isEmail(s) && (
             <button className="btn primary" disabled={send.isPending} onClick={() => send.mutate()}>
               Send
             </button>
           )}
-          <button className="btn" disabled={approve.isPending} onClick={() => approve.mutate()}>
-            {s.kind === "reply_email"
-              ? "Save to Drafts"
-              : s.kind === "task"
-                ? "Create task"
-                : "Approve"}
-          </button>
+          {isText(s) && !isEmail(s) ? (
+            <button
+              className="btn primary"
+              onClick={() => {
+                void navigator.clipboard?.writeText(body);
+                if (str(s.payload.link)) window.open(str(s.payload.link), "_blank", "noreferrer");
+                approve.mutate();
+              }}
+            >
+              Copy and open chat
+            </button>
+          ) : (
+            <button className="btn" disabled={approve.isPending} onClick={() => approve.mutate()}>
+              {isEmail(s) ? "Save to Drafts" : isTask(s) ? "Create task" : "Approve"}
+            </button>
+          )}
           <button className="btn" onClick={() => discard.mutate()}>
             Discard
           </button>
@@ -172,13 +189,15 @@ function Recent({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
   });
   const sent = s.payload.action === "send";
   const what =
-    s.kind === "reply_email" && s.status === "applied"
+    isEmail(s) && s.status === "applied"
       ? sent
         ? "Sent"
         : "Saved to Drafts"
-      : sent && s.status !== "failed"
-        ? "Sending…"
-        : (DONE[s.status] ?? s.status);
+      : s.applied_ref === "copied"
+        ? "Copied"
+        : sent && s.status !== "failed"
+          ? "Sending…"
+          : (DONE[s.status] ?? s.status);
   return (
     <li>
       <span className={s.status === "failed" ? "state error" : "state ok"}>{what}</span>{" "}

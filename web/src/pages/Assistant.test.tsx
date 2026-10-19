@@ -75,3 +75,32 @@ test("Send waits 10 seconds and can be undone", async () => {
   expect(sends).toHaveLength(1);
   expect(JSON.parse(String(sends[0].init?.body))).toEqual({ payload: { body: "Ok" } });
 });
+
+test("a Telegram nudge is copied and its chat opened", async () => {
+  window.history.pushState({}, "", "/assistant");
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  const open = vi.spyOn(window, "open").mockReturnValue(null);
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/suggestions": {
+      suggestions: [
+        {
+          ...reply,
+          id: 9,
+          kind: "nudge",
+          payload: { channel: "telegram", body: "Any news?", link: "https://t.me/c/1/2" },
+          reason: "Olga: Customs documents — 2 days overdue",
+        },
+      ],
+    },
+    "GET /api/suggestions?status=recent": { suggestions: [] },
+    "POST /api/suggestions/9/approve": { applied_ref: "copied" },
+  });
+  renderApp();
+  expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument();
+  await userEvent.click(await screen.findByRole("button", { name: "Copy and open chat" }));
+  expect(writeText).toHaveBeenCalledWith("Any news?");
+  expect(open).toHaveBeenCalledWith("https://t.me/c/1/2", "_blank", "noreferrer");
+  open.mockRestore();
+});
