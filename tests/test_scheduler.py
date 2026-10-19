@@ -145,6 +145,7 @@ def test_kb_routines_starts_scheduler_with_morning_runner(argv, monkeypatch):
         "close_answered_loops",
         "wake_snoozed",
         "push_clickup",
+        "apply_mail",
         "detect_loops",
         "propose_goals",
     ]

@@ -472,6 +472,11 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
         return goals.cycle(conn, config, llm, now)
 
+    def apply_mail(conn: db.Conn, now: datetime) -> int:
+        from kb.assistant import suggestions
+
+        return suggestions.apply_mail(conn, config, now)
+
     def detect_loops(conn: db.Conn, now: datetime) -> int:
         from kb import loop_detect
 
@@ -486,6 +491,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
             close_answered_loops,
             loops.wake_snoozed,
             push_clickup,
+            apply_mail,
             detect_loops,
             propose_goals,
         ],

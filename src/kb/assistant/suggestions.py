@@ -8,6 +8,7 @@ the task is closed.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from collections.abc import Callable
@@ -42,6 +43,30 @@ def propose(
     ).fetchone()
     assert row is not None
     return int(row["id"])
+
+
+def reply_draft(conn: Conn, item_id: int, body: str = "", reason: str = "") -> int:
+    """A reply suggestion for an email thread; reuses the pending one for the same thread."""
+    from kb.assistant import mail
+
+    mail.thread_headers(conn, item_id)  # raises for non-email items
+    row = conn.execute(
+        "SELECT id FROM suggestions WHERE kind = 'reply_email' AND item_id = %s"
+        " AND status = 'proposed'",
+        (item_id,),
+    ).fetchone()
+    if row is not None:
+        return int(row["id"])
+    scopes_ = conn.execute("SELECT scopes FROM items WHERE id = %s", (item_id,)).fetchone()
+    return propose(
+        conn,
+        "reply_email",
+        {"item_id": item_id, "body": body},
+        reason=reason or "Reply requested",
+        refs=[f"item:{item_id}"],
+        scopes=list(scopes_["scopes"]) if scopes_ else [],
+        item_id=item_id,
+    )
 
 
 def get(conn: Conn, sid: int) -> dict[str, Any]:
@@ -81,6 +106,18 @@ def approve(
         " decided_at = %s, error = NULL WHERE id = %s",
         (Jsonb(payload), bool(edited) and payload != s["payload"], now, sid),
     )
+    if s["kind"] == "reply_email":
+        # saved by the routines service (it holds the mailbox credentials): apply_mail
+        action = payload.get("action") or "draft"
+        if action != "draft":
+            raise SuggestionError(f"unknown email action {action!r}")
+        if not (payload.get("body") or "").strip():
+            raise SuggestionError("the reply is empty")
+        conn.execute(
+            "UPDATE suggestions SET payload = payload || %s WHERE id = %s",
+            (Jsonb({"action": action}), sid),
+        )
+        return "queued"
     if s["kind"] in ("task", "delegate"):
         if clickup_client is None:
             raise SuggestionError("ClickUp is not connected")
@@ -94,6 +131,52 @@ def approve(
             raise
         return ref
     raise SuggestionError(f"no executor for {s['kind']} yet")
+
+
+def apply_mail(
+    conn: Conn,
+    config: Any,
+    now: datetime,
+    open_imap: Callable[[Any], Any] | None = None,
+) -> int:
+    """Saves approved email replies to their mailbox's Drafts (never sends)."""
+    from kb.assistant import mail
+
+    opener = open_imap or mail.open_imap
+    done = 0
+    for s in conn.execute(
+        "SELECT * FROM suggestions WHERE kind = 'reply_email' AND status = 'approved'"
+        " ORDER BY decided_at LIMIT 10"
+    ).fetchall():
+        sid, payload = s["id"], s["payload"]
+        conn.execute(
+            "UPDATE suggestions SET status = 'applying', attempt_started_at = %s WHERE id = %s",
+            (now, sid),
+        )
+        client = None
+        try:
+            thread = mail.thread_headers(conn, int(payload["item_id"]))
+            box = mail.mailbox(conn, config, thread["source_id"])
+            msg = mail.build_reply(conn, sid, payload, box, now)
+            client = opener(box)
+            ref = mail.save_draft(client, msg, now)
+        except Exception as e:
+            log.warning("email suggestion %s failed: %s", sid, e)
+            conn.execute(
+                "UPDATE suggestions SET status = 'failed', error = %s WHERE id = %s",
+                (str(e)[:500], sid),
+            )
+            continue
+        finally:
+            if client is not None:
+                with contextlib.suppress(Exception):
+                    client.logout()
+        conn.execute(
+            "UPDATE suggestions SET status = 'applied', applied_ref = %s WHERE id = %s",
+            (ref, sid),
+        )
+        done += 1
+    return done
 
 
 def _marker(sid: int) -> str:
@@ -198,10 +281,17 @@ def default_list(conn: Conn) -> str | None:
     return str(row["list_id"]) if row else None
 
 
+RECENT = ("approved", "applying", "applied", "failed")
+
+
 def listing(conn: Conn, status: str = "proposed", limit: int = 100) -> list[dict[str, Any]]:
+    """Pending suggestions, or `recent`: decided in the last 7 days and not discarded."""
+    statuses = list(RECENT) if status == "recent" else [status]
     rows = conn.execute(
-        "SELECT * FROM suggestions WHERE status = %s ORDER BY created_at DESC LIMIT %s",
-        (status, limit),
+        "SELECT s.*, i.title AS item_title FROM suggestions s LEFT JOIN items i ON i.id = s.item_id"
+        " WHERE s.status = ANY(%s) AND (%s OR s.decided_at > now() - interval '7 days')"
+        " ORDER BY coalesce(s.decided_at, s.created_at) DESC LIMIT %s",
+        (statuses, status != "recent", limit),
     ).fetchall()
     return [
         {
@@ -212,6 +302,7 @@ def listing(conn: Conn, status: str = "proposed", limit: int = 100) -> list[dict
             "refs": list(r["refs"]),
             "scopes": list(r["scopes"]),
             "item_id": r["item_id"],
+            "item_title": r["item_title"],
             "status": r["status"],
             "applied_ref": r["applied_ref"],
             "error": r["error"],

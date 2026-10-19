@@ -37,6 +37,16 @@ def approve(
     return {"applied_ref": ref}
 
 
+@router.post("/api/items/{item_id}/reply-draft")
+def reply_draft(conn: Db, item_id: int) -> dict[str, int]:
+    from kb.assistant import mail
+
+    try:
+        return {"id": suggestions.reply_draft(conn, item_id)}
+    except mail.MailError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @router.post("/api/suggestions/{sid}/discard")
 def discard(
     conn: Db, sid: int, reason: Annotated[str | None, Body(embed=True)] = None

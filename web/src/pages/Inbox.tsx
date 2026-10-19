@@ -2,6 +2,7 @@ import { useProjects } from "../shell/useProjects";
 import { ScopeTag } from "../shell/ScopeTag";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { api } from "../api/client";
 import { kyivTime } from "../briefs/BriefView";
 
@@ -49,6 +50,12 @@ function Row({ item, onChanged }: { item: InboxItem; onChanged: () => void }) {
     onError: (e) => setMessage(e.message),
   });
   const post = (path: string, body?: unknown) => act.mutate({ path, body });
+  const navigate = useNavigate();
+  const draft = useMutation({
+    mutationFn: () => api(`/api/items/${item.item_id}/reply-draft`, { method: "POST" }),
+    onSuccess: () => void navigate("/assistant"),
+    onError: (e) => setMessage(e.message),
+  });
   const base = `/api/inbox/${item.item_id}`;
   return (
     <li>
@@ -76,6 +83,9 @@ function Row({ item, onChanged }: { item: InboxItem; onChanged: () => void }) {
             Open in Gmail
           </a>
         )}
+        <button className="btn" onClick={() => draft.mutate()}>
+          Draft reply
+        </button>
         <button className="btn" onClick={() => post(`${base}/done`)}>
           Done
         </button>

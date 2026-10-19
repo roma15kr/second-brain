@@ -5,6 +5,7 @@ export const APPS: App[] = [
   { path: "/", label: "Today", icon: "☀", phone: true },
   { path: "/inbox", label: "Inbox", icon: "✉", phone: true },
   { path: "/loops", label: "Loops", icon: "↺", phone: true },
+  { path: "/assistant", label: "Assistant", icon: "✦", phone: true },
   { path: "/briefs", label: "Briefs", icon: "🗞", phone: true },
   { path: "/week", label: "Week", icon: "📅" },
   { path: "/clickup", label: "ClickUp", icon: "☑" },

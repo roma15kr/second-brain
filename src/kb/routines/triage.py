@@ -134,7 +134,7 @@ def candidates(conn: Conn, since: datetime, until: datetime) -> list[Candidate]:
         JOIN LATERAL (
             SELECT author, body FROM messages
             WHERE source_id = i.source_id AND unit_key = i.source_item_key AND NOT hidden
-              AND NOT (coalesce(metadata->'labels', '[]'::jsonb) ? '\\Draft')
+              AND NOT (coalesce(metadata->'labels', '[]'::jsonb) ?| array['\\Draft', 'Draft'])
             ORDER BY sent_at DESC LIMIT 1
         ) m ON true
         WHERE i.kind = 'email_thread' AND NOT i.hidden
