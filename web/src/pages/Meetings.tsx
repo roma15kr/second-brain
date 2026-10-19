@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { api } from "../api/client";
 import { ScopeTag } from "../shell/ScopeTag";
+import { AudioTranscript, type Track } from "./AudioPlayer";
 
 export type Meeting = {
   id: number;
@@ -37,13 +38,10 @@ export type Recording = {
     actions: { text: string; owner: string; is_me: boolean; due: string | null }[];
   } | null;
   processed: boolean;
+  audio?: Track[];
 };
 
-function mmss(s: number): string {
-  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-}
-
-export function RecordingView({ r }: { r: Recording }) {
+export function RecordingView({ r, onChanged }: { r: Recording; onChanged: () => void }) {
   return (
     <section className="recording">
       <h3>
@@ -84,19 +82,20 @@ export function RecordingView({ r }: { r: Recording }) {
       ) : (
         <p className="muted">{r.processed ? "Not processed." : "Processing…"}</p>
       )}
-      {r.segments.length > 0 && (
-        <details>
-          <summary>Transcript ({r.segments.length} lines)</summary>
-          <ul className="list transcript">
-            {r.segments.map((s, i) => (
-              <li key={i}>
-                <span className="muted">{mmss(s.start)}</span> <strong>{s.speaker || "?"}</strong>:{" "}
-                {s.text}
-              </li>
-            ))}
-          </ul>
+      {r.segments.length > 0 || (r.audio ?? []).length > 0 ? (
+        <details open={(r.audio ?? []).some((t) => t.available)}>
+          <summary>
+            {(r.audio ?? []).some((t) => t.available) ? "Listen" : "Transcript"} (
+            {r.segments.length} lines)
+          </summary>
+          <AudioTranscript
+            recordingId={r.id}
+            tracks={r.audio ?? []}
+            segments={r.segments}
+            onDeleted={onChanged}
+          />
         </details>
-      )}
+      ) : null}
       {r.notes && <div className="answer">{r.notes}</div>}
     </section>
   );
@@ -305,7 +304,7 @@ export function RecordingPage() {
   return (
     <article className="card">
       <h2>{q.data.title}</h2>
-      <RecordingView r={q.data} />
+      <RecordingView r={q.data} onChanged={() => void q.refetch()} />
     </article>
   );
 }
@@ -401,7 +400,11 @@ export function MeetingPage() {
         </>
       )}
       {(m.recordings ?? []).map((r) => (
-        <RecordingView key={r.id} r={r} />
+        <RecordingView
+          key={r.id}
+          r={r}
+          onChanged={() => void queryClient.invalidateQueries({ queryKey: ["meeting", id] })}
+        />
       ))}
       <AttachNotes
         id={m.id}

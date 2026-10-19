@@ -12,10 +12,11 @@ import binascii
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, Response
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from kb import recordings
+from kb import audio, recordings
 from kb.api.deps import get_conn
 from kb.db import Conn
 
@@ -141,6 +142,7 @@ def _recording(r: dict[str, Any]) -> dict[str, Any]:
         "item_id": r["item_id"],
         "result": r["result"],
         "processed": r["processed_at"] is not None,
+        "audio": r.get("audio", []),
     }
 
 
@@ -159,14 +161,40 @@ def recording(conn: Db, rid: int) -> dict[str, Any]:
     row = conn.execute("SELECT * FROM recordings WHERE id = %s", (rid,)).fetchone()
     if row is None:
         raise HTTPException(404, f"no recording {rid}")
-    return _recording(row)
+    return _recording({**row, "audio": audio.tracks(conn, rid)})
 
 
 def for_event(conn: Conn, event_id: int) -> list[dict[str, Any]]:
     rows = conn.execute(
         "SELECT * FROM recordings WHERE event_id = %s ORDER BY started_at", (event_id,)
     ).fetchall()
-    return [_recording(r) for r in rows]
+    return [_recording({**r, "audio": audio.tracks(conn, r["id"])}) for r in rows]
+
+
+@router.get("/api/recordings/{rid}/audio/{track}", response_model=None)
+def play(conn: Db, rid: int, track: str, download: bool = False) -> FileResponse:
+    """The owner's playback (HTTP Range supported, for seeking); device tokens cannot read."""
+    try:
+        path, mime = audio.playable(conn, rid, track)
+    except audio.AudioError as e:
+        raise HTTPException(e.status, str(e)) from e
+    return FileResponse(
+        path,
+        media_type=mime,
+        filename=path.name if download else None,
+        content_disposition_type="attachment" if download else "inline",
+    )
+
+
+@router.delete("/api/recordings/{rid}/audio")
+def delete_audio(conn: Db, rid: int) -> dict[str, int]:
+    return {"deleted": audio.delete_recording(conn, rid, datetime.now(UTC))}
+
+
+@router.post("/api/scopes/{scope}/delete-audio")
+def delete_scope_audio(conn: Db, scope: str) -> dict[str, int]:
+    """All audio of a project (e.g. after a contract ends); transcripts stay."""
+    return {"deleted": audio.delete_scope(conn, scope, datetime.now(UTC))}
 
 
 # --- device side (bearer token) -----------------------------------------------------------------
@@ -223,3 +251,93 @@ def upload(conn: Db, dev: Device, body: Upload) -> dict[str, int]:
     except recordings.RecordingError as e:
         raise HTTPException(400, str(e)) from e
     return {"recording_id": rid}
+
+
+def _own(conn: Conn, dev: dict[str, Any], rid: int) -> dict[str, Any]:
+    row = conn.execute(
+        "SELECT * FROM recordings WHERE id = %s AND device_id = %s", (rid, dev["id"])
+    ).fetchone()
+    if row is None:
+        raise HTTPException(404, f"no recording {rid} from this device")
+    return dict(row)
+
+
+def _audio_error(e: audio.AudioError, conn: Conn, rid: int, track: str) -> JSONResponse:
+    body: dict[str, Any] = {"detail": str(e)}
+    headers = {}
+    if e.status == 409:
+        try:
+            got = audio.state(audio.get(conn, rid, track))
+            body.update(got)
+            headers["Upload-Offset"] = str(got["received_bytes"])
+        except audio.AudioError:
+            pass
+    return JSONResponse(body, status_code=e.status, headers=headers)
+
+
+class Announce(BaseModel):
+    mime: str
+    total_bytes: int
+    sha256: str
+    duration_seconds: float | None = None
+
+
+@router.post("/api/devices/recordings/{rid}/audio/{track}", response_model=None)
+def announce(conn: Db, dev: Device, rid: int, track: str, body: Announce) -> Any:
+    rec = _own(conn, dev, rid)
+    try:
+        return audio.announce(
+            conn, rec, track, body.mime, body.total_bytes, body.sha256, body.duration_seconds
+        )
+    except audio.AudioError as e:
+        return _audio_error(e, conn, rid, track)
+
+
+@router.head("/api/devices/recordings/{rid}/audio/{track}")
+def received(conn: Db, dev: Device, rid: int, track: str) -> Response:
+    """How much of the track arrived (Upload-Offset), so an interrupted upload continues."""
+    _own(conn, dev, rid)
+    try:
+        st = audio.state(audio.get(conn, rid, track))
+    except audio.AudioError as e:
+        raise HTTPException(e.status, str(e)) from e
+    return Response(
+        headers={
+            "Upload-Offset": str(st["received_bytes"]),
+            "Upload-Length": str(st["total_bytes"]),
+            "Upload-Complete": "1" if st["complete"] else "0",
+        }
+    )
+
+
+@router.put("/api/devices/recordings/{rid}/audio/{track}", response_model=None)
+async def chunk(request: Request, rid: int, track: str) -> Any:
+    """One chunk with `Content-Range: bytes <start>-<end>/<total>` (8 MB recommended)."""
+    from starlette.concurrency import run_in_threadpool
+
+    data = await request.body()
+    rng = request.headers.get("content-range", "")
+    try:
+        unit, _, spec = rng.partition(" ")
+        span, _, _total = spec.partition("/")
+        start, _, end = span.partition("-")
+        if unit != "bytes" or int(end) - int(start) + 1 != len(data):
+            raise ValueError
+    except ValueError:
+        return JSONResponse({"detail": "Content-Range must match the body"}, status_code=400)
+    token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+
+    def work() -> Any:
+        with request.app.state.connect() as conn:
+            dev = recordings.device_for(conn, token, datetime.now(UTC)) if token else None
+            if dev is None:
+                return JSONResponse({"detail": "unknown or revoked device"}, status_code=401)
+            try:
+                _own(conn, dev, rid)
+                return audio.put_chunk(conn, rid, track, int(start), data)
+            except HTTPException as e:
+                return JSONResponse({"detail": e.detail}, status_code=e.status_code)
+            except audio.AudioError as e:
+                return _audio_error(e, conn, rid, track)
+
+    return await run_in_threadpool(work)

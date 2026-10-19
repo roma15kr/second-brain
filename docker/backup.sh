@@ -14,6 +14,45 @@ record() {  # status, dump file, detail
     VALUES ('$1', '$2', \$detail\$$3\$detail\$)" || echo "cannot record backup check"
 }
 
+record_audio() {  # status, detail
+  psql -q -v ON_ERROR_STOP=1 -c "INSERT INTO backup_checks (kind, status, detail)
+    VALUES ('audio', '$1', \$detail\$$2\$detail\$)" || echo "cannot record audio backup check"
+}
+
+# Meeting audio: files are immutable, so a copy = new names only; each copy is verified by
+# sha256, and copies of audio deleted from the app (12-month retention) are removed too.
+backup_audio() {
+  SRC="${AUDIO_DIR:-/data/audio}"
+  DST="$DIR/audio"
+  [ -d "$SRC" ] || return 0
+  mkdir -p "$DST"
+  LIST=$(mktemp)
+  psql -Atc "SELECT path || ' ' || sha256 FROM recording_audio WHERE complete
+             AND deleted_at IS NULL" > "$LIST" || { record_audio failed "cannot list audio"; return; }
+  COPIED=0; BAD=0
+  while read -r path sum; do
+    rel="${path#"$SRC"/}"
+    [ -f "$DST/$rel" ] && continue
+    mkdir -p "$(dirname "$DST/$rel")"
+    if cp "$path" "$DST/$rel.tmp" && echo "$sum  $DST/$rel.tmp" | sha256sum -c --status; then
+      mv "$DST/$rel.tmp" "$DST/$rel"; COPIED=$((COPIED + 1))
+    else
+      rm -f "$DST/$rel.tmp"; BAD=$((BAD + 1))
+    fi
+  done < "$LIST"
+  find "$DST" -type f ! -name '*.tmp' | while read -r f; do
+    rel="${f#"$DST"/}"
+    grep -q "^$SRC/$rel " "$LIST" || { rm -f "$f"; }
+  done
+  SIZE=$(du -sh "$DST" | cut -f1)
+  if [ "$BAD" = 0 ]; then
+    record_audio ok "copied $COPIED new files, verified; audio backup $SIZE"
+  else
+    record_audio checksum_failed "copied $COPIED, $BAD failed verification; audio backup $SIZE"
+  fi
+  rm -f "$LIST"
+}
+
 counts() {  # database → "table=count ..." for the tables that must survive a restore
   psql -d "$1" -Atc "SELECT string_agg(t || '=' || n, ' ' ORDER BY t) FROM (
       SELECT 'raw_records' t, count(*) n FROM raw_records UNION ALL
@@ -45,6 +84,7 @@ while true; do
     record dump_failed "$FILE" "pg_dump failed"
   fi
   find "$DIR" -name 'kb-*.dump' -mtime +"$KEEP_DAYS" -delete
+  backup_audio
   [ "${BACKUP_ONCE:-0}" = 1 ] && exit 0
   sleep "$INTERVAL"
 done
