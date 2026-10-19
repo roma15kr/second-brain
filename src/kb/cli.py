@@ -111,7 +111,13 @@ def _sync_clickup(last_run: dict[str, float]) -> None:
                 n, finished = clickup.sync_account_for(conn, client, acc, CLICKUP_SLICE_SECONDS)
                 if not finished:  # a big first pass: continue soon, mail sync runs in between
                     last_run[sid] = now - CLICKUP_EVERY + 10
-                try:  # followed chat channels (ClickUp Chat API v3)
+                try:  # the owner's inbox: involved tasks in every list of the workspace
+                    n += clickup.sync_inbox(conn, client, acc, datetime.now(UTC))
+                except clickup.RateLimited:
+                    raise
+                except Exception:
+                    log.exception("%s: inbox sync failed", sid)
+                try:  # DMs, group DMs and the owner's channels (ClickUp Chat API v3)
                     n += clickup.sync_chat(conn, client, acc, datetime.now(UTC))
                 except clickup.RateLimited:
                     raise
