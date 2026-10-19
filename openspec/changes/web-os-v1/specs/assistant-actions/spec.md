@@ -38,7 +38,7 @@ Needs-reply and important email SHALL be ordered by importance (who the sender i
 - **THEN** that email is listed first with the reason "Quokka goal: marketplace launch"
 
 ### Requirement: Reply drafts
-For the top needs-reply emails (default 10 per day) the system SHALL draft a reply in the language of the thread and the owner's tone (learned from the owner's sent mail), using knowledge-base context with cited sources; approved drafts SHALL be saved to that mailbox's drafts in the same thread or sent on the owner's tap. For Telegram, drafts SHALL be shown for copying with a link that opens the chat.
+For the top needs-reply emails (default 5 per day, set in Settings; more on request with "Draft reply") the system SHALL draft a reply in the language of the thread and the owner's tone (learned from the owner's sent mail), using knowledge-base context with cited sources; approved drafts SHALL be saved to that mailbox's drafts in the same thread or sent on the owner's tap. For Telegram, drafts SHALL be shown for copying with a link that opens the chat.
 
 #### Scenario: Draft with context
 - **WHEN** a dealer asks about delivery terms that were agreed in an earlier thread

@@ -49,6 +49,7 @@ class AppSettings(BaseModel):
     schedule: Schedule = Schedule()  # pydantic copies defaults per instance
     quiet_hours: QuietHours = QuietHours()
     ai_budget_usd: float | None = Field(default=None, ge=0, le=1000)  # None: config default
+    reply_drafts_per_day: int = Field(default=5, ge=0, le=20)  # owner decision 2026-10-18: 3-5
 
 
 class SettingsError(ValueError):

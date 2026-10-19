@@ -50,7 +50,13 @@ def cmd_ingest(args: argparse.Namespace) -> None:
                 try:
                     with db.connect(database_url()) as conn:
                         new, backfilling = imap.sync(conn, client, source)
-                        health.record_ok(conn, source.id, new=new, backfilling=backfilling)
+                        health.record_ok(
+                            conn,
+                            source.id,
+                            new=new,
+                            backfilling=backfilling,
+                            folders=imap.folder_cursors(conn, source.id),
+                        )
                     if backfilling:  # keep going quickly until the backfill is done
                         last_run[source.id] -= source.poll_seconds - 5
                 finally:
@@ -350,6 +356,7 @@ def cmd_index(args: argparse.Namespace) -> None:
                 log.exception("passage backfill failed")
             if embedder is not None:
                 try:
+                    embed.embed_goals(conn, embedder)
                     if embed.run_cycle(conn, config, embedder):
                         continue  # keep embedding while there is work
                 except Exception as exc:
@@ -472,6 +479,23 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
         return goals.cycle(conn, config, llm, now)
 
+    def apply_mail(conn: db.Conn, now: datetime) -> int:
+        from kb.assistant import suggestions
+
+        return suggestions.apply_mail(conn, config, now)
+
+    searcher = _web_searcher()
+
+    def draft_replies(conn: db.Conn, now: datetime) -> int:
+        from kb.assistant import drafting
+
+        return drafting.cycle(conn, config, llm, now, searcher)
+
+    def propose_actions(conn: db.Conn, now: datetime) -> int:
+        from kb.assistant import proactive
+
+        return proactive.cycle(conn, config, llm, now)
+
     def detect_loops(conn: db.Conn, now: datetime) -> int:
         from kb import loop_detect
 
@@ -486,6 +510,9 @@ def cmd_routines(args: argparse.Namespace) -> None:
             close_answered_loops,
             loops.wake_snoozed,
             push_clickup,
+            apply_mail,
+            draft_replies,
+            propose_actions,
             detect_loops,
             propose_goals,
         ],

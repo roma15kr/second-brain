@@ -519,3 +519,12 @@ fieldset.plain {
   padding: 10px;
   border-radius: 8px;
 }
+
+.tag.quadrant.do_now {
+  color: var(--error);
+  box-shadow: inset 0 0 0 1px var(--error);
+}
+.tag.quadrant.schedule {
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}

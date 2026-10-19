@@ -16,6 +16,7 @@ type AppSettings = {
   };
   quiet_hours: { start: string; end: string };
   ai_budget_usd: number | null;
+  reply_drafts_per_day: number;
 };
 type SettingsData = { app: AppSettings; budget_default_usd: number; month_spend_usd: number };
 type Device = {
@@ -62,6 +63,7 @@ function Schedule({ data }: { data: SettingsData }) {
     quiet_start: hm(s.quiet_hours.start),
     quiet_end: hm(s.quiet_hours.end),
     budget: s.ai_budget_usd === null ? "" : String(s.ai_budget_usd),
+    drafts: s.reply_drafts_per_day ?? 5,
   });
   const [message, setMessage] = useState<string | null>(null);
   const save = useMutation({
@@ -84,6 +86,7 @@ function Schedule({ data }: { data: SettingsData }) {
             },
             quiet_hours: { start: form.quiet_start, end: form.quiet_end },
             ai_budget_usd: form.budget === "" ? null : Number(form.budget),
+            reply_drafts_per_day: Number(form.drafts),
           },
         },
       }),
@@ -162,6 +165,18 @@ function Schedule({ data }: { data: SettingsData }) {
           {...field("budget")}
         />
         <span className="muted">spent this month: ${data.month_spend_usd.toFixed(2)}</span>
+      </label>
+      <label>
+        Reply drafts a day
+        <input
+          aria-label="Reply drafts a day"
+          type="number"
+          min={0}
+          max={20}
+          className="btn"
+          {...field("drafts")}
+        />
+        <span className="muted">for the emails that most need your reply; more on request</span>
       </label>
       <div className="row">
         <button className="btn primary" type="submit">

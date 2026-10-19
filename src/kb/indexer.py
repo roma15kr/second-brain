@@ -43,12 +43,14 @@ def _resolve(conn: Conn, config: Config, facts: scopes.Facts) -> list[str]:
 
 
 def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) -> int | None:
+    payload = raw["payload"]
+    if any(str(lab).lstrip("\\") == "Draft" for lab in payload.get("gm_labels") or ()):
+        return None  # an unsent draft (e.g. saved by the assistant) is not mail yet
     parsed = email_parse.parse(bytes(raw["blob"]))
     sent = parsed.date or raw["occurred_at"]
     header = f"From: {parsed.sender}\nTo: {', '.join(parsed.recipients)}\n"
     if parsed.attachments:
         header += f"Attachments: {', '.join(parsed.attachments)}\n"
-    payload = raw["payload"]
     refs = list(dict.fromkeys([*parsed.references, parsed.in_reply_to]))
     m = units.Message(
         source_id=raw["source_id"],

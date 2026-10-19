@@ -17,8 +17,9 @@ from kb.db import Conn
 
 LoopKind = Literal["needs_reply", "i_owe", "owed_to_me", "manual"]
 DRAFT_LABEL = "\\Draft"
-# A Gmail draft is not a reply: it carries the \Draft label.
-NOT_DRAFT = "NOT (coalesce(m.metadata->'labels', '[]'::jsonb) ? '\\Draft')"
+# A Gmail draft is not a reply: it carries the \Draft label (stored as "Draft"; older rows and
+# tests may keep the backslash).
+NOT_DRAFT = "NOT (coalesce(m.metadata->'labels', '[]'::jsonb) ?| array['\\Draft', 'Draft'])"
 
 
 # --- the owner's identities -----------------------------------------------------------------
@@ -160,7 +161,9 @@ def close_answered(conn: Conn, owner: set[str], now: datetime) -> int:
     return len(rows)
 
 
-def close_for_item(conn: Conn, item_id: int, now: datetime, by: str = "owner") -> int:
+def close_for_item(
+    conn: Conn, item_id: int, now: datetime, by: str = "owner", via: str = "inbox"
+) -> int:
     """Owner marked a conversation done (e.g. in the Inbox): its live needs-reply loop closes."""
     rows = conn.execute(
         "UPDATE loops SET status = 'done', closed_at = %s WHERE item_id = %s"
@@ -168,7 +171,7 @@ def close_for_item(conn: Conn, item_id: int, now: datetime, by: str = "owner") -
         (now, item_id),
     ).fetchall()
     for r in rows:
-        _event(conn, r["id"], "done", by, via="inbox")
+        _event(conn, r["id"], "done", by, via=via)
     return len(rows)
 
 

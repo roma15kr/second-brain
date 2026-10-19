@@ -69,6 +69,21 @@ class FastEmbedder:
         return [float(x) for x in vec]
 
 
+def embed_goals(conn: Conn, embedder: Embedder) -> int:
+    """Confirmed goals as query vectors, so mail can be matched to them by meaning (priority)."""
+    rows = conn.execute(
+        "SELECT id, title || coalesce(': ' || nullif(measure, ''), '') AS text FROM goals"
+        " WHERE status = 'confirmed' AND embedded_text IS DISTINCT FROM"
+        " title || coalesce(': ' || nullif(measure, ''), '') LIMIT 20"
+    ).fetchall()
+    for r in rows:
+        conn.execute(
+            "UPDATE goals SET embedding = %s::vector, embedded_text = %s WHERE id = %s",
+            (vector_literal(embedder.query(r["text"])), r["text"], r["id"]),
+        )
+    return len(rows)
+
+
 def default_embedder(config: Config) -> Embedder | None:
     return FastEmbedder(config.embedding) if config.embedding.enabled else None
 

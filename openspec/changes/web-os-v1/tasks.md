@@ -68,9 +68,9 @@ branch `change/web-os-v1`.
 
 - [ ] 12.1 Tracer: `suggestions` queue, Assistant page (approve / edit / discard), Gmail draft executor (IMAP APPEND, threaded) and draft skipping in ingest; verify `test_draft_saved_to_drafts_not_sent`, `test_draft_not_ingested_and_loop_stays_open`, `assistant.test.tsx`, and one approved draft appears in the real Gmail thread unsent
 - [ ] 12.2 Send on tap: `outbox` with 10-second undo, SMTP send from the receiving mailbox, threaded, Sent copy for non-Gmail; verify `test_send_only_after_tap_single_message`, `test_undo_within_10s_nothing_sent`, `test_sent_threaded_and_copied_to_sent_non_gmail`, `test_no_bulk_send_endpoint`, and one real reply sent from Gmail lands in its thread
-- [ ] 12.3 Eisenhower priority with reasons (goal link, person, money, deadline, waiting) in Inbox and morning brief; two-minute "do now" group; verify `test_priority_goal_linked_first_with_reason`
+- [x] 12.3 Eisenhower priority with reasons (goal link, person, money, deadline, waiting) in Inbox and morning brief; two-minute "do now" group; verify `test_priority_goal_linked_first_with_reason`
 - [ ] 12.4 Reply drafts with tone examples and cited context (email → Drafts or Send on tap; Telegram → copy and open chat), daily cap; verify draft refs validated and the cap respected (stubbed LLM)
-- [ ] 12.5 Nudges for overdue promises to the owner, delegation suggestions by teammate area, decline suggestions on overloaded weeks; learning from discards; acceptance rates on Status; verify `test_nudge_for_overdue_owed_to_me`, `test_delegate_matches_teammate_area`, `test_discard_rate_lowers_frequency`
+- [x] 12.5 Nudges for overdue promises to the owner, delegation suggestions by teammate area (decline suggestions moved to 13.5: they need meeting load); learning from discards; acceptance rates on Status; verify `test_nudge_for_overdue_owed_to_me`, `test_delegate_matches_teammate_area`, `test_discard_rate_lowers_frequency`
 
 ## 13. Calendar and meetings
 
@@ -78,7 +78,7 @@ branch `change/web-os-v1`.
 - [ ] 13.2 Meeting prep at T-30 (or in the morning brief before 10:00) with people, history, loops, ClickUp tasks, goals and agenda; verify `test_prep_and_reminder_times` and a real prep on the owner's phone
 - [ ] 13.3 Device pairing (Settings → Devices, one-time code/QR, revoke) and recording upload API for the recorder apps, matched to calendar events or saved as unscheduled calls; manual notes import (paste, .txt/.md/.vtt/.srt/.docx); processing → summary, decisions, owner's loops, team task drafts; verify `test_pairing_code_single_use_and_expires`, `test_device_token_cannot_read_kb`, `test_recording_matched_to_overlapping_event`, `test_unscheduled_call_created`, `test_revoked_device_refused`, `test_upload_idempotent`, `test_notes_to_loops_and_task_drafts`
 - [ ] 13.4 Meeting audio: `kb-audio` volume, resumable chunked upload per track with checksum, playback with transcript sync (tap a line → seek), download, 12-month retention and delete per recording/scope, incremental audio backup and storage on Status; ADR 0010 amendment; verify `test_resumable_upload_continues_from_received_length`, `test_checksum_mismatch_rejected`, `test_range_playback_requires_session`, `test_retention_deletes_audio_keeps_transcript`, `test_delete_scope_audio`, `test_audio_backup_copies_new_files_and_verifies`, `meeting.test.tsx`
-- [ ] 13.5 Focus blocks and meeting-load warning in briefs; attention audit, neglected goals and decision log in weekly routines; verify `test_focus_blocks_and_meeting_load_warning`, `test_neglected_goal_in_weekly_review`
+- [ ] 13.5 Focus blocks and meeting-load warning in briefs; decline/defer suggestions with a polite draft when the week is overloaded and the commitment serves no confirmed goal; attention audit, neglected goals and decision log in weekly routines; verify `test_focus_blocks_and_meeting_load_warning`, `test_neglected_goal_in_weekly_review`
 
 ## 14. Deploy and acceptance
 

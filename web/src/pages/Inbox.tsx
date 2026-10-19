@@ -2,6 +2,7 @@ import { useProjects } from "../shell/useProjects";
 import { ScopeTag } from "../shell/ScopeTag";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { api } from "../api/client";
 import { kyivTime } from "../briefs/BriefView";
 
@@ -15,11 +16,18 @@ type InboxItem = {
   scopes: string[];
   link: string | null;
   last_activity_at: string;
+  priority?: {
+    quadrant: "do_now" | "schedule" | "delegate" | "drop";
+    reason: string;
+    quick: boolean;
+  };
 };
 type InboxData = {
   pass: { id: number; headline: string; created_at: string } | null;
   groups: Record<"needs_reply" | "important" | "fyi" | "noise", InboxItem[]>;
 };
+
+const QUADRANT = { do_now: "Do now", schedule: "Schedule", delegate: "Delegate", drop: "Drop" };
 
 const GROUPS: [keyof InboxData["groups"], string][] = [
   ["needs_reply", "Needs reply"],
@@ -49,6 +57,12 @@ function Row({ item, onChanged }: { item: InboxItem; onChanged: () => void }) {
     onError: (e) => setMessage(e.message),
   });
   const post = (path: string, body?: unknown) => act.mutate({ path, body });
+  const navigate = useNavigate();
+  const draft = useMutation({
+    mutationFn: () => api(`/api/items/${item.item_id}/reply-draft`, { method: "POST" }),
+    onSuccess: () => void navigate("/assistant"),
+    onError: (e) => setMessage(e.message),
+  });
   const base = `/api/inbox/${item.item_id}`;
   return (
     <li>
@@ -68,6 +82,14 @@ function Row({ item, onChanged }: { item: InboxItem; onChanged: () => void }) {
           · {item.sender} · {kyivTime.format(new Date(item.last_activity_at))}
         </span>
       </div>
+      {item.priority && (
+        <div>
+          <span className={`tag quadrant ${item.priority.quadrant}`}>
+            {QUADRANT[item.priority.quadrant]}
+          </span>{" "}
+          <span className="muted">{item.priority.reason}</span>
+        </div>
+      )}
       {item.action && <div>→ {item.action}</div>}
       {item.summary && <div className="muted">{item.summary}</div>}
       <div className="row actions">
@@ -76,6 +98,9 @@ function Row({ item, onChanged }: { item: InboxItem; onChanged: () => void }) {
             Open in Gmail
           </a>
         )}
+        <button className="btn" onClick={() => draft.mutate()}>
+          Draft reply
+        </button>
         <button className="btn" onClick={() => post(`${base}/done`)}>
           Done
         </button>
@@ -131,14 +156,21 @@ export function Inbox() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["inbox"] });
   if (inbox.isPending) return <p className="muted">Loading…</p>;
   if (inbox.isError) return <p className="error">{inbox.error.message}</p>;
-  const { pass, groups } = inbox.data;
+  const { pass } = inbox.data;
+  // two-minute replies first: short questions that take less time to answer than to track
+  const quick = inbox.data.groups.needs_reply.filter((i) => i.priority?.quick);
+  const groups = {
+    ...inbox.data.groups,
+    quick,
+    needs_reply: inbox.data.groups.needs_reply.filter((i) => !i.priority?.quick),
+  };
   if (!pass) return <p className="muted">No mail revision yet — the first pass runs at 11:00.</p>;
   return (
     <>
       <p className="muted">
         {pass.headline} · {kyivTime.format(new Date(pass.created_at))}
       </p>
-      {GROUPS.map(([key, title]) => {
+      {([["quick", "Two-minute replies"], ...GROUPS] as const).map(([key, title]) => {
         const items = groups[key];
         if (!items.length) return null;
         const list = (

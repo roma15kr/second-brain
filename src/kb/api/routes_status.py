@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Request
 
 from kb import distill, health, metrics, settings_store
 from kb.api.deps import get_conn
+from kb.assistant import proactive
 from kb.connectors import accounts
 from kb.db import Conn
 
@@ -60,4 +61,5 @@ def status(request: Request, conn: Db) -> dict[str, Any]:
             ],
         },
         "usefulness": metrics.usefulness(conn, now),
+        "suggestions": proactive.acceptance(conn, now),
     }

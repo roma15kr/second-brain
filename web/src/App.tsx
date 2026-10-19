@@ -8,6 +8,7 @@ import { TelegramConnector } from "./connectors/TelegramConnector";
 import { Security } from "./auth/Security";
 import { SignIn } from "./auth/SignIn";
 import { useMe } from "./auth/useMe";
+import { Assistant } from "./pages/Assistant";
 import { BriefPage } from "./pages/BriefPage";
 import { Briefs } from "./pages/Briefs";
 import { ClickUpUpdates } from "./pages/ClickUpUpdates";
@@ -55,6 +56,7 @@ function Routed({ needsPasskey }: { needsPasskey: boolean }) {
         <Route path="/settings" element={<Settings security={<Security />} />} />
         <Route path="/status" element={<Status />} />
         <Route path="/clickup" element={<ClickUpUpdates />} />
+        <Route path="/assistant" element={<Assistant />} />
         <Route path="/library" element={<Library goals={<Goals />} />} />
         <Route path="/library/:id" element={<LibraryDoc />} />
         <Route path="/connectors" element={<Connectors />} />
