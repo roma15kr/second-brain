@@ -637,3 +637,82 @@ def test_old_threads_deleted_pinned_kept(conn):
     recent = request(conn)
     assert routes_requests.delete_old_threads(conn, datetime.now(UTC)) == 1
     assert fetch(conn, old) is None and fetch(conn, pinned) and fetch(conn, recent)
+
+
+# --- calendar questions, cost (feedback 2026-10-20) -------------------------------------
+
+from kb.routines import KYIV as KYIV_TZ  # noqa: E402
+
+
+def test_schedule_question_uses_the_calendar(conn, config):
+    from tests.test_meeting_prep import event, setup_calendar
+
+    cal = setup_calendar(conn)
+    tomorrow = datetime(2026, 10, 21, 9, 30, tzinfo=KYIV_TZ)
+    eid = event(conn, cal, tomorrow, "Dealer call")
+    rid, llm = run(
+        conn,
+        config,
+        [("meetings", {"date_from": "2026-10-21", "date_to": "2026-10-21"})],
+        {
+            "answer": "Your first meeting tomorrow is **Dealer call** at 09:30.",
+            "refs": [f"meeting:{eid}"],
+        },
+        text="which first meeting will I have tomorrow?",
+    )
+    out = next(i for i in llm.calls[1]["items"] if i.get("type") == "function_call_output")
+    assert "Dealer call" in out["output"] and "Tue 2026-10-21 09:30-10:00" not in out["output"]
+    assert "Wed 2026-10-21 09:30-10:00" in out["output"]
+    assert fetch(conn, rid)["refs"] == [f"meeting:{eid}"]
+    assert fetch(conn, rid)["steps"][0]["summary"] == "checked your calendar 2026-10-21…2026-10-21"
+
+
+def test_no_calendar_is_said_plainly(conn, config):
+    _rid, llm = run(
+        conn,
+        config,
+        [("meetings", {"date_from": "2026-10-21", "date_to": "2026-10-21"})],
+        {"answer": "No calendar is connected.", "refs": []},
+    )
+    out = next(i for i in llm.calls[1]["items"] if i.get("type") == "function_call_output")
+    assert "Connectors → Calendars" in out["output"]
+
+
+def test_requests_run_on_the_cheaper_model(conn, config, monkeypatch):
+    seen = []
+
+    class Recording(ScriptedLlm):
+        def respond(self, model, instructions, items, tools, schema):
+            seen.append(model)
+            return super().respond(model, instructions, items, tools, schema)
+
+    run_id = request(conn)
+    agent.run_request(conn, config, Recording({"answer": "ok", "refs": []}), None, run_id, NOW)
+    assert seen == ["gpt-6-luna"]
+    monkeypatch.setenv("KB_ASSISTANT_MODEL", "gpt-6.1-sol")
+    agent.run_request(
+        conn, config, Recording({"answer": "ok", "refs": []}), None, request(conn), NOW
+    )
+    assert seen[-1] == "gpt-6.1-sol"
+
+
+def test_meeting_refs_link_to_the_meeting(app, conn):
+    from tests.test_meeting_prep import event, setup_calendar
+
+    cal = setup_calendar(conn)
+    eid = event(conn, cal, datetime(2026, 10, 21, 9, 30, tzinfo=KYIV_TZ), "Dealer call")
+    app.state.assistant_llm = ScriptedLlm(
+        [("meetings", {"date_from": "2026-10-21", "date_to": "2026-10-21"})],
+        {"answer": "Dealer call at 09:30.", "refs": [f"meeting:{eid}"]},
+    )
+    client = signed_in(app, conn)
+    rid = client.post("/api/assistant/requests", json={"text": "tomorrow?"}, headers=CSRF).json()[
+        "id"
+    ]
+    [ref] = client.get(f"/api/assistant/requests/{rid}").json()["refs"]
+    assert ref == {
+        "ref": f"meeting:{eid}",
+        "item_id": eid,
+        "link": f"/meetings/{eid}",
+        "title": "Dealer call",
+    }

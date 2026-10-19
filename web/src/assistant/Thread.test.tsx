@@ -159,3 +159,25 @@ test("a report can be saved to the Library and over-budget requests offer Run an
   await userEvent.click(screen.getByRole("button", { name: "Run anyway" }));
   await waitFor(() => expect(ranAnyway).toBe(true));
 });
+
+test("answers show **bold** as bold and meeting sources open the meeting", async () => {
+  window.history.pushState({}, "", "/assistant/t/4");
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/assistant/threads/4": {
+      id: 4,
+      title: "t",
+      pinned: false,
+      requests: [
+        req("done", {
+          answer: "Your first meeting tomorrow is **Dealer call** at 09:30.",
+          refs: [{ ref: "meeting:7", item_id: 7, link: "/meetings/7", title: "Dealer call" }],
+        }),
+      ],
+    },
+  });
+  renderApp();
+  const strong = await screen.findByText("Dealer call", { selector: "strong" });
+  expect(strong.tagName).toBe("STRONG");
+  expect(screen.getByRole("link", { name: "Dealer call" })).toHaveAttribute("href", "/meetings/7");
+});

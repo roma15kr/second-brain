@@ -30,3 +30,4 @@ Why: `s.replace(old, new)` silently does nothing when `old` differs by a line br
 in a script never reached the file; tests that bypass the entry point (cmd_mcp) did not notice. Assert
 `old in s` before replacing, or use the Edit tool; add a test at the real entry point.
 - Scripted edits: assert the target text occurs exactly once (`s.count(old) == 1`), not just that it exists — near-identical blocks in two functions (e.g. time-sliced walks) make a first-match replace silently edit the wrong one (2026-10-19, ClickUp inbox slices).
+- Frontend tests that wait on polling flake under a full parallel run with Testing Library's 1 s / Vitest's 5 s defaults: asyncUtilTimeout is 5 s (test-setup.ts) and testTimeout 15 s (vite.config.ts) — raise limits, never weaken assertions (2026-10-20).

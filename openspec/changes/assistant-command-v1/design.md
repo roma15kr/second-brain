@@ -30,7 +30,7 @@ existing suggestions queue; dictation that works on iPhone Safari/PWA and deskto
 ## Decisions
 
 ### D1. Agent: OpenAI Responses API with function tools, bounded loop
-`src/kb/assistant/agent.py` runs `gpt-6.1-sol` with function tools and `store=False`, feeding tool
+`src/kb/assistant/agent.py` runs `gpt-6-luna` (owner feedback 2026-10-20: cost; `KB_ASSISTANT_MODEL` switches it) with function tools, including `meetings` for the calendar and `store=False`, feeding tool
 results back until the model returns a final message, at most **8 tool calls** and **90 s** per
 request. Final output is a structured JSON (`answer_md`, `refs`, `created` (suggestion/loop ids),
 `report` or null); refs are validated like briefs (`item:`/`loop:`/`suggestion:` ids that exist and
