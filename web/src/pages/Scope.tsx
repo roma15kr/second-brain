@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { api } from "../api/client";
 import { kyivTime } from "../briefs/BriefView";
@@ -31,6 +32,12 @@ export function Scope() {
       api(`/api/scopes/${scope}/archive`, { method: "POST", body: { archived } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["scope", scope] }),
   });
+  const [audioNote, setAudioNote] = useState<string | null>(null);
+  const deleteAudio = useMutation({
+    mutationFn: () =>
+      api<{ deleted: number }>(`/api/scopes/${scope}/delete-audio`, { method: "POST" }),
+    onSuccess: (r) => setAudioNote(`Deleted ${r.deleted} audio files; transcripts stay.`),
+  });
   if (data.isPending) return <p className="muted">Loading…</p>;
   if (data.isError) return <p className="error">{data.error.message}</p>;
   const d = data.data;
@@ -45,6 +52,16 @@ export function Scope() {
         <button className="btn" onClick={() => archive.mutate(!d.archived)}>
           {d.archived ? "Unarchive" : "Archive scope…"}
         </button>
+        <button
+          className="btn"
+          onClick={() => {
+            if (window.confirm(`Delete all meeting audio of ${d.scope}? Transcripts stay.`))
+              deleteAudio.mutate();
+          }}
+        >
+          Delete all meeting audio…
+        </button>
+        {audioNote && <span className="muted">{audioNote}</span>}
       </div>
       <div className="grid">
         <section className="card">

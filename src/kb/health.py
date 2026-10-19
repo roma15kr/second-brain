@@ -93,7 +93,8 @@ def status(conn: Conn, config: Config) -> dict[str, Any]:
     ).fetchone()
     size = conn.execute("SELECT pg_database_size(current_database()) AS b").fetchone()
     backup = conn.execute(
-        "SELECT status, detail, created_at FROM backup_checks ORDER BY id DESC LIMIT 1"
+        "SELECT status, detail, created_at FROM backup_checks WHERE kind = 'db'"
+        " ORDER BY id DESC LIMIT 1"
     ).fetchone()
     inflight = conn.execute(
         "SELECT count(*) AS n FROM distill_batches WHERE finished_at IS NULL"

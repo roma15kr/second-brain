@@ -530,6 +530,11 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
         return meetings.remind_due(conn, now)
 
+    def expire_audio(conn: db.Conn, now: datetime) -> int:
+        from kb import audio
+
+        return audio.expire(conn, now)
+
     def process_recordings(conn: db.Conn, now: datetime) -> int:
         from kb import recordings
 
@@ -562,6 +567,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
             prepare_meetings,
             remind_meetings,
             process_recordings,
+            expire_audio,
             apply_mail,
             draft_replies,
             propose_actions,

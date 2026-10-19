@@ -552,3 +552,18 @@ fieldset.plain {
   border-radius: 50%;
   background: var(--error);
 }
+
+.transcript li.current {
+  background: var(--line);
+}
+button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+}
+.audio audio {
+  width: 100%;
+}

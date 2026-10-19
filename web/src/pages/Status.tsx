@@ -49,6 +49,13 @@ type StatusData = {
     briefs: { total: number; used: number; share: number | null; target: number };
     loops: { total: number; resolved: number; share: number | null; target: number };
   };
+  audio?: {
+    bytes: number;
+    files: number;
+    growth_bytes_per_month: number;
+    deletions_next_30_days: number;
+    last_backup: { status: string; detail: string; at: string } | null;
+  };
   assistant?: {
     requests_7d: number;
     requests_target: number;
@@ -74,6 +81,7 @@ const SUGGESTION_KINDS: Record<string, string> = {
   decline: "declines",
 };
 
+const gb = (b: number) => `${(b / 1024 ** 3).toFixed(1)} GB`;
 const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)}%`);
 
 function Metric({
@@ -142,6 +150,21 @@ export function Status() {
             {status.data.assistant.requests_target}) ·{" "}
             {pct(status.data.assistant.approved_from_requests)} of drafts from requests approved
             (target {pct(status.data.assistant.approved_target)})
+          </p>
+        )}
+        {status.data.audio && status.data.audio.files > 0 && (
+          <p>
+            Meeting audio: {gb(status.data.audio.bytes)} in {status.data.audio.files} files, +
+            {gb(status.data.audio.growth_bytes_per_month)}/month
+            {status.data.audio.deletions_next_30_days > 0 &&
+              ` · ${status.data.audio.deletions_next_30_days} due for deletion in 30 days`}
+            {status.data.audio.last_backup && (
+              <span className="muted">
+                {" "}
+                · backup {status.data.audio.last_backup.status}:{" "}
+                {status.data.audio.last_backup.detail}
+              </span>
+            )}
           </p>
         )}
         {kinds.length > 0 && (
