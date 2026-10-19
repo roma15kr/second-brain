@@ -17,8 +17,9 @@ from kb.db import Conn
 
 LoopKind = Literal["needs_reply", "i_owe", "owed_to_me", "manual"]
 DRAFT_LABEL = "\\Draft"
-# A Gmail draft is not a reply: it carries the \Draft label.
-NOT_DRAFT = "NOT (coalesce(m.metadata->'labels', '[]'::jsonb) ? '\\Draft')"
+# A Gmail draft is not a reply: it carries the \Draft label (stored as "Draft"; older rows and
+# tests may keep the backslash).
+NOT_DRAFT = "NOT (coalesce(m.metadata->'labels', '[]'::jsonb) ?| array['\\Draft', 'Draft'])"
 
 
 # --- the owner's identities -----------------------------------------------------------------

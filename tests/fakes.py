@@ -80,6 +80,9 @@ class FakeImap:
             if key == "SINCE":
                 since = crit.pop(0)
                 uids = [u for u in uids if msgs[u][1].date() >= since]
+            elif key == "HEADER":
+                name, value = crit.pop(0), crit.pop(0)
+                uids = [u for u in uids if _header(msgs[u][0], name) == value]
             elif key == "UID":
                 lo, hi = crit.pop(0).split(":")
                 top = max(msgs, default=0)
@@ -90,6 +93,15 @@ class FakeImap:
             else:
                 raise AssertionError(criteria)
         return uids
+
+    def append(
+        self, folder: str, msg: bytes, flags: Iterable[bytes] = (), msg_time: Any = None
+    ) -> None:
+        box = self.folders[folder]
+        box[max(box, default=0) + 1] = (msg, msg_time, {b"FLAGS": tuple(flags)})
+
+    def logout(self) -> None:
+        self.logged_out = True
 
     def fetch(self, messages: Iterable[int], data: list[str]) -> dict[int, dict[bytes, Any]]:
         self.fetch_calls.append(list(data))
@@ -104,6 +116,13 @@ class FakeImap:
                     row[item.encode()] = extra[item.encode()]
             out[u] = row
         return out
+
+
+def _header(raw: bytes, name: str) -> str | None:
+    from email import message_from_bytes
+
+    value = message_from_bytes(raw)[name]
+    return str(value) if value is not None else None
 
 
 async def call(server: Any, name: str, args: dict[str, Any]) -> Any:

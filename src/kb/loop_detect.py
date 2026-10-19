@@ -152,7 +152,7 @@ def _messages(conn: Conn, item: dict[str, Any], emails: set[str], tg_ids: set[st
         """
         SELECT message_key, sent_at, author, body, locator, kind, identity_keys FROM messages
         WHERE source_id = %s AND unit_key = %s AND NOT hidden
-          AND NOT (coalesce(metadata->'labels', '[]'::jsonb) ? '\\Draft')
+          AND NOT (coalesce(metadata->'labels', '[]'::jsonb) ?| array['\\Draft', 'Draft'])
         ORDER BY sent_at DESC LIMIT %s
         """,
         (item["source_id"], item["source_item_key"], MAX_MESSAGES),
