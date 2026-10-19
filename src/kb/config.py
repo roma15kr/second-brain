@@ -153,12 +153,16 @@ class LlmConfig(BaseModel):
     daily_token_cap: int = 3_000_000  # per source per day, input + output
     scope_min_confidence: float = 0.7
     brief_model: str = "gpt-6.1-sol"  # writes routine briefs (web-os-v1 design D5)
+    assistant_model: str = "gpt-6-luna"  # answers requests: tool loops re-send context each turn
     monthly_budget_usd: float = 30.0  # all server-side AI; routines fall back to data-only above it
     transcribe_model: str = "gpt-transcribe"  # dictation (ADR 0014)
     transcribe_usd_per_minute: float = 0.006  # list price at setup; adjust if OpenAI changes it
 
     def model(self) -> str:
         return os.environ.get("KB_DISTILL_MODEL") or self.distill_model
+
+    def assistant_model_name(self) -> str:
+        return os.environ.get("KB_ASSISTANT_MODEL") or self.assistant_model
 
     def briefs_model(self) -> str:
         return os.environ.get("KB_BRIEF_MODEL") or self.brief_model

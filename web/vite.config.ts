@@ -34,5 +34,7 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
+    // some flows wait on real polling intervals (1.5 s); 5 s was too tight in a full run
+    testTimeout: 15_000,
   },
 });

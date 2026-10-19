@@ -77,7 +77,7 @@ type Request = {
   status: "running" | "done" | "failed";
   steps: { tool: string; summary: string }[];
   answer: string | null;
-  refs: { ref: string; item_id: number; title: string | null }[];
+  refs: { ref: string; item_id: number; link?: string; title: string | null }[];
   error: string | null;
   cost_usd: number;
   created: Created[];
@@ -145,6 +145,23 @@ function Report({ r, onChanged }: { r: Request; onChanged: () => void }) {
   );
 }
 
+// Answers are short markdown: **bold** is shown bold, line breaks and "- " lists as written.
+export function Answer({ text }: { text: string }) {
+  return (
+    <div className="answer">
+      {text
+        .split(/(\*\*[^*]+\*\*)/g)
+        .map((part, i) =>
+          part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
+            <strong key={i}>{part.slice(2, -2)}</strong>
+          ) : (
+            part
+          ),
+        )}
+    </div>
+  );
+}
+
 function Turn({ r, onChanged }: { r: Request; onChanged: () => void }) {
   return (
     <li className="turn">
@@ -158,7 +175,7 @@ function Turn({ r, onChanged }: { r: Request; onChanged: () => void }) {
       )}
       {r.status === "running" && <div className="muted">Working…</div>}
       {r.status === "failed" && <div className="error">{r.error}</div>}
-      {r.answer && <div className="answer">{r.answer}</div>}
+      {r.answer && <Answer text={r.answer} />}
       {r.needs_budget && <RunAnyway rid={r.id} onChanged={onChanged} />}
       <Report r={r} onChanged={onChanged} />
       {r.search && r.search.results.length > 0 && (
@@ -209,7 +226,7 @@ function Turn({ r, onChanged }: { r: Request; onChanged: () => void }) {
       {r.refs.length > 0 && (
         <div className="row">
           {r.refs.map((ref) => (
-            <Link key={ref.ref} className="tag" to={`/c/${ref.item_id}`}>
+            <Link key={ref.ref} className="tag" to={ref.link ?? `/c/${ref.item_id}`}>
               {ref.title || ref.ref}
             </Link>
           ))}

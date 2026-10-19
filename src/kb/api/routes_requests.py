@@ -97,15 +97,21 @@ def _report_view(r: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _refs(r: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        {
-            "ref": ref,
-            "item_id": int(ref.removeprefix("item:")),
-            "title": r.get("titles", {}).get(ref),
-        }
-        for ref in r["refs"]
-        if ref.startswith("item:")
-    ]
+    """Source chips: conversations and documents (/c/…) and meetings (/meetings/…)."""
+    out = []
+    for ref in r["refs"]:
+        kind, _, num = ref.partition(":")
+        if kind not in ("item", "meeting") or not num.isdigit():
+            continue
+        out.append(
+            {
+                "ref": ref,
+                "item_id": int(num),
+                "link": f"/c/{num}" if kind == "item" else f"/meetings/{num}",
+                "title": r.get("titles", {}).get(ref),
+            }
+        )
+    return out
 
 
 def _with_created(conn: Conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -149,6 +155,14 @@ def _with_titles(conn: Conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]
             "SELECT id, title, kind FROM items WHERE id = ANY(%s)", (list(ids),)
         ).fetchall()
     }
+    meeting_ids = [int(x.removeprefix("meeting:")) for x in refs if x.startswith("meeting:")]
+    if meeting_ids:
+        titles |= {
+            f"meeting:{e['id']}": e["title"] or "Meeting"
+            for e in conn.execute(
+                "SELECT id, title FROM events WHERE id = ANY(%s)", (meeting_ids,)
+            ).fetchall()
+        }
     return [{**r, "titles": titles} for r in rows]
 
 
