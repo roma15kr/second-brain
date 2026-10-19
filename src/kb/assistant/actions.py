@@ -263,7 +263,80 @@ def undo(conn: Conn, request_id: int, index: int, now: datetime) -> dict[str, An
     return entry
 
 
+def activity(run: Run, date_from: str, date_to: str, scope: str | None) -> Any:
+    from kb.routines import KYIV, factpack
+
+    start = datetime.combine(date.fromisoformat(date_from), datetime.min.time(), tzinfo=KYIV)
+    end = datetime.combine(date.fromisoformat(date_to), datetime.max.time(), tzinfo=KYIV)
+    pack = factpack.build(run.conn, "weekly_review", (start, end))
+    facts = [f for s, items in pack.by_scope.items() if not scope or s == scope for f in items]
+    unique = list({f.id: f for f in facts}.values())[:80]
+    for f in unique:
+        run.seen.add(f.id)
+    run.step(
+        "activity",
+        f"collected {len(unique)} items from {date_from} to {date_to}"
+        + (f" in {scope}" if scope else ""),
+    )
+    open_loops = [lp for lp in loops.list_loops(run.conn, _now(run), "open", scope=scope or None)][
+        :40
+    ]
+    return {
+        "items": [
+            {
+                "id": f.ref,
+                "kind": f.kind,
+                "title": f.title,
+                "summary": f.summary,
+                "outcome": f.outcome,
+                "date": f.last_activity_at.isoformat(),
+                "scopes": f.scopes,
+            }
+            for f in unique
+        ],
+        "open_loops": [
+            {
+                "title": lp["title"],
+                "kind": lp["kind"],
+                "counterpart": lp["counterpart"],
+                "due_date": lp["due_date"],
+                "overdue": lp["overdue"],
+            }
+            for lp in open_loops
+        ],
+    }
+
+
+def report(run: Run, title: str, sections: list[dict[str, Any]]) -> Any:
+    allowed = {f"item:{i}" for i in run.seen}
+    clean = []
+    for s in sections:
+        refs = [r for r in s.get("refs", []) if r in allowed]
+        clean.append({"heading": s["heading"], "body": s["body"], "refs": refs})
+    run.conn.execute(
+        "UPDATE assistant_requests SET report = %s WHERE id = %s",
+        (Jsonb({"title": title, "sections": clean}), run.request_id),
+    )
+    run.step("report", f"wrote the report “{title}”")
+    return {"status": "report published", "sections": len(clean)}
+
+
+def report_markdown(rep: dict[str, Any], titles: dict[str, str], origin: str = "") -> str:
+    """The report as a Library note: sections with their sources as links."""
+    out = [f"# {rep['title']}", ""]
+    for s in rep["sections"]:
+        out += [f"## {s['heading']}", "", s["body"], ""]
+        if s["refs"]:
+            links = [
+                f"[{titles.get(r, r)}]({origin}/c/{r.removeprefix('item:')})" for r in s["refs"]
+            ]
+            out += ["Sources: " + ", ".join(links), ""]
+    return "\n".join(out)
+
+
 HANDLERS: dict[str, Callable[..., Any]] = {
+    "activity": activity,
+    "report": report,
     "loops": loops_tool,
     "draft_reply": draft_reply,
     "draft_email": draft_email,

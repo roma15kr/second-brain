@@ -19,6 +19,9 @@ _Last updated: 2026-10-18 by Claude_
   (approval queue, inline in the thread), update their own drafts on follow-ups, add reminders and close/snooze
   loops with Undo; search shows its filters with "Open in Search"; Status shows requests/week and approval rate
   of drafts from requests (targets 15 and 60%).
+- assistant-command-v1 slice 3: reports (activity in a period + sections with checked sources, Save to Library as a
+  note), over budget = plain search results + "Run anyway" for one request, push "Ready: …" after requests over 30 s
+  (device switch "Assistant answers ready"), threads deleted after 90 days unless pinned.
 - gmail-digisoft: status shows each folder's cursor vs the server's next UID; no mail since 2026-10-17 is Gmail's own
   state for digisoftou@gmail.com (the owner's new Digisoft mail goes to another, unconnected address).
 

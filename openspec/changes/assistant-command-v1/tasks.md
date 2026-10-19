@@ -17,8 +17,8 @@ Each slice ends runnable with its tests passing (`make check`), is committed sep
 
 ## 3. Reports, budget and push
 
-- [ ] 3.1 `report` tool using fact-pack helpers, report view, "Save to Library" as a note with a project mark (indexed); verify `test_report_sections_cite_sources`, `test_saved_report_is_searchable_note`
-- [ ] 3.2 Budget gate (monthly spend + estimate, "Run anyway" per request), cost per request, push `assistant` routine for requests > 30 s, 90-day thread cleanup (pinned kept); verify `test_over_budget_request_runs_search_only`, `test_run_anyway_one_request`, `test_long_request_pushes`, `test_old_threads_deleted_pinned_kept`
+- [x] 3.1 `report` tool using fact-pack helpers, report view, "Save to Library" as a note with a project mark (indexed); verify `test_report_sections_cite_sources`, `test_saved_report_is_searchable_note`
+- [x] 3.2 Budget gate (monthly spend + estimate, "Run anyway" per request), cost per request, push `assistant` routine for requests > 30 s, 90-day thread cleanup (pinned kept); verify `test_over_budget_request_runs_search_only`, `test_run_anyway_one_request`, `test_long_request_pushes`, `test_old_threads_deleted_pinned_kept`
 
 ## 4. Dictation
 

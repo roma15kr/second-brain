@@ -476,3 +476,164 @@ def test_thread_shows_drafts_inline_and_undo_route(app, conn, config):
     assert (
         client.post(f"/api/assistant/requests/{ids['id']}/undo/0", headers=CSRF).status_code == 400
     )
+
+
+# --- reports, budget, push, cleanup (slice 3) ---------------------------------------------
+
+
+from kb import settings_store  # noqa: E402
+
+
+def test_report_sections_cite_sources(conn, config):
+    a = item(conn, "Listing photos decided")
+    rid, _ = run(
+        conn,
+        config,
+        [("activity", {"date_from": "2026-10-19", "date_to": "2026-10-20", "scope": "quokka"})],
+        [
+            (
+                "report",
+                {
+                    "title": "Quokka week",
+                    "sections": [
+                        {
+                            "heading": "Decisions",
+                            "body": "New listing photos.",
+                            "refs": [f"item:{a}", "item:999"],
+                        },
+                        {"heading": "Open questions", "body": "None.", "refs": []},
+                    ],
+                },
+            )
+        ],
+        {"answer": "The report is ready.", "refs": []},
+    )
+    rep = fetch(conn, rid)["report"]
+    assert rep["title"] == "Quokka week"
+    assert rep["sections"][0]["refs"] == [f"item:{a}"]  # item:999 was never collected
+    assert next(s["summary"] for s in fetch(conn, rid)["steps"]).startswith("collected 1 items")
+
+
+def test_saved_report_is_searchable_note(app, conn):
+    a = item(conn, "Listing photos decided")
+    app.state.assistant_llm = ScriptedLlm(
+        [("activity", {"date_from": "2026-10-19", "date_to": "2026-10-20", "scope": None})],
+        [
+            (
+                "report",
+                {
+                    "title": "Quokka week",
+                    "sections": [
+                        {"heading": "Decisions", "body": "New photos.", "refs": [f"item:{a}"]}
+                    ],
+                },
+            )
+        ],
+        {"answer": "Ready.", "refs": []},
+    )
+    client = signed_in(app, conn)
+    rid = client.post(
+        "/api/assistant/requests", json={"text": "Quokka report"}, headers=CSRF
+    ).json()["id"]
+    got = client.get(f"/api/assistant/requests/{rid}").json()
+    assert got["report"]["sections"][0]["refs"][0]["title"] == "Listing photos decided"
+    doc = client.post(
+        f"/api/assistant/requests/{rid}/report/save", json={"scope": "quokka"}, headers=CSRF
+    ).json()
+    row = conn.execute(
+        "SELECT d.kind, d.scopes, v.text FROM documents d"
+        " JOIN document_versions v ON v.document_id = d.id WHERE d.id = %s",
+        (doc["document_id"],),
+    ).fetchone()
+    assert row["kind"] == "note" and row["scopes"] == ["quokka"]
+    assert "## Decisions" in row["text"] and f"/c/{a}" in row["text"]
+    assert (
+        conn.execute(
+            "SELECT count(*) AS n FROM items"
+            " WHERE kind IN ('document', 'doc_section') AND scopes = '{quokka}'"
+        ).fetchone()["n"]
+        >= 1
+    )  # indexed for search
+
+
+def test_over_budget_request_runs_search_only(conn, config):
+    settings_store.save(conn, {"ai_budget_usd": 0})
+    hit = item(conn, "netcup invoice")
+    rid, llm = run(
+        conn,
+        config,
+        text="netcup invoice",
+        searcher=lambda p: [{"item_id": hit, "title": "netcup invoice"}],
+    )
+    r = fetch(conn, rid)
+    assert llm.calls == [] and r["status"] == "done" and r["needs_budget"]
+    assert r["answer_md"] == agent.BUDGET_NOTE and r["search"]["results"][0]["item_id"] == hit
+
+
+def test_run_anyway_one_request(app, conn):
+    settings_store.save(conn, {"ai_budget_usd": 0})
+    app.state.assistant_llm = ScriptedLlm({"answer": "With AI.", "refs": []})
+    client = signed_in(app, conn)
+    first = client.post("/api/assistant/requests", json={"text": "a report"}, headers=CSRF).json()
+    assert client.get(f"/api/assistant/requests/{first['id']}").json()["needs_budget"] is True
+    again = client.post(f"/api/assistant/requests/{first['id']}/run-anyway", headers=CSRF).json()
+    assert client.get(f"/api/assistant/requests/{again['id']}").json()["answer"] == "With AI."
+    # only that one request: the next one is search-only again
+    nxt = client.post(
+        "/api/assistant/requests",
+        json={"text": "another", "thread_id": first["thread_id"]},
+        headers=CSRF,
+    ).json()
+    assert client.get(f"/api/assistant/requests/{nxt['id']}").json()["needs_budget"] is True
+
+
+def test_long_request_pushes(conn, config, monkeypatch):
+    from kb import push
+
+    sent = []
+
+    def fake_send(conn, routine, headline, url, now):
+        sent.append((routine, headline, url))
+        return 1
+
+    monkeypatch.setattr(push, "send", fake_send)
+    ticks = iter([0.0, 0.0, 0.0, 45.0, 45.0, 45.0])
+    rid = request(conn, "prepare a Quokka report for this week")
+    agent.run_request(
+        conn,
+        config,
+        ScriptedLlm({"answer": "Ready.", "refs": []}),
+        None,
+        rid,
+        NOW,
+        monotonic=lambda: next(ticks, 45.0),
+    )
+    tid = fetch(conn, rid)["thread_id"]
+    assert sent == [
+        ("assistant", "Ready: prepare a Quokka report for this week", f"/assistant/t/{tid}")
+    ]
+    sent.clear()
+    quick = request(conn, "quick one")
+    agent.run_request(
+        conn,
+        config,
+        ScriptedLlm({"answer": "Ok.", "refs": []}),
+        None,
+        quick,
+        NOW,
+        monotonic=lambda: 0.0,
+    )
+    assert sent == []
+
+
+def test_old_threads_deleted_pinned_kept(conn):
+    old, pinned = request(conn), request(conn)
+    conn.execute("UPDATE assistant_threads SET updated_at = now() - interval '91 days'")
+    conn.execute(
+        "UPDATE assistant_threads SET pinned = true"
+        " WHERE id = (SELECT thread_id FROM assistant_requests WHERE id = %s)",
+        (pinned,),
+    )
+    recent = request(conn)
+    assert routes_requests.delete_old_threads(conn, datetime.now(UTC)) == 1
+    assert fetch(conn, old) is None and fetch(conn, pinned) and fetch(conn, recent)

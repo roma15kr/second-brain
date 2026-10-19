@@ -7,7 +7,7 @@ closed; the SPA polls it for steps and the answer.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
@@ -21,6 +21,7 @@ router = APIRouter()
 Db = Annotated[Conn, Depends(get_conn)]
 WORKERS = 2
 MAX_CHARS = 4000
+KEEP_DAYS = 90
 
 _pool: ThreadPoolExecutor | None = None
 
@@ -56,10 +57,37 @@ def _request(r: dict[str, Any]) -> dict[str, Any]:
         "refs": _refs(r),
         "error": r["error"],
         "created": r.get("created_view", r.get("created", [])),
+        "report": _report_view(r),
+        "needs_budget": r["needs_budget"],
+        "saved_doc_id": r["saved_doc_id"],
         "search": r.get("search"),
         "cost_usd": float(r["cost_usd"]),
         "started_at": r["started_at"].isoformat(),
         "finished_at": r["finished_at"].isoformat() if r["finished_at"] else None,
+    }
+
+
+def _report_view(r: dict[str, Any]) -> dict[str, Any] | None:
+    rep = r.get("report")
+    if not rep:
+        return None
+    titles = r.get("titles", {})
+    return {
+        "title": rep["title"],
+        "sections": [
+            {
+                **s,
+                "refs": [
+                    {
+                        "ref": ref,
+                        "item_id": int(ref.removeprefix("item:")),
+                        "title": titles.get(ref),
+                    }
+                    for ref in s["refs"]
+                ],
+            }
+            for s in rep["sections"]
+        ],
     }
 
 
@@ -106,9 +134,10 @@ def _with_created(conn: Conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]
 
 
 def _with_titles(conn: Conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    ids = {
-        int(ref.removeprefix("item:")) for r in rows for ref in r["refs"] if ref.startswith("item:")
-    }
+    refs = [ref for r in rows for ref in r["refs"]] + [
+        ref for r in rows for s in (r.get("report") or {}).get("sections", []) for ref in s["refs"]
+    ]
+    ids = {int(ref.removeprefix("item:")) for ref in refs if ref.startswith("item:")}
     titles = {
         f"item:{t['id']}": t["title"] or t["kind"]
         for t in conn.execute(
@@ -193,6 +222,71 @@ def thread(conn: Db, tid: int) -> dict[str, Any]:
             _request(r) for r in _with_created(conn, _with_titles(conn, [dict(r) for r in rows]))
         ],
     }
+
+
+@router.post("/api/assistant/requests/{rid}/run-anyway")
+def run_anyway(request: Request, conn: Db, rid: int) -> dict[str, int]:
+    """Over budget: the owner chose to use AI for this one request (asked again)."""
+    old = conn.execute("SELECT * FROM assistant_requests WHERE id = %s", (rid,)).fetchone()
+    if old is None or not old["needs_budget"]:
+        raise HTTPException(400, "this request did not wait for budget")
+    row = conn.execute(
+        "INSERT INTO assistant_requests (thread_id, text, allow_over_budget) VALUES (%s, %s, true)"
+        " RETURNING id",
+        (old["thread_id"], old["text"]),
+    ).fetchone()
+    assert row is not None
+    _submit(request, int(row["id"]))
+    return {"id": int(row["id"]), "thread_id": int(old["thread_id"])}
+
+
+@router.post("/api/assistant/requests/{rid}/report/save")
+def save_report(conn: Db, rid: int, scope: Annotated[str, Body(embed=True)]) -> dict[str, int]:
+    """Saves a request's report to the Library as a note (indexed, so it is searchable)."""
+    import os
+
+    from kb import library, scopes
+    from kb.assistant import actions
+
+    row = conn.execute("SELECT * FROM assistant_requests WHERE id = %s", (rid,)).fetchone()
+    if row is None or not row["report"]:
+        raise HTTPException(404, f"request {rid} has no report")
+    titles = _with_titles(conn, [dict(row)])[0]["titles"]
+    text = actions.report_markdown(row["report"], titles, os.environ.get("KB_WEB_ORIGIN", ""))
+    try:
+        doc = library.add_document(
+            conn,
+            row["report"]["title"],
+            "note",
+            [scope],
+            "report.md",
+            text.encode(),
+            scopes.known(conn),
+            datetime.now(UTC),
+        )
+    except library.LibraryError as e:
+        raise HTTPException(400, str(e)) from e
+    conn.execute("UPDATE assistant_requests SET saved_doc_id = %s WHERE id = %s", (doc, rid))
+    return {"document_id": doc}
+
+
+@router.post("/api/assistant/threads/{tid}/pin")
+def pin(conn: Db, tid: int, pinned: Annotated[bool, Body(embed=True)]) -> dict[str, bool]:
+    if not conn.execute(
+        "UPDATE assistant_threads SET pinned = %s WHERE id = %s RETURNING id", (pinned, tid)
+    ).fetchone():
+        raise HTTPException(404, f"no thread {tid}")
+    return {"pinned": pinned}
+
+
+def delete_old_threads(conn: Conn, now: datetime) -> int:
+    """Threads are kept 90 days after their last request unless pinned."""
+    return len(
+        conn.execute(
+            "DELETE FROM assistant_threads WHERE NOT pinned AND updated_at < %s RETURNING id",
+            (now - timedelta(days=KEEP_DAYS),),
+        ).fetchall()
+    )
 
 
 @router.post("/api/assistant/requests/{rid}/undo/{index}")
