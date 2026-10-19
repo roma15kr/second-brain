@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { ScopeTag } from "../shell/ScopeTag";
 import type { Brief, BriefItem, BriefSection } from "../api/types";
 
@@ -6,6 +7,7 @@ const KIND_ICON: Record<string, string> = {
   tg_conversation: "✈",
   loop: "↺",
   clickup_task: "☑",
+  meeting: "🗓",
 };
 export const kyivTime = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Europe/Kyiv",
@@ -19,7 +21,9 @@ function Item({ item }: { item: BriefItem }) {
   return (
     <li>
       <span aria-hidden>{KIND_ICON[item.kind] ?? "•"} </span>
-      {item.link ? (
+      {item.link?.startsWith("/") ? (
+        <Link to={item.link}>{title}</Link>
+      ) : item.link ? (
         <a href={item.link} target="_blank" rel="noreferrer">
           {title}
         </a>

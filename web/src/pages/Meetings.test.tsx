@@ -47,3 +47,36 @@ test("the meeting page links attendees to People", async () => {
   expect(await screen.findByRole("link", { name: "Олена" })).toHaveAttribute("href", "/people/8");
   expect(screen.getByRole("link", { name: "Join the call" })).toBeInTheDocument();
 });
+
+test("the meeting page shows the prep with sourced agenda points", async () => {
+  window.history.pushState({}, "", "/meetings/3");
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/meetings/3": {
+      ...meeting,
+      prep: {
+        people: [{ email: "olena@rdim.example", name: "Олена", person_id: 8 }],
+        conversations: [
+          { ref: "item:12", title: "Price list", summary: "Prices for Q4", date: "2026-10-15" },
+        ],
+        loops: [
+          {
+            ref: "loop:4",
+            kind: "i_owe",
+            title: "Send the price list",
+            counterpart: "Олена",
+            due_date: "2026-10-21",
+          },
+        ],
+        tasks: [],
+        goals: [],
+        agenda: [{ text: "Confirm the Q4 price list", ref: "item:12" }],
+      },
+    },
+  });
+  renderApp();
+  expect(await screen.findByText("Confirm the Q4 price list")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "source" })).toHaveAttribute("href", "/c/12");
+  expect(screen.getByText("Send the price list")).toBeInTheDocument();
+  expect(screen.getByText(/you promised/)).toBeInTheDocument();
+});

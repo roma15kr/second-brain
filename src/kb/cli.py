@@ -530,6 +530,11 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
         return meetings.remind_due(conn, now)
 
+    def prepare_meetings(conn: db.Conn, now: datetime) -> int:
+        from kb import meetings
+
+        return meetings.prepare_due(conn, config, llm, now)
+
     def clean_threads(conn: db.Conn, now: datetime) -> int:
         from kb.api import routes_requests
 
@@ -549,6 +554,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
             close_answered_loops,
             loops.wake_snoozed,
             push_clickup,
+            prepare_meetings,
             remind_meetings,
             apply_mail,
             draft_replies,
