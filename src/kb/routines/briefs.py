@@ -207,6 +207,33 @@ LOOP_SECTIONS = {
 }
 
 
+def early_meetings(conn: Conn, now: datetime) -> list[dict[str, Any]]:
+    """Meetings before 10:00 today, linked to their prep (calendar-meetings: preparation)."""
+    from kb import meetings
+
+    out = []
+    for m in meetings.early_meetings(conn, now):
+        prep = m.get("prep") or {}
+        agenda = "; ".join(a["text"] for a in prep.get("agenda", [])[:3])
+        people = ", ".join(p["name"] for p in prep.get("people", [])[:4])
+        start = datetime.fromisoformat(m["start"]).astimezone(KYIV)
+        out.append(
+            {
+                "ref": f"meeting:{m['id']}",
+                "id": m["id"],
+                "kind": "meeting",
+                "title": f"{start:%H:%M} {m['title']}",
+                "summary": " · ".join(x for x in (people, agenda) if x) or m["calendar"],
+                "outcome": None,
+                "link": f"/meetings/{m['id']}",
+                "last_activity_at": m["start"],
+                "scopes": m["scopes"],
+                "participants": [],
+            }
+        )
+    return out
+
+
 def clickup_due(conn: Conn, owner: set[str], now: datetime) -> list[dict[str, Any]]:
     """The owner's ClickUp tasks due today or overdue and not closed (clickup-integration spec)."""
     if not owner:
@@ -438,6 +465,8 @@ def write_brief(
 
         if due_tasks := clickup_due(conn, loops.owner_emails(conn, config), now):
             sections.append(Section("ClickUp: due today & overdue", "", due_tasks, kind="group"))
+    if pack.routine == "morning" and (early := early_meetings(conn, now)):
+        sections.append(Section("Meetings before 10:00", "", early, kind="group"))
     if pack.routine == "morning" and (upcoming := coming_up(conn, now)):
         sections.append(upcoming)
     sections.extend(data_only(pack))
