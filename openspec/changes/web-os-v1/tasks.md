@@ -69,7 +69,7 @@ branch `change/web-os-v1`.
 - [ ] 12.1 Tracer: `suggestions` queue, Assistant page (approve / edit / discard), Gmail draft executor (IMAP APPEND, threaded) and draft skipping in ingest; verify `test_draft_saved_to_drafts_not_sent`, `test_draft_not_ingested_and_loop_stays_open`, `assistant.test.tsx`, and one approved draft appears in the real Gmail thread unsent
 - [ ] 12.2 Send on tap: `outbox` with 10-second undo, SMTP send from the receiving mailbox, threaded, Sent copy for non-Gmail; verify `test_send_only_after_tap_single_message`, `test_undo_within_10s_nothing_sent`, `test_sent_threaded_and_copied_to_sent_non_gmail`, `test_no_bulk_send_endpoint`, and one real reply sent from Gmail lands in its thread
 - [x] 12.3 Eisenhower priority with reasons (goal link, person, money, deadline, waiting) in Inbox and morning brief; two-minute "do now" group; verify `test_priority_goal_linked_first_with_reason`
-- [ ] 12.4 Reply drafts with tone examples and cited context (email → Drafts or Send on tap; Telegram → copy and open chat), daily cap; verify draft refs validated and the cap respected (stubbed LLM)
+- [x] 12.4 Reply drafts with tone examples and cited context (email → Drafts or Send on tap; Telegram → copy and open chat), daily cap; verify draft refs validated and the cap respected (stubbed LLM)
 - [x] 12.5 Nudges for overdue promises to the owner, delegation suggestions by teammate area (decline suggestions moved to 13.5: they need meeting load); learning from discards; acceptance rates on Status; verify `test_nudge_for_overdue_owed_to_me`, `test_delegate_matches_teammate_area`, `test_discard_rate_lowers_frequency`
 
 ## 13. Calendar and meetings
@@ -83,7 +83,7 @@ branch `change/web-os-v1`.
 ## 14. Deploy and acceptance
 
 - [ ] 14.1 Deploy `web` and `routines` on Coolify with VAPID env vars, `KB_SECRET_KEY` and the `os.` domain; register passkeys on phone and laptop, install the app, enable push; connect ClickUp and calendars, upload the constitution and 2026 plans, confirm goals; verify one full day of routines, a meeting reminder with prep, and an approved reply draft in Gmail
-- [ ] 14.2 Update `docs/architecture.md`, `docs/external/README.md` and `STATUS.md` (done, next steps, open questions, gotchas)
+- [x] 14.2 Update `docs/architecture.md`, `docs/external/README.md` and `STATUS.md` (done, next steps, open questions, gotchas)
 
 ## Workflow follow-up
 

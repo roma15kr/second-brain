@@ -42,6 +42,35 @@ Built in v1 (`v1-mail-telegram-search`), one Python package `kb` (`src/kb/`):
 Planned (later changes): metrics warehouse, Telegram bot, automations (digest, follow-ups, CMO
 standups, meeting prep), ops registry, vault metadata push, macOS meeting assistant.
 
+### Web OS (`web-os-v1`, ADR 0015)
+Two services on top of the same database: **`web`** (FastAPI JSON API + the React PWA, passkeys,
+domain `os.zhukovsky.biz`) and **`routines`** (scheduler loop every 30 s). Search from the web goes
+through the `mcp` service's internal route (models loaded once).
+
+| Module | Responsibility |
+|--------|----------------|
+| `api/app.py`, `api/auth.py` | App factory; session middleware on every `/api/*` (CSRF header on writes); passkeys, recovery codes, lockout; `/api/devices/*` use device tokens instead |
+| `routines/scheduler.py`, `routines/briefs.py`, `routines/factpack.py`, `routines/weekly.py` | Kyiv-time slots (morning, mail revisions, evening, weekly review/plan) → data fact pack → AI sections with validated refs → brief + push |
+| `routines/triage.py`, `loops.py`, `loop_detect.py` | Mail revision (cheap model, sender prefs), open loops (needs reply, promises both ways, reminders) |
+| `push.py`, `web/src/sw.ts` | Web Push (VAPID) per device and routine, quiet hours; service worker with offline cache |
+| `connectors/accounts.py`, `connectors/tg_dialogs.py`, `secrets.py` | Mailboxes and Telegram dialogs connected from the web, credentials sealed with `KB_SECRET_KEY` |
+| `connectors/clickup.py` | ClickUp lists, tasks with all comments, chat channels, owner/DTC notifications, task creation after approval |
+| `connectors/calendar.py`, `meetings.py`, `focus.py` | Google iCal + iCloud CalDAV (read-only), meetings, reminders, prep, focus blocks, decline drafts, weekly audit |
+| `recordings.py`, `audio.py`, `api/routes_devices.py` | Recorder-app pairing and uploads, notes import, meeting processing (summary, decisions, loops, task drafts), audio 12 months |
+| `library.py`, `goals.py` | Library documents (versions, sections, private flag), goals proposed from plans and confirmed by the owner |
+| `assistant/suggestions.py`, `assistant/mail.py`, `assistant/drafting.py`, `assistant/priority.py`, `assistant/proactive.py` | Approval queue and executors (Drafts, send on tap with undo, ClickUp tasks), reply drafts, email priority, nudges, delegation, learning from discards |
+
+Routines maintenance each cycle: close answered loops, wake snoozed, ClickUp pushes, meeting
+prep and reminders, recording processing, audio expiry, mail executors, reply drafts, nudges /
+delegation / declines, thread cleanup, dictation retries, loop detection, goal proposals.
+
+Tables added: `webauthn_credentials`, `sessions`, `routine_runs`, `briefs`, `push_subscriptions`,
+`app_events`, `triage`, `sender_prefs`, `loops`, `loop_events`, `weekly_plans`,
+`connector_accounts`, `projects`, `tg_dialogs`, `documents`, `document_versions`, `goals`,
+`clickup_lists`, `clickup_notifications`, `suggestions`, `outbox`, `calendars`, `events`,
+`devices`, `device_pair_codes`, `recordings`, `recording_audio`, `assistant_threads`,
+`assistant_requests`, `dictations`.
+
 ### Web OS assistant (`assistant-command-v1`)
 | Module | Responsibility |
 |--------|----------------|
@@ -92,7 +121,8 @@ standups, meeting prep), ops registry, vault metadata push, macOS meeting assist
   failed-payment alerts.
 - **Meeting app (macOS):** ScreenCaptureKit system audio + mic as separate tracks (you vs others),
   streaming cloud STT for live transcript, live KB assistant and end-of-call action items; after the
-  call batch re-transcription becomes the canonical transcript; audio deleted after 30 days.
+  call batch re-transcription becomes the canonical transcript; audio kept 12 months (ADR 0010
+  amendment), uploaded through the device API.
 
 ## Passwords and secrets
 Passwords live in a self-hosted Vaultwarden (Coolify, Tailscale only), never in the KB. The KB only
@@ -100,8 +130,11 @@ receives vault metadata pushed from the Mac; see [ADR 0013](decisions/0013-passw
 
 ## Deployment
 Coolify on a dedicated CPU server (ns31426159), one Docker Compose app: postgres (pgvector), ingest,
-telegram, index, mcp, backup. Only the MCP service has a domain (public HTTPS + bearer token with
-lockout, ADR 0009 amendment); all other services have no ports. Secrets as
+telegram, index, mcp, web, routines, backup. Two domains through Cloudflare: `kb.` → MCP (public
+HTTPS + bearer token with lockout, ADR 0009 amendment) and `os.` → web (passkeys); all other
+services have no ports. Volumes: `kb-postgres`, `kb-telegram`, `kb-models`, `kb-backups`,
+`kb-dictations` (web + routines; audio until transcribed), `kb-audio` (web + routines, backup
+read-only; meeting audio 12 months). Secrets as
 Coolify env vars; Telegram session on its own volume. Backups: Coolify Postgres backups to S3 +
 restic for the raw archive. See [ADR 0009](decisions/0009-deployment-coolify-private.md).
 

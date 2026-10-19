@@ -14,6 +14,9 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` — Web Push (web-os-v1); generate with `kb web vapid-keys`; subject is a `mailto:` contact for push services
   - `KB_WEB_ORIGIN` — public origin of the web OS (passkey relying party), e.g. https://os.zhukovsky.biz
   - `KB_WEB_DIST` — built SPA directory, set by the Docker image (`/app/web/dist`)
+  - `KB_SEARCH_URL` — the mcp service's internal search route (`http://mcp:8765/internal/search`), used by `web` and `routines` with `KB_MCP_TOKEN`
+  - `KB_DICTATION_DIR` (default `/data/dictations`), `KB_AUDIO_DIR` (default `/data/audio`) — volumes for dictation audio (until transcribed) and meeting audio (12 months)
+  - `llm.transcribe_model` (default `gpt-transcribe`) and `llm.transcribe_usd_per_minute` (default 0.006, check against OpenAI's price list) in `KB_CONFIG_YAML`
 - Third-party services and dashboards:
   - Coolify (on the owner's dedicated server) — deployment; dashboard reachable over Tailscale only.
     App `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), server ns31426159, deploy key `second-brain-deploy`.
@@ -31,4 +34,5 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - Google Calendar secret iCal address — read-only calendar feed, no OAuth (Settings → Integrate calendar); resetting it in Google breaks sync until replaced
   - Web Push services (Apple, Google, Mozilla push endpoints) — deliver notifications to subscribed devices; no content in payloads
   - Reserve storage (S3-compatible, different provider/region than the server; provider TBD) — Coolify Postgres backups and nightly encrypted Vaultwarden export; its credentials are in the printed emergency kit, not only in the vault
+  - Recorder apps (`voice-apps-v1`, to be built) — pair in Settings → Recorder apps; upload-only API under `/api/devices/*` with a device token
 - Test accounts: none yet.
