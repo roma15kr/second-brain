@@ -28,7 +28,7 @@ Each slice ends runnable with its tests passing (`make check`), is committed sep
 
 ## 5. Docs and acceptance
 
-- [ ] 5.1 ADR 0014 amendment (in-app dictation in the web OS), web-os-v1 proposal non-goal pointer, `docs/architecture.md`, `STATUS.md`; verify `openspec validate --all` passes
+- [x] 5.1 ADR 0014 amendment (in-app dictation in the web OS), web-os-v1 proposal non-goal pointer, `docs/architecture.md`, `STATUS.md`; verify `openspec validate --all` passes
 - [ ] 5.2 Owner acceptance on production: 5 requests (question, email draft, task draft, reminder, report) and 3 dictations (uk, ru, mixed) behave as the spec scenarios say; record results in STATUS.md
 
 ## Workflow follow-up
