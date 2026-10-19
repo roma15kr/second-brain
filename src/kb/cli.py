@@ -112,7 +112,9 @@ def _sync_clickup(last_run: dict[str, float]) -> None:
                 if not finished:  # a big first pass: continue soon, mail sync runs in between
                     last_run[sid] = now - CLICKUP_EVERY + 10
                 try:  # the owner's inbox: involved tasks in every list of the workspace
-                    n += clickup.sync_inbox(conn, client, acc, datetime.now(UTC))
+                    n += clickup.sync_inbox(
+                        conn, client, acc, datetime.now(UTC), CLICKUP_SLICE_SECONDS
+                    )
                 except clickup.RateLimited:
                     raise
                 except Exception:

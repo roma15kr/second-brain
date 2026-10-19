@@ -619,6 +619,13 @@ def sync_account_for(
 INBOX_PAGES = 10  # up to 1,000 changed tasks per pass; the cursor moves only after a full walk
 
 
+def _clock() -> float:
+    """Time for the inbox walk's slices (tests replace it)."""
+    import time
+
+    return time.monotonic()
+
+
 def involves_owner(task: dict[str, Any], settings: dict[str, Any]) -> bool:
     owner, group = settings.get("owner_user_id"), settings.get("group_id")
     if not owner:
@@ -631,13 +638,20 @@ def involves_owner(task: dict[str, Any], settings: dict[str, Any]) -> bool:
     )
 
 
-def sync_inbox(conn: Conn, client: ClickUpClient, account: Account, now: datetime) -> int:
+def sync_inbox(
+    conn: Conn,
+    client: ClickUpClient,
+    account: Account,
+    now: datetime,
+    seconds: float | None = None,
+) -> int:
     """ClickUp has no Inbox API, so the inbox is rebuilt: every task changed anywhere in the
     workspace (also in lists not chosen for sync) that the owner is assigned to, watches or
     created, or that is assigned to their team group, is stored with all comments and checked for
     mentions and assignments like synced tasks. Synced lists are left to their own walk."""
     from kb.connectors.base import get_state, set_state
 
+    deadline = _clock() + seconds if seconds is not None else None
     sid = source_id(account.id)
     s = account.settings or {}
     if not s.get("owner_user_id"):
@@ -655,6 +669,8 @@ def sync_inbox(conn: Conn, client: ClickUpClient, account: Account, now: datetim
     for page in range(INBOX_PAGES):
         tasks, last = client.workspace_tasks(account.team_id, cursor, page)
         for t in tasks:
+            if deadline is not None and _clock() > deadline:
+                return stored  # a time slice: the next pass skips what is already stored
             newest = max(newest, int(t.get("date_updated") or 0))
             row = lists.get(str((t.get("list") or {}).get("id")))
             if (row is not None and row["sync"]) or not involves_owner(t, s):

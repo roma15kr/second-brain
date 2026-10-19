@@ -29,3 +29,4 @@ formatter rewrapped lines (3 times)  Count: 3
 Why: `s.replace(old, new)` silently does nothing when `old` differs by a line break, so a change "applied"
 in a script never reached the file; tests that bypass the entry point (cmd_mcp) did not notice. Assert
 `old in s` before replacing, or use the Edit tool; add a test at the real entry point.
+- Scripted edits: assert the target text occurs exactly once (`s.count(old) == 1`), not just that it exists — near-identical blocks in two functions (e.g. time-sliced walks) make a first-match replace silently edit the wrong one (2026-10-19, ClickUp inbox slices).
