@@ -455,6 +455,12 @@ def write_brief(
     if pack.priorities:
         text = "\n".join(f"{n}. {p['title']}" for n, p in enumerate(pack.priorities, 1))
         sections.append(Section("This week's priorities", text, kind="note"))
+    from kb import focus
+
+    if pack.routine == "morning" and (blocks := focus.focus_section(conn, now, pack.priorities)):
+        sections.append(Section("Focus blocks", blocks, kind="note"))
+    if pack.routine == "evening" and (warning := focus.tomorrow_warning(conn, now)):
+        sections.append(Section("Tomorrow", warning, kind="note"))
     sections.extend(loop_sections(pack))
     if pack.routine in ("morning", "evening"):
         from kb.connectors import clickup

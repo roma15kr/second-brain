@@ -18,6 +18,7 @@ type AppSettings = {
   quiet_hours: { start: string; end: string };
   ai_budget_usd: number | null;
   reply_drafts_per_day: number;
+  working_hours?: { start: string; end: string };
 };
 type SettingsData = { app: AppSettings; budget_default_usd: number; month_spend_usd: number };
 type Device = {
@@ -67,6 +68,8 @@ function Schedule({ data }: { data: SettingsData }) {
     quiet_end: hm(s.quiet_hours.end),
     budget: s.ai_budget_usd === null ? "" : String(s.ai_budget_usd),
     drafts: s.reply_drafts_per_day ?? 5,
+    work_start: hm(s.working_hours?.start ?? "09:00"),
+    work_end: hm(s.working_hours?.end ?? "18:00"),
   });
   const [message, setMessage] = useState<string | null>(null);
   const save = useMutation({
@@ -90,6 +93,7 @@ function Schedule({ data }: { data: SettingsData }) {
             quiet_hours: { start: form.quiet_start, end: form.quiet_end },
             ai_budget_usd: form.budget === "" ? null : Number(form.budget),
             reply_drafts_per_day: Number(form.drafts),
+            working_hours: { start: form.work_start, end: form.work_end },
           },
         },
       }),
@@ -155,6 +159,17 @@ function Schedule({ data }: { data: SettingsData }) {
         />
         to{" "}
         <input aria-label="Quiet hours end" type="time" className="btn" {...field("quiet_end")} />
+      </label>
+      <label>
+        Working hours (focus blocks, meeting load){" "}
+        <input
+          aria-label="Working hours start"
+          type="time"
+          className="btn"
+          {...field("work_start")}
+        />{" "}
+        to{" "}
+        <input aria-label="Working hours end" type="time" className="btn" {...field("work_end")} />
       </label>
       <label>
         Monthly AI budget, $

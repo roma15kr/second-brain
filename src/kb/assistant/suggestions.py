@@ -124,7 +124,7 @@ def approve(
         " decided_at = %s, error = NULL WHERE id = %s",
         (Jsonb(payload), bool(edited) and payload != s["payload"], now, sid),
     )
-    if s["kind"] in ("reply_tg", "nudge") and not is_email(s["kind"], payload):
+    if s["kind"] in ("reply_tg", "nudge", "decline") and not is_email(s["kind"], payload):
         # Telegram: the owner copies the text and sends it; the system never writes to Telegram
         conn.execute(
             "UPDATE suggestions SET status = 'applied', applied_ref = 'copied' WHERE id = %s",

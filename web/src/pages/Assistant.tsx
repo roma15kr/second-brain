@@ -45,7 +45,7 @@ function isEmail(s: Suggestion): boolean {
   return s.kind === "reply_email" || (s.kind === "nudge" && s.payload.channel === "email");
 }
 function isText(s: Suggestion): boolean {
-  return ["reply_email", "reply_tg", "nudge"].includes(s.kind);
+  return ["reply_email", "reply_tg", "nudge", "decline"].includes(s.kind);
 }
 function isTask(s: Suggestion): boolean {
   return s.kind === "task" || s.kind === "delegate";
@@ -162,7 +162,7 @@ export function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void })
                 approve.mutate();
               }}
             >
-              Copy and open chat
+              {str(s.payload.link) ? "Copy and open chat" : "Copy"}
             </button>
           ) : (
             <button className="btn" disabled={approve.isPending} onClick={() => approve.mutate()}>
