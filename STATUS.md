@@ -11,6 +11,10 @@ _Last updated: 2026-10-18 by Claude_
   Web OS https://os.zhukovsky.biz (passkeys) · MCP https://kb.zhukovsky.biz/mcp (token + lockout) · Cloudflare-proxied.
 
 ## Done recently (2026-10-18)
+- Assistant (12.1, 12.2, 12.4 email): Assistant page = approval queue; "Draft reply" in Inbox; up to 5 AI
+  reply drafts a day (Settings) in the thread's language and the owner's tone, KB context with checked refs;
+  Save to Drafts (IMAP, threaded) or Send on tap with 10 s undo (SMTP from the receiving mailbox). Fixed: Gmail
+  drafts were stored with label `Draft` (no backslash) and could close needs-reply loops.
 - ClickUp notifications (11.3): pushes for tasks/comments assigned to or mentioning the owner or the DTC
   group (immediately, quiet hours respected), followed tasks/comments/chat channels (≤1 push per 15 min);
   "ClickUp for you" page `/clickup`; group name on the ClickUp connector page. Re-marking a list re-labels its
@@ -53,6 +57,7 @@ _Last updated: 2026-10-18 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
+- Mail executors (Save to Drafts, Send) run in the `routines` service: it needs IMAP_USER_MAIN/IMAP_PASSWORD_MAIN; a send leaves 10–40 s after the tap (30 s cycle).
 - Test DB: schema is built once per session; each test empties tables with DELETE (TRUNCATE costs ~3 s per test). `make check` ≈ 4 min.
 - Gmail All Mail includes drafts (label `\Draft`): never treat them as the owner's reply.
 - Domains moved to os./kb.zhukovsky.biz (Cloudflare-proxied) on 2026-10-18: passkeys and Home Screen apps are per domain, so re-enrol (`kb web setup-code`) and reinstall after any domain change.
