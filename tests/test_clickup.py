@@ -769,3 +769,24 @@ def test_migration_marks_the_adducate_workspace_quokka(conn):
     }
     assert marks == {"A": ["quokka"], "B": ["personal"]}
     assert conn.execute("SELECT scopes FROM items").fetchone()["scopes"] == ["quokka"]
+
+
+def test_inbox_walk_is_time_sliced(conn, fake, watched, monkeypatch):
+    workspace = [
+        {**task(f"s{n}", now_ms()), "list": {"id": "L9"}, "watchers": [OWNER]} for n in range(3)
+    ]
+    original = fake.handler
+
+    def team_tasks(request):
+        if request.url.path == "/api/v2/team/T1/task":
+            return httpx.Response(200, json={"tasks": workspace, "last_page": True})
+        return original(request)
+
+    fake.handler = team_tasks
+    clock = iter([0.0, 0.0, 0.5, 2.0])
+    monkeypatch.setattr(clickup, "_clock", lambda: next(clock, 99.0))
+    assert clickup.sync_inbox(conn, fake.client(), watched, datetime.now(UTC), seconds=1) == 2
+    state = conn.execute("SELECT value FROM sync_state WHERE key = 'inbox'").fetchone()
+    assert state is None  # the cursor moves only after a full walk
+    monkeypatch.setattr(clickup, "_clock", lambda: 0.0)
+    assert clickup.sync_inbox(conn, fake.client(), watched, datetime.now(UTC), seconds=1) == 1
