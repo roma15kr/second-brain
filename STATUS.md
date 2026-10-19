@@ -22,6 +22,11 @@ _Last updated: 2026-10-18 by Claude_
 - assistant-command-v1 slice 3: reports (activity in a period + sections with checked sources, Save to Library as a
   note), over budget = plain search results + "Run anyway" for one request, push "Ready: …" after requests over 30 s
   (device switch "Assistant answers ready"), threads deleted after 90 days unless pinned.
+- assistant-command-v1 slice 4: Dictate app (🎙) and a mic in the Ask box: record while the app is open (≤ 15 min,
+  stops in background, kept on the device until uploaded), `gpt-transcribe` in the background, audio deleted after the
+  transcript; Verbatim / Clean (wording check) / Structured (no invented dates) / As a request; Save to Library.
+  Audio volume `kb-dictations` shared by web and routines. Transcription price is a config value
+  (`llm.transcribe_usd_per_minute`, 0.006) — check it against OpenAI's price list.
 - gmail-digisoft: status shows each folder's cursor vs the server's next UID; no mail since 2026-10-17 is Gmail's own
   state for digisoftou@gmail.com (the owner's new Digisoft mail goes to another, unconnected address).
 

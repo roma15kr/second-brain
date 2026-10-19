@@ -544,3 +544,11 @@ fieldset.plain {
 .small {
   font-size: 12px;
 }
+
+.rec-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--error);
+}

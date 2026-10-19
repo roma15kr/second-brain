@@ -77,9 +77,11 @@ drafts, task drafts, nudges) are approved, edited-and-approved, rather than disc
 
 ## Non-goals
 
-- Dictation, call/meeting recording and transcription themselves (native macOS/iOS apps, ADR 0014,
+- Dictation (in-app dictation added by `assistant-command-v1`, ADR 0014 amendment), call/meeting
+  recording and transcription themselves (native macOS/iOS apps, ADR 0014,
   next change `voice-apps-v1`); this change only provides device pairing and the upload API they use.
 - Chat with the knowledge base inside the web app (later change; Claude via MCP covers it now).
+  Lifted by `assistant-command-v1` (approved 2026-10-19): requests by text or voice in the web OS.
 - Sending anything automatically. The only writes are approved email drafts, emails sent on the
   owner's tap, and approved ClickUp tasks; Telegram stays read-only; calendars are read-only (no
   automatic time-blocking).
