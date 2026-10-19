@@ -1,16 +1,35 @@
 # Status
-_Last updated: 2026-10-18 by Claude_
+_Last updated: 2026-10-19 by Claude_
 
 ## Current focus
-- `web-os-v1` (branch `change/web-os-v1`, merged slice by slice into `main` and deployed): 25/39 tasks.
-  Next: slice 11 ClickUp, 12 proactive assistant (drafts, send on tap), 13 calendars/meetings/audio, 14 acceptance.
-- `v1-mail-telegram-search`: 29/30 tasks. Remaining: **10.3 acceptance** — owner writes ~30 real questions in
-  `eval/questions.yaml` (format: `eval/questions.example.yaml`), then
-  `KB_MCP_TOKEN=… kb eval eval/questions.yaml --mcp-url https://kb.zhukovsky.biz/mcp --min-recall 0.8`.
+- **Everything built, waiting for the owner's acceptance test** (one consolidated list below, owner asked to
+  test at the end). `web-os-v1`: 38/40 tasks (left: 14.1 acceptance, plus real-device checks of 11.3/12.1/12.2).
+  `assistant-command-v1`: 10/13 (left: 1.3, 4.3, 5.2 real-device checks). `v1-mail-telegram-search`: 29/30 (10.3).
 - Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), branch `main`.
   Web OS https://os.zhukovsky.biz (passkeys) · MCP https://kb.zhukovsky.biz/mcp (token + lockout) · Cloudflare-proxied.
 
+## Owner acceptance checklist (test on phone and laptop, then give feedback)
+1. ClickUp: a push arrives when you or DTC are assigned/mentioned (11.3); followed activity is grouped.
+2. Inbox → Draft reply → Save to Drafts appears unsent in the Gmail thread (12.1); Send → lands in the thread (12.2).
+3. Assistant: one question with sources, an email draft, a task draft, a reminder, a report (assistant 1.3, 5.2).
+4. Dictate (🎙): Ukrainian, Russian and mixed; Structured; As a request; the mic in the Ask box (assistant 4.3).
+5. Connectors → Calendars: Google secret address and/or iCloud app-specific password; mark calendars; a meeting
+   with attendees shows prep 30 min before and a reminder push 10 min before (14.1).
+6. Settings → Working hours; morning brief shows focus blocks; evening wrap warns about a heavy tomorrow.
+7. Settings → Recorder apps: pairing works once the recorder apps exist (`voice-apps-v1`); until then, attach notes
+   or a .vtt/.docx to a meeting → summary, decisions, your loops, team task drafts.
+8. Library: upload the constitution and 2026 plans, confirm goals (goal links in priority and the weekly audit
+   need confirmed goals).
+9. v1 10.3: 30 evaluation questions → `kb eval`.
+
 ## Done recently (2026-10-19)
+- web-os-v1 slice 13 (PRs #30–#34): calendars (Google iCal + iCloud CalDAV, read-only, every 10 min), Meetings
+  page and Today's meetings, reminders, meeting prep (people, history, loops, tasks, sourced agenda; morning brief
+  for meetings before 10:00), recorder-app pairing + upload API, notes import (.txt/.md/.vtt/.srt/.docx), meeting
+  processing (summary, decisions, owner loops, team task drafts), meeting audio (resumable upload, playback beside
+  the transcript, 12-month expiry, per-project delete, incremental backup, Status), focus blocks, meeting-load
+  warnings, decline drafts, weekly attention audit, neglected goals, decision log. Docs: architecture, external.
+- Fix: the mailbox config cache could return another config's result when Python reused an object id.
 - assistant-command-v1 slice 1 (approved 2026-10-19): Ask box on the Assistant page and "Ask the assistant" in ⌘K;
   requests run in the web service (2 workers, 8 tool calls / 90 s), tools search/get_item/person, answers cite only
   items the tools returned, private documents never read, threads with follow-ups. The web service now gets
@@ -68,12 +87,13 @@ _Last updated: 2026-10-18 by Claude_
 - Example eval (5 questions): recall@10 1.0, recall@1 0.8, MRR 0.9, p50 1.5 s.
 
 ## Next steps
-1. Owner: generate recovery codes (Settings → Security) — the first passkey predates them.
-2. Owner: go through Connectors → Telegram "To mark"; upload constitution and 2026 plans to the Library, confirm goals.
-3. Owner: 30 evaluation questions → `kb eval` (v1 task 10.3), then archive v1 with `--skip-specs`.
-4. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key).
-5. Owner: add reserve storage → off-site copy of `/backups` + Vaultwarden export (ADR 0013).
-6. Next changes: `voice-apps-v1` (macOS/iOS recorder + dictation), GitHub/Karakeep, metrics warehouse.
+1. Owner: the acceptance checklist above; feedback → fixes.
+2. Owner: generate recovery codes (Settings → Security); go through Connectors → Telegram "To mark".
+3. Owner: rotate secrets pasted in chat (Coolify API token, Gmail app password, OpenAI key).
+4. Owner: add reserve storage → off-site copy of `/backups` (now including `/backups/audio`) + Vaultwarden export.
+5. Owner: check `gpt-transcribe` price vs `llm.transcribe_usd_per_minute` (0.006).
+6. After acceptance: archive `web-os-v1`, `assistant-command-v1`, `v1-mail-telegram-search` (owner).
+7. Next changes: `voice-apps-v1` (macOS/iOS recorder apps against the device API), GitHub/Karakeep, metrics warehouse.
 
 ## Open questions
 - AI scope classifier (planned in v1 design, never wired): build it, or keep rules + unsorted review?
@@ -83,6 +103,11 @@ _Last updated: 2026-10-18 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
+- Calendars and recorder uploads use volumes `kb-dictations` and `kb-audio` mounted in web and routines (backup
+  mounts `kb-audio` read-only); a new service that needs them must mount them too.
+- `/api/devices/*` bypasses the session middleware on purpose (device bearer tokens, upload only); never add a
+  read endpoint under that prefix.
+- Focus blocks appear only when at least one calendar is marked for sync.
 - Mail executors (Save to Drafts, Send) run in the `routines` service: it needs IMAP_USER_MAIN/IMAP_PASSWORD_MAIN; a send leaves 10–40 s after the tap (30 s cycle).
 - Test DB: schema is built once per session; each test empties tables with DELETE (TRUNCATE costs ~3 s per test). `make check` ≈ 4 min.
 - Gmail All Mail includes drafts (label `\Draft`): never treat them as the owner's reply.
