@@ -3,7 +3,7 @@ _Last updated: 2026-10-19 by Claude_
 
 ## Current focus
 - **Everything built, waiting for the owner's acceptance test** (one consolidated list below, owner asked to
-  test at the end). `web-os-v1`: 38/40 tasks (left: 14.1 acceptance, plus real-device checks of 11.3/12.1/12.2).
+  test at the end). `web-os-v1`: 36/40 tasks (left: real-device checks 11.3, 12.1, 12.2 and acceptance 14.1).
   `assistant-command-v1`: 10/13 (left: 1.3, 4.3, 5.2 real-device checks). `v1-mail-telegram-search`: 29/30 (10.3).
 - Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), branch `main`.
   Web OS https://os.zhukovsky.biz (passkeys) · MCP https://kb.zhukovsky.biz/mcp (token + lockout) · Cloudflare-proxied.
