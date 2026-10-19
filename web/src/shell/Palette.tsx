@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../api/client";
+import { ask } from "../assistant/Ask";
 import { APPS } from "./apps";
 
 type Entry = { key: string; label: string; hint: string; go: () => void };
@@ -83,7 +84,22 @@ export function Palette({ onClose }: { onClose: () => void }) {
           },
         ]
       : [];
-    return [...ppl, ...pages, ...scopes, ...hits, ...searchAll];
+    const askEntry = lower
+      ? [
+          {
+            key: "ask",
+            label: `✦ Ask the assistant: “${q.trim()}”`,
+            hint: "assistant",
+            go: () => {
+              void ask(q.trim()).then((c) => {
+                navigate(`/assistant/t/${c.thread_id}`);
+                onClose();
+              });
+            },
+          },
+        ]
+      : [];
+    return [...ppl, ...pages, ...scopes, ...hits, ...searchAll, ...askEntry];
   }, [q, people.data, search.data, navigate, onClose, projectNames]);
 
   function onKey(e: KeyboardEvent) {

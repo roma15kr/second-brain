@@ -10,6 +10,14 @@ _Last updated: 2026-10-18 by Claude_
 - Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), branch `main`.
   Web OS https://os.zhukovsky.biz (passkeys) · MCP https://kb.zhukovsky.biz/mcp (token + lockout) · Cloudflare-proxied.
 
+## Done recently (2026-10-19)
+- assistant-command-v1 slice 1 (approved 2026-10-19): Ask box on the Assistant page and "Ask the assistant" in ⌘K;
+  requests run in the web service (2 workers, 8 tool calls / 90 s), tools search/get_item/person, answers cite only
+  items the tools returned, private documents never read, threads with follow-ups. The web service now gets
+  OPENAI_API_KEY.
+- gmail-digisoft: status shows each folder's cursor vs the server's next UID; no mail since 2026-10-17 is Gmail's own
+  state for digisoftou@gmail.com (the owner's new Digisoft mail goes to another, unconnected address).
+
 ## Done recently (2026-10-18)
 - Nudges and delegation (12.5): overdue promises owed to the owner get a polite follow-up draft (email: Drafts/Send;
   Telegram: copy and open chat); emails resembling a teammate's ClickUp work get a task draft for them; a kind

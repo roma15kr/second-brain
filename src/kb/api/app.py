@@ -31,6 +31,7 @@ from kb.api import (
     routes_loops,
     routes_people,
     routes_push,
+    routes_requests,
     routes_search,
     routes_settings,
     routes_status,
@@ -85,6 +86,9 @@ def build_app(
     from kb.assistant import suggestions as _suggestions
 
     app.state.clickup_factory = _suggestions.clickup_client_factory  # replaced in tests
+    from kb.assistant import agent as _agent
+
+    app.state.assistant_llm = _agent.default_llm(app.state.config)  # replaced in tests
     app.state.searcher = searcher or (
         routes_search.local_searcher(connect, app.state.config) if connect else None
     )
@@ -299,6 +303,7 @@ def build_app(
     app.include_router(routes_library.router)
     app.include_router(routes_goals.router)
     app.include_router(routes_assistant.router)
+    app.include_router(routes_requests.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:

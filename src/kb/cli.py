@@ -404,6 +404,13 @@ def build_web_app() -> Any:
     dist = os.environ.get("KB_WEB_DIST")
     origin = os.environ.get("KB_WEB_ORIGIN", "")
     url = database_url()
+    try:
+        from kb.api import routes_requests
+
+        with db.connect(url) as conn:
+            routes_requests.fail_interrupted(conn)
+    except Exception:
+        log.exception("cannot mark interrupted assistant requests")
     return build_app(
         Path(dist) if dist else None,
         connect=lambda: db.connect(url),

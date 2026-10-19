@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { AskBox } from "../assistant/Ask";
 import { api } from "../api/client";
 import { kyivTime } from "../briefs/BriefView";
 import { ScopeTag } from "../shell/ScopeTag";
@@ -231,10 +232,30 @@ export function Assistant() {
         : false,
   });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["suggestions"] });
+  const threads = useQuery({
+    queryKey: ["assistant-threads"],
+    queryFn: () =>
+      api<{ threads: { id: number; title: string; requests: number; updated_at: string }[] }>(
+        "/api/assistant/threads",
+      ),
+  });
   if (pending.isPending) return <p className="muted">Loading…</p>;
   if (pending.isError) return <p className="error">{pending.error.message}</p>;
   return (
     <>
+      <section className="card">
+        <AskBox />
+        {threads.data && threads.data.threads.length > 0 && (
+          <ul className="list">
+            {threads.data.threads.slice(0, 5).map((t) => (
+              <li key={t.id}>
+                <Link to={`/assistant/t/${t.id}`}>{t.title}</Link>
+                <span className="muted"> · {kyivTime.format(new Date(t.updated_at))}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <section className="card group">
         <h3>Waiting for you</h3>
         <ul className="list">
