@@ -484,6 +484,7 @@ def clickup_overview(conn: Db) -> dict[str, Any]:
                 "owner": a["settings"].get("owner_email"),
                 "group_name": a["settings"].get("group_name") or "DTC",
                 "group_found": bool(a["settings"].get("group_id")),
+                "default_scope": a["settings"].get("default_scope"),
             }
             for a in accounts_
         ],
@@ -592,13 +593,43 @@ def clickup_updates(conn: Db, days: int = 3) -> dict[str, Any]:
 
 @router.post("/api/connectors/clickup/accounts/{account_id}")
 def clickup_account_settings(
-    conn: Db, account_id: int, group_name: Annotated[str, Body(embed=True)]
-) -> dict[str, bool]:
+    conn: Db,
+    account_id: int,
+    group_name: Annotated[str | None, Body(embed=True)] = None,
+    default_scope: Annotated[str | None, Body(embed=True)] = None,
+    apply_to_lists: Annotated[bool, Body(embed=True)] = False,
+) -> dict[str, int]:
+    """The team group to watch, and the workspace's own mark (for lists without one, chat and
+    inbox tasks); `apply_to_lists` re-marks every list and everything stored from them."""
     row = conn.execute(
-        "UPDATE connector_accounts SET settings = settings || %s - 'group_id'"
-        " WHERE id = %s AND kind = 'clickup' RETURNING id",
-        (Jsonb({"group_name": group_name.strip() or "DTC"}), account_id),
+        "SELECT id FROM connector_accounts WHERE id = %s AND kind = 'clickup'", (account_id,)
     ).fetchone()
     if row is None:
         raise HTTPException(404, f"no ClickUp account {account_id}")
-    return {"ok": True}
+    if group_name is not None:
+        conn.execute(
+            "UPDATE connector_accounts SET settings = settings || %s - 'group_id' WHERE id = %s",
+            (Jsonb({"group_name": group_name.strip() or "DTC"}), account_id),
+        )
+    relabelled = 0
+    if default_scope is not None:
+        try:
+            scopes.validate_scopes([default_scope], scopes.known(conn))
+        except scopes.ReviewError as e:
+            raise HTTPException(400, str(e)) from e
+        conn.execute(
+            "UPDATE connector_accounts SET settings = settings || %s WHERE id = %s",
+            (Jsonb({"default_scope": default_scope}), account_id),
+        )
+        if apply_to_lists:
+            conn.execute(
+                "UPDATE clickup_lists SET scopes = %s WHERE account_id = %s",
+                ([default_scope], account_id),
+            )
+            relabelled = len(
+                conn.execute(
+                    "UPDATE items SET scopes = %s WHERE source_id = %s RETURNING 1",
+                    ([default_scope], f"clickup-{account_id}"),
+                ).fetchall()
+            )
+    return {"relabelled": relabelled}

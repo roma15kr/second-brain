@@ -166,6 +166,49 @@ class ClickUpClient:
                 }
         return {}
 
+    def workspace_tasks(
+        self, team_id: str, updated_gt_ms: int, page: int
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Tasks updated anywhere in the workspace (all lists the owner can see), newest first."""
+        data = self._req(
+            "GET",
+            f"/team/{team_id}/task",
+            params={
+                "include_closed": "true",
+                "subtasks": "true",
+                "order_by": "updated",
+                **({"reverse": "true"} if self.reverse_for_newest else {}),
+                "date_updated_gt": str(updated_gt_ms),
+                "page": str(page),
+            },
+        )
+        tasks = list(data.get("tasks") or [])
+        last = data.get("last_page")
+        return tasks, bool(last) if last is not None else len(tasks) < PAGE_SIZE
+
+    def channels(self, team_id: str, since_ms: int | None = None) -> list[dict[str, Any]]:
+        """Chat channels, DMs and group DMs visible to the owner (with messages since)."""
+        params: dict[str, str] = {"limit": "100"}
+        if since_ms:
+            params["with_message_since"] = str(since_ms)
+        return self._pages(f"{API3}/workspaces/{team_id}/chat/channels", params)
+
+    def channel_member_ids(self, team_id: str, channel_id: str) -> set[str]:
+        members = self._pages(
+            f"{API3}/workspaces/{team_id}/chat/channels/{channel_id}/members", {"limit": "100"}
+        )
+        return {str(m.get("id") or (m.get("user") or {}).get("id")) for m in members}
+
+    def _pages(self, path: str, params: dict[str, str], pages: int = 10) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for _ in range(pages):
+            data = self._req("GET", path, params=params)
+            out.extend(data.get("data") or [])
+            if not data.get("next_cursor"):
+                break
+            params = {**params, "cursor": str(data["next_cursor"])}
+        return out
+
     def followed_channels(self, team_id: str) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         params: dict[str, str] = {"is_follower": "true", "limit": "100"}
@@ -571,6 +614,62 @@ def sync_account_for(
     return total, finished
 
 
+# --- the owner's "inbox": tasks that involve them anywhere in the workspace ----------------------
+
+INBOX_PAGES = 10  # up to 1,000 changed tasks per pass; the cursor moves only after a full walk
+
+
+def involves_owner(task: dict[str, Any], settings: dict[str, Any]) -> bool:
+    owner, group = settings.get("owner_user_id"), settings.get("group_id")
+    if not owner:
+        return False
+    return (
+        owner in _ids(task.get("assignees"))
+        or owner in _ids(task.get("watchers"))
+        or str((task.get("creator") or {}).get("id")) == owner
+        or (bool(group) and group in _ids(task.get("group_assignees")))
+    )
+
+
+def sync_inbox(conn: Conn, client: ClickUpClient, account: Account, now: datetime) -> int:
+    """ClickUp has no Inbox API, so the inbox is rebuilt: every task changed anywhere in the
+    workspace (also in lists not chosen for sync) that the owner is assigned to, watches or
+    created, or that is assigned to their team group, is stored with all comments and checked for
+    mentions and assignments like synced tasks. Synced lists are left to their own walk."""
+    from kb.connectors.base import get_state, set_state
+
+    sid = source_id(account.id)
+    s = account.settings or {}
+    if not s.get("owner_user_id"):
+        return 0
+    state = get_state(conn, sid, "inbox") or {}
+    cursor = int(state.get("updated_ms") or int((now - timedelta(days=7)).timestamp() * 1000))
+    lists = {
+        str(r["list_id"]): r
+        for r in conn.execute(
+            "SELECT list_id, sync, scopes FROM clickup_lists WHERE account_id = %s", (account.id,)
+        ).fetchall()
+    }
+    fallback = default_scopes(conn, account) or ["unsorted"]
+    newest, stored = cursor, 0
+    for page in range(INBOX_PAGES):
+        tasks, last = client.workspace_tasks(account.team_id, cursor, page)
+        for t in tasks:
+            newest = max(newest, int(t.get("date_updated") or 0))
+            row = lists.get(str((t.get("list") or {}).get("id")))
+            if (row is not None and row["sync"]) or not involves_owner(t, s):
+                continue
+            if _unchanged(conn, account.id, t):
+                continue
+            scopes = list(row["scopes"]) if row is not None and row["scopes"] else fallback
+            upsert_task(conn, account.id, t, client.comments(str(t["id"])), scopes, account)
+            stored += 1
+        if last:
+            break
+    set_state(conn, sid, "inbox", {"updated_ms": newest})
+    return stored
+
+
 # --- items for the owner (pushed right away) ---------------------------------------------------
 
 
@@ -689,6 +788,7 @@ HEADLINES = {
     "mentioned": "ClickUp: {actor} mentioned you",
     "group_mentioned": "ClickUp: {actor} mentioned {group}",
     "comment_assigned": "ClickUp: {actor} assigned you a comment",
+    "chat_direct": "ClickUp: {actor} wrote to you",
 }
 
 
@@ -747,8 +847,23 @@ def push_pending(conn: Conn, now: datetime) -> int:
 # --- chat channels the owner follows ------------------------------------------------------------
 
 
+def default_scopes(conn: Conn, account: Account) -> list[str] | None:
+    """The workspace's own mark (Connectors → ClickUp), for lists without one and chat."""
+    row = conn.execute(
+        "SELECT settings->>'default_scope' AS s FROM connector_accounts WHERE id = %s",
+        (account.id,),
+    ).fetchone()
+    return [row["s"]] if row and row["s"] else None
+
+
 def chat_scopes(conn: Conn, account_id: int) -> list[str]:
-    """Chat channels are marked like most of the account's synced lists."""
+    """Chat is marked with the workspace mark, else like most of the account's synced lists."""
+    row = conn.execute(
+        "SELECT settings->>'default_scope' AS s FROM connector_accounts WHERE id = %s",
+        (account_id,),
+    ).fetchone()
+    if row and row["s"]:
+        return [row["s"]]
     row = conn.execute(
         "SELECT s, count(*) AS n FROM clickup_lists, unnest(scopes) s WHERE account_id = %s"
         " AND sync GROUP BY s ORDER BY n DESC LIMIT 1",
@@ -757,19 +872,68 @@ def chat_scopes(conn: Conn, account_id: int) -> list[str]:
     return [row["s"]] if row else ["unsorted"]
 
 
+MEMBERS_TTL = timedelta(hours=24)
+
+
+def my_channels(
+    conn: Conn, client: ClickUpClient, account: Account, since_ms: int, now: datetime
+) -> list[dict[str, Any]]:
+    """Direct messages, group DMs, and channels the owner follows or is a member of (membership
+    is checked per channel and remembered for a day)."""
+    from kb.connectors.base import get_state, set_state
+
+    sid = source_id(account.id)
+    owner = str((account.settings or {}).get("owner_user_id") or "")
+    followed = {str(c["id"]) for c in client.followed_channels(account.team_id)}
+    out = []
+    for ch in client.channels(account.team_id, since_ms):
+        cid = str(ch["id"])
+        if ch.get("type") in ("DM", "GROUP_DM") or cid in followed:
+            out.append(ch)
+            continue
+        cached = get_state(conn, sid, f"chatmember:{cid}") or {}
+        checked = cached.get("checked")
+        if checked and now - datetime.fromisoformat(checked) < MEMBERS_TTL:
+            member = bool(cached.get("member"))
+        else:
+            member = owner in client.channel_member_ids(account.team_id, cid)
+            set_state(
+                conn, sid, f"chatmember:{cid}", {"member": member, "checked": now.isoformat()}
+            )
+        if member:
+            out.append(ch)
+    return out
+
+
+def _chat_kind(ch: dict[str, Any], text: str, owner_name: str, group_name: str) -> str:
+    if ch.get("type") in ("DM", "GROUP_DM"):
+        return "chat_direct"
+    low = text.lower()
+    if owner_name and f"@{owner_name.lower()}" in low:
+        return "mentioned"
+    if group_name and f"@{group_name.lower()}" in low:
+        return "group_mentioned"
+    return "followed_chat"
+
+
 def sync_chat(conn: Conn, client: ClickUpClient, account: Account, now: datetime) -> int:
-    """New messages in followed channels: archived, indexed per channel per day (searchable),
-    and noted for the owner when written by someone else."""
+    """New messages in the owner's DMs and channels: archived, indexed per channel per day
+    (searchable), and noted for the owner when written by someone else — DMs and @mentions push
+    right away, the rest is summed up."""
     from kb.connectors.base import get_state, set_state
 
     sid = source_id(account.id)
     s = account.settings or {}
     members: dict[str, dict[str, Any]] = s.get("members") or {}
-    owner = s.get("owner_user_id")
+    owner = str(s.get("owner_user_id") or "")
+    owner_name = (members.get(owner) or {}).get("username") or ""
+    group_name = s.get("group_name") or DEFAULT_GROUP
     since_notify = datetime.fromisoformat(s["notify_since"]) if s.get("notify_since") else now
     scopes = chat_scopes(conn, account.id)
+    listed = get_state(conn, sid, "chat:listed") or {}
+    list_since = int(listed.get("since_ms") or int((now - timedelta(days=30)).timestamp() * 1000))
     stored = 0
-    for ch in client.followed_channels(account.team_id):
+    for ch in my_channels(conn, client, account, list_since - 60_000, now):
         cid = str(ch["id"])
         state = get_state(conn, sid, f"chat:{cid}") or {}
         since_ms = int(state.get("since_ms") or int((now - timedelta(days=30)).timestamp() * 1000))
@@ -783,7 +947,10 @@ def sync_chat(conn: Conn, client: ClickUpClient, account: Account, now: datetime
                     external_id=f"chat:{m['id']}",
                     kind="clickup_chat_message",
                     occurred_at=_ms(m.get("date")),
-                    payload={"channel": {"id": cid, "name": ch.get("name")}, "message": m},
+                    payload={
+                        "channel": {"id": cid, "name": ch.get("name"), "type": ch.get("type")},
+                        "message": m,
+                    },
                 ),
             )
             when = _ms(m.get("date"))
@@ -798,19 +965,21 @@ def sync_chat(conn: Conn, client: ClickUpClient, account: Account, now: datetime
             author = str(m.get("user_id") or "")
             if when is None or when <= since_notify or author == owner:
                 continue
+            kind = _chat_kind(ch, str(m.get("content") or ""), owner_name, group_name)
             conn.execute(
                 "INSERT INTO clickup_notifications (key, account_id, item_id, kind, actor,"
-                " event_at) VALUES (%s, %s, %s, 'followed_chat', %s, %s)"
-                " ON CONFLICT (key) DO NOTHING",
+                " event_at) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (key) DO NOTHING",
                 (
                     f"chat:{m['id']}",
                     account.id,
                     item_ids.get(when.date().isoformat()),
+                    kind,
                     (members.get(author) or {}).get("username") or "",
                     when,
                 ),
             )
         set_state(conn, sid, f"chat:{cid}", {"since_ms": since_ms})
+    set_state(conn, sid, "chat:listed", {"since_ms": int(now.timestamp() * 1000)})
     return stored
 
 
@@ -844,7 +1013,11 @@ def _index_chat_day(
             people_.append(who)
     last = _ms(msgs[-1].get("date")) if msgs else None
     text = redact_text("\n".join(lines))
-    title = f"#{channel.get('name') or 'chat'} · {day}"
+    if channel.get("type") in ("DM", "GROUP_DM"):
+        others = sorted({p for p in people_ if p} - {""})
+        title = f"DM {', '.join(others) or channel.get('name') or ''} · {day}".replace("  ", " ")
+    else:
+        title = f"#{channel.get('name') or 'chat'} · {day}"
     row = conn.execute(
         """
         INSERT INTO items (source_id, source_item_key, kind, scopes, title, raw_text, participants,

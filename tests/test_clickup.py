@@ -636,50 +636,136 @@ def test_pending_notifications_pushed_by_routines(conn, fake, watched, monkeypat
     assert len(sent) == 3
 
 
-def test_followed_chat_channels_are_searchable_and_notify(conn, fake, watched):
-    msgs = [
-        {
-            "id": "m1",
-            "content": "Rozetka banners are live",
-            "date": now_ms(),
-            "user_id": "7",
-            "type": "message",
-        },
-        {"id": "m2", "content": "thanks", "date": now_ms(1), "user_id": "1", "type": "message"},
+def test_dms_member_channels_and_followed_channels_are_read(conn, fake, watched):
+    def msg(mid, text, user="7", minutes=0):
+        return {"id": mid, "content": text, "date": now_ms(minutes), "user_id": user}
+
+    messages = {
+        "CH1": [msg("m1", "Rozetka banners are live"), msg("m2", "thanks", user="1", minutes=1)],
+        "DM1": [msg("d1", "Can you call me?")],
+        "CH2": [msg("p1", "@Owner please check the prices")],
+        "CH3": [msg("x1", "not for you")],
+    }
+    channels = [
+        {"id": "CH1", "name": "marketing", "type": "CHANNEL", "visibility": "PUBLIC"},
+        {"id": "DM1", "name": "", "type": "DM", "visibility": "PRIVATE"},
+        {"id": "CH2", "name": "pricing", "type": "CHANNEL", "visibility": "PUBLIC"},
+        {"id": "CH3", "name": "random", "type": "CHANNEL", "visibility": "PUBLIC"},
     ]
     original = fake.handler
+    member_checks = []
 
     def v3(request):
-        p = request.url.path
+        p, q = request.url.path, request.url.params
         if p.endswith("/chat/channels"):
-            assert request.url.params["is_follower"] == "true"
-            return httpx.Response(
-                200, json={"data": [{"id": "CH1", "name": "marketing"}], "next_cursor": ""}
-            )
-        if p.endswith("/chat/channels/CH1/messages"):
-            return httpx.Response(200, json={"data": list(reversed(msgs)), "next_cursor": ""})
+            if q.get("is_follower") == "true":
+                return httpx.Response(200, json={"data": [channels[0]], "next_cursor": ""})
+            return httpx.Response(200, json={"data": channels, "next_cursor": ""})
+        if p.endswith("/members"):
+            cid = p.split("/")[-2]
+            member_checks.append(cid)
+            ids = [{"id": "1"}, {"id": "7"}] if cid == "CH2" else [{"id": "7"}]
+            return httpx.Response(200, json={"data": ids, "next_cursor": ""})
+        if p.endswith("/messages"):
+            cid = p.split("/")[-2]
+            data = list(reversed(messages[cid]))
+            return httpx.Response(200, json={"data": data, "next_cursor": ""})
         if p == "/api/v2/team":
-            return httpx.Response(
-                200,
-                json={
-                    "teams": [
-                        {
-                            "id": "T1",
-                            "name": "Quokka",
-                            "members": [{"user": OLENA}, {"user": OWNER}],
-                        }
-                    ]
-                },
-            )
+            team = {"id": "T1", "name": "Quokka", "members": [{"user": OLENA}, {"user": OWNER}]}
+            return httpx.Response(200, json={"teams": [team]})
         return original(request)
 
     fake.handler = v3
     clickup.ensure_identity(
         conn, fake.client(), watched, datetime.now(UTC) - timedelta(hours=1), refresh_group=True
     )
-    assert clickup.sync_chat(conn, fake.client(), watched, datetime.now(UTC)) == 2
-    item = conn.execute("SELECT * FROM items WHERE kind = 'clickup_chat'").fetchone()
+    assert clickup.sync_chat(conn, fake.client(), watched, datetime.now(UTC)) == 4
+    titles = {r["title"].split(" · ")[0] for r in conn.execute("SELECT title FROM items")}
+    assert titles == {"#marketing", "DM Олена", "#pricing"}  # not #random: not a member
+    item = conn.execute("SELECT * FROM items WHERE title LIKE '#marketing%'").fetchone()
     assert "Олена: Rozetka banners are live" in item["raw_text"] and item["scopes"] == ["quokka"]
-    assert item["title"].startswith("#marketing")
-    assert notes(conn) == [("followed_chat", "Олена")]  # the owner's own message is not
-    assert clickup.sync_chat(conn, fake.client(), watched, datetime.now(UTC)) == 0  # cursor kept
+    assert sorted(notes(conn)) == [
+        ("chat_direct", "Олена"),  # a DM pushes right away
+        ("followed_chat", "Олена"),  # the owner's own message is not noted
+        ("mentioned", "Олена"),
+    ]
+    assert sorted(member_checks) == ["CH2", "CH3"]  # DMs and followed channels need no check
+    assert clickup.sync_chat(conn, fake.client(), watched, datetime.now(UTC)) == 0  # cursors kept
+    assert sorted(member_checks) == ["CH2", "CH3"]  # membership remembered for a day
+
+
+def test_inbox_reads_involved_tasks_from_every_list(conn, fake, watched):
+    def ws_task(tid, list_id, **extra):
+        return {**task(tid, now_ms()), "list": {"id": list_id, "name": "Other"}, **extra}
+
+    workspace = [
+        ws_task("w1", "L9", watchers=[OWNER, OLENA]),  # a list not chosen for sync
+        ws_task("w2", "L9", creator=OLENA),  # nothing to do with the owner
+        ws_task("w3", "L1", watchers=[OWNER]),  # a synced list: left to its own walk
+    ]
+    fake.comments["w1"] = [
+        {**comment("c1", now_ms(), "@Owner look"), "comment": [{"type": "tag", "user": OWNER}]}
+    ]
+    original = fake.handler
+
+    def team_tasks(request):
+        if request.url.path == "/api/v2/team/T1/task":
+            assert int(request.url.params["date_updated_gt"]) > 0
+            return httpx.Response(200, json={"tasks": workspace, "last_page": True})
+        return original(request)
+
+    fake.handler = team_tasks
+    conn.execute(
+        'UPDATE connector_accounts SET settings = settings || \'{"default_scope": "quokka"}\''
+    )
+    assert clickup.sync_inbox(conn, fake.client(), watched, datetime.now(UTC)) == 1
+    [item] = conn.execute("SELECT * FROM items WHERE kind = 'clickup_task'").fetchall()
+    assert item["source_item_key"] == "w1" and item["scopes"] == ["quokka"]
+    assert notes(conn) == [("mentioned", "Олена")]
+    assert clickup.sync_inbox(conn, fake.client(), watched, datetime.now(UTC)) == 0  # unchanged
+
+
+def test_workspace_mark_applies_to_all_lists(client, conn, fake, account):
+    fake.tasks["L1"] = [task("a", 1000)]
+    clickup.sync_account(conn, fake.client(), account)
+    conn.execute("UPDATE clickup_lists SET scopes = '{digisoft}'")
+    conn.execute("UPDATE items SET scopes = '{digisoft}'")
+    aid = conn.execute("SELECT id FROM connector_accounts").fetchone()["id"]
+    r = client.post(
+        f"/api/connectors/clickup/accounts/{aid}",
+        json={"default_scope": "quokka", "apply_to_lists": True},
+        headers=CSRF,
+    )
+    assert r.json() == {"relabelled": 1}
+    assert {tuple(x["scopes"]) for x in conn.execute("SELECT scopes FROM clickup_lists")} == {
+        ("quokka",)
+    }
+    over = client.get("/api/connectors/clickup").json()
+    assert over["accounts"][0]["default_scope"] == "quokka"
+
+
+def test_migration_marks_the_adducate_workspace_quokka(conn):
+    from kb import db as dbmod
+
+    sql = next(s for name, s in dbmod.migration_files() if name.startswith("0039"))
+    aid = conn.execute(
+        "INSERT INTO connector_accounts (kind, label, settings, secret)"
+        " VALUES ('clickup', 'Adducate', '{}', '') RETURNING id"
+    ).fetchone()["id"]
+    conn.execute(
+        "INSERT INTO clickup_lists (list_id, account_id, space_id, list_name, sync, scopes)"
+        " VALUES ('A', %s, 'S', 'Amazon', true, '{digisoft}'),"
+        " ('B', %s, 'S', 'Personal list', true, '{personal}')",
+        (aid, aid),
+    )
+    conn.execute(
+        "INSERT INTO items (source_id, source_item_key, kind, scopes) VALUES"
+        " (%s, 't', 'clickup_task', '{digisoft}')",
+        (f"clickup-{aid}",),
+    )
+    conn.execute(sql)
+    marks = {
+        r["list_id"]: r["scopes"] for r in conn.execute("SELECT list_id, scopes FROM clickup_lists")
+    }
+    assert marks == {"A": ["quokka"], "B": ["personal"]}
+    assert conn.execute("SELECT scopes FROM items").fetchone()["scopes"] == ["quokka"]

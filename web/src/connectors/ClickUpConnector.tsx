@@ -24,6 +24,7 @@ type Overview = {
     owner?: string | null;
     group_name?: string;
     group_found?: boolean;
+    default_scope?: string | null;
   }[];
   lists: ListRow[];
   members: {
@@ -95,6 +96,59 @@ function Connect({ onDone }: { onDone: () => void }) {
   );
 }
 
+function WorkspaceMark({
+  a,
+  onChanged,
+}: {
+  a: Overview["accounts"][number];
+  onChanged: () => void;
+}) {
+  const projects = useProjects();
+  const [scope, setScope] = useState(a.default_scope ?? "");
+  const [note, setNote] = useState<string | null>(null);
+  const save = useMutation({
+    mutationFn: (applyToLists: boolean) =>
+      api<{ relabelled: number }>(`/api/connectors/clickup/accounts/${a.id}`, {
+        method: "POST",
+        body: { default_scope: scope, apply_to_lists: applyToLists },
+      }),
+    onSuccess: (r, applied) => {
+      setNote(applied ? `All lists marked ${scope}; ${r.relabelled} items re-marked.` : "Saved.");
+      onChanged();
+    },
+    onError: (e) => setNote(e.message),
+  });
+  return (
+    <div className="row">
+      <label>
+        This workspace is{" "}
+        <select
+          aria-label="Workspace mark"
+          className="btn"
+          value={scope}
+          onChange={(e) => setScope(e.target.value)}
+        >
+          <option value="">(choose)</option>
+          {projects.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button className="btn" disabled={!scope} onClick={() => save.mutate(false)}>
+        Save
+      </button>
+      <button className="btn" disabled={!scope} onClick={() => save.mutate(true)}>
+        Mark all lists {scope || "…"}
+      </button>
+      <span className="muted">
+        {note ?? "Used for chats, your inbox tasks from other lists, and lists without a mark."}
+      </span>
+    </div>
+  );
+}
+
 function AccountRow({ a, onChanged }: { a: Overview["accounts"][number]; onChanged: () => void }) {
   const [group, setGroup] = useState(a.group_name ?? "DTC");
   const save = useMutation({
@@ -111,6 +165,7 @@ function AccountRow({ a, onChanged }: { a: Overview["accounts"][number]; onChang
         <span className="state ok">connected</span> {a.team ?? a.label}
         {a.owner && <span className="muted"> · you are {a.owner}</span>}
       </p>
+      <WorkspaceMark a={a} onChanged={onChanged} />
       <div className="row">
         <label>
           Notify me for my team group{" "}

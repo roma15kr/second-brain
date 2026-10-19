@@ -23,6 +23,9 @@ _Last updated: 2026-10-19 by Claude_
 9. v1 10.3: 30 evaluation questions → `kb eval`.
 
 ## Done recently (2026-10-19)
+- ClickUp feedback: the owner's inbox is rebuilt (involved tasks from every list, not only synced ones), DMs, group
+  DMs and member channels are read (DMs and @mentions push right away), the workspace has its own mark
+  (Connectors → ClickUp, "Mark all lists"); data fix: the Adducate workspace and its digisoft lists are quokka.
 - web-os-v1 slice 13 (PRs #30–#34): calendars (Google iCal + iCloud CalDAV, read-only, every 10 min), Meetings
   page and Today's meetings, reminders, meeting prep (people, history, loops, tasks, sourced agenda; morning brief
   for meetings before 10:00), recorder-app pairing + upload API, notes import (.txt/.md/.vtt/.srt/.docx), meeting

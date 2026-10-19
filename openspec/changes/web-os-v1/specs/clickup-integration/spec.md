@@ -60,3 +60,21 @@ The system SHALL notify the owner by push, as soon as the next sync sees it, whe
 #### Scenario: Quiet hours
 - **WHEN** a mention arrives at 23:30
 - **THEN** no push is sent and the mention is listed in the 08:00 morning brief
+
+### Requirement: The owner's ClickUp inbox and chats
+Because ClickUp has no Inbox API, the system SHALL rebuild the owner's inbox: tasks changed anywhere in the workspace that the owner is assigned to, watches or created (or that are assigned to the owner's team group) SHALL be stored with all comments and notify like synced tasks, even when their list is not chosen for sync. Direct messages, group DMs and channels the owner follows or is a member of SHALL be read; a direct message or an @mention of the owner SHALL push right away.
+
+#### Scenario: Mention in a list that is not synced
+- **WHEN** someone @mentions the owner in a task of a list the owner did not choose for sync
+- **THEN** the task is stored and searchable and the owner gets the push "mentioned you"
+
+#### Scenario: Direct message
+- **WHEN** a teammate writes to the owner in a ClickUp DM
+- **THEN** the message is searchable and a push "wrote to you" arrives right away
+
+### Requirement: The workspace has its own mark
+The owner SHALL be able to mark a whole ClickUp workspace (personal or a project); the mark SHALL apply to its chats, to inbox tasks from lists without a mark, and, on request, to every list and everything stored from them.
+
+#### Scenario: Workspace is one project
+- **WHEN** the owner marks the Adducate workspace quokka and applies it to all lists
+- **THEN** its tasks, comments and chats are marked quokka only, and its people show quokka only
