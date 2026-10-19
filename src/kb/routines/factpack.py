@@ -87,7 +87,8 @@ def build(conn: Conn, routine: RoutineName, window: tuple[datetime, datetime]) -
                last_activity_at, participants
         FROM items
         WHERE NOT hidden
-          AND kind IN ('email_thread', 'tg_conversation', 'clickup_task', 'clickup_chat')
+          AND kind IN ('email_thread', 'tg_conversation', 'clickup_task', 'clickup_chat',
+                       'meeting')
           AND last_activity_at > %s AND last_activity_at <= %s
         ORDER BY last_activity_at DESC
         """,

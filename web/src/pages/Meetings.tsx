@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { api } from "../api/client";
 import { ScopeTag } from "../shell/ScopeTag";
@@ -16,7 +17,135 @@ export type Meeting = {
   calendar: string;
   scopes: string[];
   prep?: Prep | null;
+  recordings?: Recording[];
 };
+
+export type Recording = {
+  id: number;
+  kind: string;
+  source: string;
+  title: string;
+  event_id: number | null;
+  started_at: string;
+  ended_at: string;
+  segments: { speaker: string; is_owner: boolean; start: number; end: number; text: string }[];
+  notes: string;
+  item_id: number | null;
+  result: {
+    summary: string;
+    decisions: string[];
+    actions: { text: string; owner: string; is_me: boolean; due: string | null }[];
+  } | null;
+  processed: boolean;
+};
+
+function mmss(s: number): string {
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+}
+
+export function RecordingView({ r }: { r: Recording }) {
+  return (
+    <section className="recording">
+      <h3>
+        {r.kind === "notes" ? "Notes" : `${r.source || "Recording"}`}{" "}
+        <span className="muted small">{day.format(new Date(r.started_at))}</span>
+      </h3>
+      {r.result ? (
+        <>
+          <p>{r.result.summary}</p>
+          {r.result.decisions.length > 0 && (
+            <>
+              <h4>Decisions</h4>
+              <ul>
+                {r.result.decisions.map((d) => (
+                  <li key={d}>{d}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {r.result.actions.length > 0 && (
+            <>
+              <h4>Actions</h4>
+              <ul>
+                {r.result.actions.map((a) => (
+                  <li key={a.text}>
+                    {a.text} <span className="muted">· {a.is_me ? "you" : a.owner}</span>
+                    {a.due && <span className="muted"> · {a.due}</span>}
+                  </li>
+                ))}
+              </ul>
+              <p className="muted small">
+                Your actions are in <Link to="/loops">Loops</Link>; the team's are task drafts in
+                the <Link to="/assistant">Assistant</Link> queue.
+              </p>
+            </>
+          )}
+        </>
+      ) : (
+        <p className="muted">{r.processed ? "Not processed." : "Processing…"}</p>
+      )}
+      {r.segments.length > 0 && (
+        <details>
+          <summary>Transcript ({r.segments.length} lines)</summary>
+          <ul className="list transcript">
+            {r.segments.map((s, i) => (
+              <li key={i}>
+                <span className="muted">{mmss(s.start)}</span> <strong>{s.speaker || "?"}</strong>:{" "}
+                {s.text}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {r.notes && <div className="answer">{r.notes}</div>}
+    </section>
+  );
+}
+
+function AttachNotes({ id, onDone }: { id: number; onDone: () => void }) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const send = useMutation({
+    mutationFn: (body: unknown) => api(`/api/meetings/${id}/notes`, { method: "POST", body }),
+    onSuccess: () => {
+      setText("");
+      onDone();
+    },
+    onError: (e) => setError(e.message),
+  });
+  const onFile = async (f: File | undefined) => {
+    if (!f) return;
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    let bin = "";
+    bytes.forEach((b) => (bin += String.fromCharCode(b)));
+    send.mutate({ file: { filename: f.name, data: btoa(bin) } });
+  };
+  return (
+    <details>
+      <summary>Attach notes or a transcript</summary>
+      <textarea
+        aria-label="Meeting notes"
+        className="btn wide"
+        rows={5}
+        value={text}
+        placeholder="Paste notes…"
+        onChange={(e) => setText(e.target.value)}
+      />
+      <div className="row">
+        <button className="btn" disabled={!text.trim()} onClick={() => send.mutate({ text })}>
+          Attach notes
+        </button>
+        <input
+          aria-label="Notes file"
+          type="file"
+          accept=".txt,.md,.vtt,.srt,.docx"
+          onChange={(e) => void onFile(e.target.files?.[0])}
+        />
+      </div>
+      {error && <p className="error">{error}</p>}
+    </details>
+  );
+}
 
 type Prep = {
   people: { email: string; name: string; person_id: number | null }[];
@@ -145,6 +274,42 @@ export function MeetingLine({ m }: { m: Meeting }) {
   );
 }
 
+function Calls() {
+  const q = useQuery({
+    queryKey: ["unscheduled-calls"],
+    queryFn: () => api<{ recordings: Recording[] }>("/api/recordings?unscheduled=true"),
+  });
+  if (!q.data?.recordings.length) return null;
+  return (
+    <section className="card group">
+      <h3>Calls without a calendar event</h3>
+      <ul className="list">
+        {q.data.recordings.slice(0, 10).map((r) => (
+          <li key={r.id}>
+            <Link to={`/recordings/${r.id}`}>{r.title}</Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export function RecordingPage() {
+  const { id } = useParams();
+  const q = useQuery({
+    queryKey: ["recording", id],
+    queryFn: () => api<Recording>(`/api/recordings/${id}`),
+  });
+  if (q.isPending) return <p className="muted">Loading…</p>;
+  if (q.isError) return <p className="error">{q.error.message}</p>;
+  return (
+    <article className="card">
+      <h2>{q.data.title}</h2>
+      <RecordingView r={q.data} />
+    </article>
+  );
+}
+
 // Meetings: the next 7 days from the marked calendars (calendar-meetings spec).
 export function Meetings() {
   const q = useQuery({
@@ -155,9 +320,12 @@ export function Meetings() {
   if (q.isError) return <p className="error">{q.error.message}</p>;
   if (!q.data.meetings.length)
     return (
-      <p className="muted">
-        No meetings in the next 7 days. <Link to="/connectors/calendars">Connect calendars</Link>
-      </p>
+      <>
+        <p className="muted">
+          No meetings in the next 7 days. <Link to="/connectors/calendars">Connect calendars</Link>
+        </p>
+        <Calls />
+      </>
     );
   const byDay = new Map<string, Meeting[]>();
   for (const m of q.data.meetings) {
@@ -176,6 +344,7 @@ export function Meetings() {
           </ul>
         </section>
       ))}
+      <Calls />
     </>
   );
 }
@@ -183,6 +352,7 @@ export function Meetings() {
 // One meeting: time, place, attendees linked to People.
 export function MeetingPage() {
   const { id } = useParams();
+  const queryClient = useQueryClient();
   const q = useQuery({
     queryKey: ["meeting", id],
     queryFn: () => api<Meeting>(`/api/meetings/${id}`),
@@ -230,6 +400,13 @@ export function MeetingPage() {
           </ul>
         </>
       )}
+      {(m.recordings ?? []).map((r) => (
+        <RecordingView key={r.id} r={r} />
+      ))}
+      <AttachNotes
+        id={m.id}
+        onDone={() => void queryClient.invalidateQueries({ queryKey: ["meeting", id] })}
+      />
       {m.prep ? (
         <PrepView p={m.prep} />
       ) : (

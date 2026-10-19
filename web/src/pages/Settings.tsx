@@ -2,6 +2,7 @@ import { useProjects } from "../shell/useProjects";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../api/client";
+import { RecorderDevices } from "./RecorderDevices";
 import { Notifications } from "../push/Notifications";
 
 type AppSettings = {
@@ -454,6 +455,9 @@ export function Settings({ security }: { security?: ReactNode }) {
         <Devices />
       </Section>
       {security}
+      <Section title="Recorder apps">
+        <RecorderDevices />
+      </Section>
       <Section title="Me">
         <Identities />
       </Section>

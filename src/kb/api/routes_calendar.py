@@ -146,4 +146,7 @@ def meeting(conn: Db, event_id: int) -> dict[str, Any]:
             "SELECT person_id FROM identities WHERE key = %s", (people.email_key(a["email"]),)
         ).fetchone()
         a["person_id"] = pid["person_id"] if pid else None
+    from kb.api.routes_devices import for_event
+
+    m["recordings"] = for_event(conn, event_id)
     return m
