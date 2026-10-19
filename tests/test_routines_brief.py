@@ -93,7 +93,7 @@ def test_api_today_returns_latest_brief(conn, pg_url):
     app = build_app(None, connect=lambda: db.connect(pg_url), rp=auth.RelyingParty("https://os.x"))
     client = TestClient(app, base_url="https://os.x")
     client.cookies.set(auth.SESSION_COOKIE, auth.create_session(conn, "t", datetime.now(UTC)))
-    assert client.get("/api/today").json() == {"brief": None}
+    assert client.get("/api/today").json() == {"brief": None, "meetings": []}
     briefs.run_morning(conn, NOW)
     assert client.get("/api/today").json()["brief"]["routine"] == "morning"
 

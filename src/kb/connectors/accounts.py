@@ -254,7 +254,9 @@ def imap_sources(conn: Conn) -> list[ImapSource]:
     return out
 
 
-_cache: dict[int, tuple[float, Config]] = {}
+# id(config) → (time, the config itself, merged). Holding the config keeps its id from being
+# reused by a new object while the entry lives (a reused id would return another config's result).
+_cache: dict[int, tuple[float, Config, Config]] = {}
 
 
 def _invalidate() -> None:
@@ -264,15 +266,15 @@ def _invalidate() -> None:
 def effective_config(conn: Conn, config: Config) -> Config:
     """Configuration plus web-connected mailboxes (cached for a minute)."""
     hit = _cache.get(id(config))
-    if hit and time.monotonic() - hit[0] < CACHE_SECONDS:
-        return hit[1]
+    if hit and hit[1] is config and time.monotonic() - hit[0] < CACHE_SECONDS:
+        return hit[2]
     try:
         extra = imap_sources(conn)
     except Exception:
         log.exception("cannot load connected accounts")
         extra = []
     merged = config.model_copy(update={"sources": [*config.sources, *extra]})
-    _cache[id(config)] = (time.monotonic(), merged)
+    _cache[id(config)] = (time.monotonic(), config, merged)
     return merged
 
 
