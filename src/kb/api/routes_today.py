@@ -15,4 +15,11 @@ router = APIRouter()
 
 @router.get("/api/today")
 def today(conn: Annotated[Conn, Depends(get_conn)]) -> dict[str, Any]:
-    return {"brief": briefs.latest(conn, ["morning", "evening"])}
+    from datetime import UTC, datetime
+
+    from kb import meetings
+
+    return {
+        "brief": briefs.latest(conn, ["morning", "evening"]),
+        "meetings": meetings.today(conn, datetime.now(UTC)),
+    }

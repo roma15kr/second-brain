@@ -203,6 +203,9 @@ export function Connectors() {
           <Link className="btn" to="/connectors/clickup">
             {(h.clickup ?? []).length ? "ClickUp settings" : "+ Connect ClickUp"}
           </Link>
+          <Link className="btn" to="/connectors/calendars">
+            Calendars (Google, iCloud)
+          </Link>
         </p>
       </section>
       <Projects />

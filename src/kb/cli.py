@@ -65,6 +65,7 @@ def cmd_ingest(args: argparse.Namespace) -> None:
                 log.exception("sync failed for %s", source.id)
                 _record_error(source.id, exc)
         _sync_clickup(last_run)
+        _sync_calendars(config)
         if args.once:
             return
         time.sleep(5)
@@ -151,6 +152,20 @@ def _telegram_source(source_id: str | None) -> TelegramSource:
     if not found:
         raise ConfigError(f"no telegram source {source_id!r} in config")
     return found[0]
+
+
+def _sync_calendars(config: Config) -> None:
+    """Marked calendars every 10 minutes (each calendar keeps its own last sync time)."""
+    from datetime import UTC, datetime
+
+    from kb import loops
+    from kb.connectors import calendar
+
+    try:
+        with db.connect(database_url()) as conn:
+            calendar.sync_due(conn, datetime.now(UTC), loops.owner_emails(conn, config))
+    except Exception:
+        log.exception("calendar sync failed")
 
 
 def cmd_ingest_telegram(_: argparse.Namespace) -> None:
@@ -510,6 +525,11 @@ def cmd_routines(args: argparse.Namespace) -> None:
     def maintain_dictations(conn: db.Conn, now: datetime) -> int:
         return dictation.maintain(conn, config, transcriber, now)
 
+    def remind_meetings(conn: db.Conn, now: datetime) -> int:
+        from kb import meetings
+
+        return meetings.remind_due(conn, now)
+
     def clean_threads(conn: db.Conn, now: datetime) -> int:
         from kb.api import routes_requests
 
@@ -529,6 +549,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
             close_answered_loops,
             loops.wake_snoozed,
             push_clickup,
+            remind_meetings,
             apply_mail,
             draft_replies,
             propose_actions,
