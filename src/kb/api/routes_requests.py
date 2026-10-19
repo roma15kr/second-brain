@@ -6,6 +6,7 @@ closed; the SPA polls it for steps and the answer.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
@@ -26,8 +27,19 @@ KEEP_DAYS = 90
 _pool: ThreadPoolExecutor | None = None
 
 
+def background(request: Request, job: Callable[[], None]) -> None:
+    """Runs a job in the small background pool (tests replace `app.state.assistant_submit`)."""
+    submit = getattr(request.app.state, "assistant_submit", None)
+    if submit is not None:
+        submit(job)
+        return
+    global _pool
+    if _pool is None:
+        _pool = ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="assistant")
+    _pool.submit(job)
+
+
 def _submit(request: Request, rid: int) -> None:
-    """Runs the request in the background pool (tests replace `app.state.assistant_submit`)."""
     state = request.app.state
     connect, config, searcher = state.connect, state.config, state.searcher
     llm = state.assistant_llm
@@ -36,14 +48,7 @@ def _submit(request: Request, rid: int) -> None:
         with connect() as conn:
             agent.run_request(conn, config, llm, searcher, rid, datetime.now(UTC))
 
-    submit = getattr(state, "assistant_submit", None)
-    if submit is not None:
-        submit(job)
-        return
-    global _pool
-    if _pool is None:
-        _pool = ThreadPoolExecutor(max_workers=WORKERS, thread_name_prefix="assistant")
-    _pool.submit(job)
+    background(request, job)
 
 
 def _request(r: dict[str, Any]) -> dict[str, Any]:

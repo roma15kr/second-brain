@@ -25,6 +25,7 @@ from kb.api import (
     routes_assistant,
     routes_briefs,
     routes_connectors,
+    routes_dictations,
     routes_goals,
     routes_inbox,
     routes_library,
@@ -89,6 +90,11 @@ def build_app(
     from kb.assistant import agent as _agent
 
     app.state.assistant_llm = _agent.default_llm(app.state.config)  # replaced in tests
+    from kb import dictation as _dictation
+    from kb.routines import briefs as _briefs
+
+    app.state.transcriber = _dictation.default_transcriber()  # replaced in tests
+    app.state.dictation_llm = _briefs.default_llm(app.state.config)  # replaced in tests
     app.state.searcher = searcher or (
         routes_search.local_searcher(connect, app.state.config) if connect else None
     )
@@ -304,6 +310,7 @@ def build_app(
     app.include_router(routes_goals.router)
     app.include_router(routes_assistant.router)
     app.include_router(routes_requests.router)
+    app.include_router(routes_dictations.router)
 
     @app.api_route("/api/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(rest: str) -> JSONResponse:

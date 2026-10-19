@@ -22,8 +22,8 @@ Each slice ends runnable with its tests passing (`make check`), is committed sep
 
 ## 4. Dictation
 
-- [ ] 4.1 Migration `dictations`; `POST /api/dictations` upload (≤ 25 MB), transcription with `gpt-transcribe`, audio deleted on success and kept 7 days on failure with retry; verify `test_audio_deleted_after_transcript`, `test_failed_transcription_retried_then_deleted`, `test_transcript_redacted`
-- [ ] 4.2 Forms: Clean (`gpt-6-luna` + content-word check), Structured (`gpt-6.1-sol` schema + no-invented-dates check), As a request; Save to Library; history 90 days; verify `test_clean_keeps_wording_or_falls_back`, `test_structured_drops_invented_due_dates`, `test_mixed_language_kept`, `test_dictation_saved_as_note`
+- [x] 4.1 Migration `dictations`; `POST /api/dictations` upload (≤ 25 MB), transcription with `gpt-transcribe`, audio deleted on success and kept 7 days on failure with retry; verify `test_audio_deleted_after_transcript`, `test_failed_transcription_retried_then_deleted`, `test_transcript_redacted`
+- [x] 4.2 Forms: Clean (`gpt-6-luna` + content-word check), Structured (`gpt-6.1-sol` schema + no-invented-dates check), As a request; Save to Library; history 90 days; verify `test_clean_keeps_wording_or_falls_back`, `test_structured_drops_invented_due_dates`, `test_mixed_language_kept`, `test_dictation_saved_as_note`
 - [ ] 4.3 `Recorder` (MediaRecorder mime detection, 10 s slices in IndexedDB, stop on background, 15-min limit, upload retry) and Dictation sheet with the four forms; mic button in the request field (transcript shown before sending); verify `Recorder.test.tsx` (mocked MediaRecorder: limit, background stop, offline retry), `Dictation.test.tsx`, and a real dictation on the owner's iPhone and Mac
 
 ## 5. Docs and acceptance

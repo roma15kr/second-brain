@@ -503,6 +503,13 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
         return proactive.cycle(conn, config, llm, now)
 
+    from kb import dictation
+
+    transcriber = dictation.default_transcriber()
+
+    def maintain_dictations(conn: db.Conn, now: datetime) -> int:
+        return dictation.maintain(conn, config, transcriber, now)
+
     def clean_threads(conn: db.Conn, now: datetime) -> int:
         from kb.api import routes_requests
 
@@ -526,6 +533,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
             draft_replies,
             propose_actions,
             clean_threads,
+            maintain_dictations,
             detect_loops,
             propose_goals,
         ],

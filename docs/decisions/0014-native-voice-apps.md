@@ -21,3 +21,12 @@ iOS suspends web apps on screen lock and web apps cannot be share targets; syste
 ## Consequences
 Two native codebases (Swift/SwiftUI, shared package), App Store / TestFlight distribution,
 Apple developer account. Planned as its own OpenSpec change after the web OS.
+
+## Amendment (2026-10-19, change `assistant-command-v1`)
+The web OS now records **dictation inside the app while it is open** (MediaRecorder; webm/opus, or
+mp4 on iPhone), uploads it, transcribes it with `gpt-transcribe` and deletes the audio once the
+transcript is stored (failed ones after 7 days). It offers Verbatim, Clean, Structured and "as a
+request". Still native-only: system-wide dictation (typing into other apps), background recording,
+and call/meeting recording (`voice-apps-v1`). Reason: the owner asked to dictate requests and notes
+in the web OS; research showed in-app foreground recording works in the installed PWA on iPhone,
+macOS Safari and Chrome (docs/research/web-os-pwa-voice.md).

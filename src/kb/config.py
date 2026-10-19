@@ -154,6 +154,8 @@ class LlmConfig(BaseModel):
     scope_min_confidence: float = 0.7
     brief_model: str = "gpt-6.1-sol"  # writes routine briefs (web-os-v1 design D5)
     monthly_budget_usd: float = 30.0  # all server-side AI; routines fall back to data-only above it
+    transcribe_model: str = "gpt-transcribe"  # dictation (ADR 0014)
+    transcribe_usd_per_minute: float = 0.006  # list price at setup; adjust if OpenAI changes it
 
     def model(self) -> str:
         return os.environ.get("KB_DISTILL_MODEL") or self.distill_model

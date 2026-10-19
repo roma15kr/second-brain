@@ -42,6 +42,15 @@ Built in v1 (`v1-mail-telegram-search`), one Python package `kb` (`src/kb/`):
 Planned (later changes): metrics warehouse, Telegram bot, automations (digest, follow-ups, CMO
 standups, meeting prep), ops registry, vault metadata push, macOS meeting assistant.
 
+### Web OS assistant (`assistant-command-v1`)
+| Module | Responsibility |
+|--------|----------------|
+| `assistant/agent.py` | Request loop: OpenAI Responses API with function tools, ≤ 8 calls / 90 s, refs validated, budget fallback, "ready" push |
+| `assistant/actions.py` | Action tools: drafts (reply, new email, Telegram, ClickUp task) into the approval queue, reminders/loop changes with undo, activity + reports |
+| `api/routes_requests.py` | Requests and threads (background pool in the `web` service), undo, run anyway, report → Library, pin, 90-day cleanup |
+| `dictation.py`, `api/routes_dictations.py` | Upload (raw body), background `gpt-transcribe`, audio deleted after transcript, Clean/Structured forms with faithfulness checks |
+| `web/src/assistant/` | Ask box (⌘K and Assistant page), thread view, recorder (MediaRecorder + IndexedDB queue), Dictate page |
+
 ## Data model (core)
 - `raw_records` — source, scope[], external id, fetched_at, payload (JSON/blob ref), content hash.
   Never mutated; new versions appended. All derived tables are rebuildable from here.

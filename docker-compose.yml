@@ -91,6 +91,8 @@ services:
   routines:
     <<: *kb
     command: ["sh", "-c", "kb migrate && exec kb routines"]
+    volumes:
+      - kb-dictations:/data/dictations  # retries failed transcriptions
     environment:
       DATABASE_URL: postgresql://kb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kb
       KB_CONFIG_YAML: ${KB_CONFIG_YAML}
@@ -110,6 +112,9 @@ services:
   web:
     <<: *kb
     command: ["sh", "-c", "kb migrate && exec kb web --port 8001"]
+    volumes:
+      # dictation audio until it is transcribed (deleted then; failed ones after 7 days)
+      - kb-dictations:/data/dictations
     environment:
       DATABASE_URL: postgresql://kb:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/kb
       KB_CONFIG_YAML: ${KB_CONFIG_YAML}
@@ -138,4 +143,5 @@ volumes:
   kb-postgres:
   kb-telegram:
   kb-models:
+  kb-dictations:
   kb-backups:
