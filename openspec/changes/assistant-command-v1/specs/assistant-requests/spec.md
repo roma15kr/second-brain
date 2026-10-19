@@ -88,7 +88,7 @@ The assistant SHALL never read Library documents marked "AI may not read", SHALL
 - **THEN** the answer does not use that document and says the document is private
 
 ### Requirement: Budget
-Each request SHALL count against the monthly AI budget and show its cost. When the budget is used up, requests SHALL still run searches and loop changes, and SHALL tell the owner that answers, drafts and reports wait until the budget allows them.
+Each request SHALL count against the monthly AI budget and show its cost. When the budget is used up, a request SHALL still return plain search results for its text, and SHALL tell the owner that answers, drafts and reports need AI budget.
 
 #### Scenario: Budget exhausted
 - **WHEN** the monthly budget is used up and the owner asks for a report

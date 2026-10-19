@@ -503,6 +503,11 @@ def cmd_routines(args: argparse.Namespace) -> None:
 
         return proactive.cycle(conn, config, llm, now)
 
+    def clean_threads(conn: db.Conn, now: datetime) -> int:
+        from kb.api import routes_requests
+
+        return routes_requests.delete_old_threads(conn, now)
+
     def detect_loops(conn: db.Conn, now: datetime) -> int:
         from kb import loop_detect
 
@@ -520,6 +525,7 @@ def cmd_routines(args: argparse.Namespace) -> None:
             apply_mail,
             draft_replies,
             propose_actions,
+            clean_threads,
             detect_loops,
             propose_goals,
         ],

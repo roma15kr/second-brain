@@ -19,6 +19,9 @@ const req = (status: string, extra = {}) => ({
   error: null,
   created: [],
   search: null,
+  report: null,
+  needs_budget: false,
+  saved_doc_id: null,
   cost_usd: 0,
   started_at: "2026-10-20T08:00:00Z",
   finished_at: null,
@@ -107,4 +110,52 @@ test("drafts appear inline and a loop change can be undone", async () => {
   expect(screen.getByRole("button", { name: "Create task" })).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Undo" }));
   expect(await screen.findByText("· undone")).toBeInTheDocument();
+});
+
+test("a report can be saved to the Library and over-budget requests offer Run anyway", async () => {
+  window.history.pushState({}, "", "/assistant/t/4");
+  let saved: unknown = null;
+  let ranAnyway = false;
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/projects": { projects: [{ name: "quokka" }, { name: "personal" }] },
+    "GET /api/assistant/threads/4": () => ({
+      id: 4,
+      title: "t",
+      pinned: false,
+      requests: [
+        req("done", {
+          answer: "The report is ready.",
+          report: {
+            title: "Quokka week",
+            sections: [
+              {
+                heading: "Decisions",
+                body: "New listing photos.",
+                refs: [{ ref: "item:9", item_id: 9, title: "Photos" }],
+              },
+            ],
+          },
+          saved_doc_id: saved ? 12 : null,
+        }),
+        req("done", { id: 2, answer: "AI budget is used up.", needs_budget: true }),
+      ],
+    }),
+    "POST /api/assistant/requests/1/report/save": (init?: RequestInit) => {
+      saved = JSON.parse(String(init?.body));
+      return { document_id: 12 };
+    },
+    "POST /api/assistant/requests/2/run-anyway": () => {
+      ranAnyway = true;
+      return { id: 3, thread_id: 4 };
+    },
+  });
+  renderApp();
+  expect(await screen.findByRole("heading", { name: "Quokka week" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Photos" })).toHaveAttribute("href", "/c/9");
+  await userEvent.click(screen.getByRole("button", { name: "Save to Library" }));
+  expect(await screen.findByRole("link", { name: "Saved to the Library" })).toBeInTheDocument();
+  expect(saved).toHaveProperty("scope");
+  await userEvent.click(screen.getByRole("button", { name: "Run anyway" }));
+  await waitFor(() => expect(ranAnyway).toBe(true));
 });

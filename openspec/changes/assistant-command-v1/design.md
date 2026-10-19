@@ -81,8 +81,8 @@ Facts for reports come from tools (search, loops, ClickUp updates, fact-pack hel
 
 ### D6. Budget
 Before each model call the agent checks the month's spend + an estimate (input tokens × price);
-over budget → tools that need no model (search, loop actions parsed by the cheap path) still run
-and the answer explains; "Run anyway" sets `allow_over_budget` on that one request. Costs are
+over budget → no model call: the request text is searched as is and the answer explains
+(loop changes need the model to understand the request, so they wait for budget); "Run anyway" sets `allow_over_budget` on that one request. Costs are
 recorded per request and per dictation and summed into the monthly spend with briefs.
 
 ### D7. Dictation recording in the browser
