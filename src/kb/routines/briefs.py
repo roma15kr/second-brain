@@ -179,6 +179,8 @@ def loop_item(lp: dict[str, Any]) -> dict[str, Any]:
         when = f" · due {lp['due_date']}"
     elif lp.get("age_days"):
         when = f" · {lp['age_days']} days open"
+    if lp.get("priority_reason"):
+        when += f" · {lp['priority_reason']}"
     return {
         "ref": lp["ref"],
         "id": lp["id"],
@@ -378,6 +380,16 @@ def write_brief(
     from kb import loops
 
     pack.loops = loops.for_brief(conn, pack.routine, pack.window, now)
+    if replies := pack.loops.get("needs_reply"):
+        from kb.assistant import priority
+
+        ids = [lp["item_id"] for lp in replies if lp["item_id"]]
+        prio = priority.assess(conn, ids, loops.owner_emails(conn, config), now)
+        for lp in replies:
+            if (p := prio.get(lp["item_id"])) is not None and p.reason:
+                lp["priority_reason"] = p.reason
+        order = {i: n for n, i in enumerate(priority.ordered(prio, ids))}
+        replies.sort(key=lambda lp: order.get(lp["item_id"], len(order)))
     if pack.routine == "morning":
         from kb.routines import weekly
 

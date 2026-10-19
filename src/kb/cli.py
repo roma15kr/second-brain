@@ -350,6 +350,7 @@ def cmd_index(args: argparse.Namespace) -> None:
                 log.exception("passage backfill failed")
             if embedder is not None:
                 try:
+                    embed.embed_goals(conn, embedder)
                     if embed.run_cycle(conn, config, embedder):
                         continue  # keep embedding while there is work
                 except Exception as exc:

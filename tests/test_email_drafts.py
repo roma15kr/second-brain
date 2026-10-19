@@ -104,8 +104,7 @@ def test_draft_not_ingested_and_loop_stays_open(conn, config):
     assert loops.close_answered(conn, {"me@example.com"}, NOW + timedelta(hours=1)) == 0
 
 
-@pytest.fixture
-def client(conn, pg_url, config):
+def web_client(conn, pg_url, config):
     app = build_app(
         None,
         connect=lambda: db.connect(pg_url),
@@ -115,6 +114,11 @@ def client(conn, pg_url, config):
     c = TestClient(app, base_url="https://os.x")
     c.cookies.set(auth.SESSION_COOKIE, auth.create_session(conn, "t", datetime.now(UTC)))
     return c
+
+
+@pytest.fixture
+def client(conn, pg_url, config):
+    return web_client(conn, pg_url, config)
 
 
 def test_reply_draft_api_and_queue(client, conn):
