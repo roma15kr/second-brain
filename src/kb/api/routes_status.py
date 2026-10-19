@@ -62,4 +62,5 @@ def status(request: Request, conn: Db) -> dict[str, Any]:
         },
         "usefulness": metrics.usefulness(conn, now),
         "suggestions": proactive.acceptance(conn, now),
+        "assistant": proactive.assistant_metric(conn, now),
     }

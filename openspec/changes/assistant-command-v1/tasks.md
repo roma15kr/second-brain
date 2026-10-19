@@ -11,9 +11,9 @@ Each slice ends runnable with its tests passing (`make check`), is committed sep
 
 ## 2. Actions from requests
 
-- [ ] 2.1 Migration: `suggestions.origin`, `suggestions.thread_id`, kind `email`; tools `draft_reply`, `draft_email`, `draft_task`, `draft_tg_reply`, `update_suggestion` (own thread, proposed only); verify `test_request_creates_reply_draft_not_sent`, `test_new_email_mailbox_choice`, `test_task_draft_list_assignee_due`, `test_follow_up_updates_pending_draft`, `test_update_suggestion_refuses_other_threads`
-- [ ] 2.2 Loop tools `add_loop`, `loop_action` with undo; `search` results with understood filters; verify `test_remind_me_creates_loop_with_due`, `test_loop_change_undo`, `test_search_request_returns_filters`
-- [ ] 2.3 Inline suggestion cards (approve/edit/discard), loop undo and search results in the thread view; `app_events` for the metric (requests per week, approval rate by origin) on the Status page; verify `Assistant.test.tsx` cases and `test_status_assistant_metric`
+- [x] 2.1 Migration: `suggestions.origin`, `suggestions.thread_id`, kind `email`; tools `draft_reply`, `draft_email`, `draft_task`, `draft_tg_reply`, `update_suggestion` (own thread, proposed only); verify `test_request_creates_reply_draft_not_sent`, `test_new_email_mailbox_choice`, `test_task_draft_list_assignee_due`, `test_follow_up_updates_pending_draft`, `test_update_suggestion_refuses_other_threads`
+- [x] 2.2 Loop tools `add_loop`, `loop_action` with undo; `search` results with understood filters; verify `test_remind_me_creates_loop_with_due`, `test_loop_change_undo`, `test_search_request_returns_filters`
+- [x] 2.3 Inline suggestion cards (approve/edit/discard), loop undo and search results in the thread view; `app_events` for the metric (requests per week, approval rate by origin) on the Status page; verify `Assistant.test.tsx` cases and `test_status_assistant_metric`
 
 ## 3. Reports, budget and push
 

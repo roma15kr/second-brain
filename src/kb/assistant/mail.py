@@ -165,6 +165,55 @@ def special_folder(client: Any, flag: bytes, names: tuple[str, ...], what: str) 
     raise MailError(f"no {what} folder in this mailbox")
 
 
+def mailbox_for_address(conn: Conn, config: Config, address: str) -> str:
+    """The mailbox last used with this address, else the first connected one."""
+    from kb.connectors import accounts
+
+    row = conn.execute(
+        "SELECT source_id FROM messages WHERE kind = 'email' AND EXISTS ("
+        " SELECT 1 FROM unnest(participants) p WHERE lower(p) LIKE '%%' || lower(%s) || '%%')"
+        " ORDER BY sent_at DESC LIMIT 1",
+        (address,),
+    ).fetchone()
+    if row is not None:
+        return str(row["source_id"])
+    for s in accounts.effective_config(conn, config).sources:
+        if isinstance(s, ImapSource):
+            return s.id
+    raise MailError("no mailbox is connected")
+
+
+def build_new(sid: int, payload: dict[str, Any], box: Mailbox, now: datetime) -> EmailMessage:
+    to = [a for a in payload.get("to") or [] if a]
+    if not to:
+        raise MailError("a new email needs a recipient")
+    msg = EmailMessage()
+    msg["From"] = box.address
+    msg["To"] = ", ".join(to)
+    if payload.get("cc"):
+        msg["Cc"] = ", ".join(payload["cc"])
+    msg["Subject"] = payload.get("subject") or ""
+    msg["Date"] = format_datetime(now)
+    msg["Message-ID"] = message_id(sid, box.address)
+    msg.set_content(payload.get("body") or "")
+    return msg
+
+
+def compose(
+    conn: Conn, config: Config, sid: int, kind: str, payload: dict[str, Any], now: datetime
+) -> tuple[Mailbox, EmailMessage]:
+    """The mailbox and message for an email suggestion: a reply in its thread, or a new email."""
+    if kind == "email":
+        source = payload.get("source_id") or mailbox_for_address(
+            conn, config, (payload.get("to") or [""])[0]
+        )
+        box = mailbox(conn, config, source)
+        return box, build_new(sid, payload, box, now)
+    thread = thread_headers(conn, int(payload["item_id"]))
+    box = mailbox(conn, config, thread["source_id"])
+    return box, build_reply(conn, sid, payload, box, now)
+
+
 def drafts_folder(client: Any) -> str:
     return special_folder(client, b"\\Drafts", DRAFT_FOLDER_NAMES, "Drafts")
 

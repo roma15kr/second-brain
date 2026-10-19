@@ -55,6 +55,8 @@ def _request(r: dict[str, Any]) -> dict[str, Any]:
         "answer": r["answer_md"],
         "refs": _refs(r),
         "error": r["error"],
+        "created": r.get("created_view", r.get("created", [])),
+        "search": r.get("search"),
         "cost_usd": float(r["cost_usd"]),
         "started_at": r["started_at"].isoformat(),
         "finished_at": r["finished_at"].isoformat() if r["finished_at"] else None,
@@ -71,6 +73,36 @@ def _refs(r: dict[str, Any]) -> list[dict[str, Any]]:
         for ref in r["refs"]
         if ref.startswith("item:")
     ]
+
+
+def _with_created(conn: Conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drafts a request made, with their live status (approved or discarded in the queue)."""
+    from kb.assistant import suggestions
+
+    ids = [c["id"] for r in rows for c in r.get("created") or [] if c.get("type") == "suggestion"]
+    live = {
+        s["id"]: s
+        for s in (
+            suggestions.listing(conn, "proposed", 500) + suggestions.listing(conn, "recent", 500)
+        )
+        if s["id"] in ids
+    }
+    out = []
+    for r in rows:
+        view = []
+        for n, c in enumerate(r.get("created") or []):
+            entry = {**c, "index": n}
+            if c.get("type") == "suggestion":
+                s = live.get(c["id"])
+                entry["suggestion"] = s
+                if s is None:
+                    st = conn.execute(
+                        "SELECT status FROM suggestions WHERE id = %s", (c["id"],)
+                    ).fetchone()
+                    entry["status"] = st["status"] if st else "gone"
+            view.append(entry)
+        out.append({**r, "created_view": view})
+    return out
 
 
 def _with_titles(conn: Conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -122,7 +154,7 @@ def get(conn: Db, rid: int) -> dict[str, Any]:
     row = conn.execute("SELECT * FROM assistant_requests WHERE id = %s", (rid,)).fetchone()
     if row is None:
         raise HTTPException(404, f"no request {rid}")
-    return _request(_with_titles(conn, [dict(row)])[0])
+    return _request(_with_created(conn, _with_titles(conn, [dict(row)]))[0])
 
 
 @router.get("/api/assistant/threads")
@@ -157,8 +189,20 @@ def thread(conn: Db, tid: int) -> dict[str, Any]:
         "id": t["id"],
         "title": t["title"],
         "pinned": t["pinned"],
-        "requests": [_request(r) for r in _with_titles(conn, [dict(r) for r in rows])],
+        "requests": [
+            _request(r) for r in _with_created(conn, _with_titles(conn, [dict(r) for r in rows]))
+        ],
     }
+
+
+@router.post("/api/assistant/requests/{rid}/undo/{index}")
+def undo(conn: Db, rid: int, index: int) -> dict[str, Any]:
+    from kb.assistant import actions
+
+    try:
+        return actions.undo(conn, rid, index, datetime.now(UTC))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
 
 
 def fail_interrupted(conn: Conn) -> int:

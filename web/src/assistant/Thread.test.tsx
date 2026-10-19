@@ -17,6 +17,8 @@ const req = (status: string, extra = {}) => ({
   answer: null,
   refs: [],
   error: null,
+  created: [],
+  search: null,
   cost_usd: 0,
   started_at: "2026-10-20T08:00:00Z",
   finished_at: null,
@@ -62,4 +64,47 @@ test("a palette request opens its thread, shows steps, then the cited answer", a
   expect(screen.getByRole("link", { name: "Rozetka delivery" })).toHaveAttribute("href", "/c/9");
   const post = calls.find((c) => c.method === "POST");
   expect(JSON.parse(String(post?.init?.body))).toEqual({ text: "Rozetka delivery?" });
+});
+
+test("drafts appear inline and a loop change can be undone", async () => {
+  window.history.pushState({}, "", "/assistant/t/4");
+  let undone = false;
+  const draft = {
+    id: 7,
+    kind: "task",
+    payload: { name: "Update the banners", due_date: "2026-10-23", assignee_name: "Max" },
+    reason: "From your request",
+    scopes: [],
+    item_id: null,
+    item_title: null,
+    status: "proposed",
+    applied_ref: null,
+    error: null,
+    created_at: "2026-10-20T08:00:00Z",
+  };
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/assistant/threads/4": () => ({
+      id: 4,
+      title: "t",
+      requests: [
+        req("done", {
+          answer: "Prepared a task and closed the reminder.",
+          created: [
+            { index: 0, type: "suggestion", id: 7, kind: "draft_task", suggestion: draft },
+            { index: 1, type: "loop", id: 3, action: "done", title: "Call Olena", undone },
+          ],
+        }),
+      ],
+    }),
+    "POST /api/assistant/requests/1/undo/1": () => {
+      undone = true;
+      return { undone: true };
+    },
+  });
+  renderApp();
+  expect(await screen.findByDisplayValue("Update the banners")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Create task" })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(await screen.findByText("· undone")).toBeInTheDocument();
 });
