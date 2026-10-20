@@ -64,19 +64,24 @@ export async function upload(p: Pending): Promise<number> {
   return data.id;
 }
 
-// Tries every waiting recording; returns the ids the server accepted (the rest stay).
-export async function flush(onUploaded?: (key: string, id: number) => void): Promise<number[]> {
+// Tries every waiting recording; returns the ids the server accepted (the rest stay) and the
+// last error, so the owner sees why a recording is still waiting.
+export async function flush(
+  onUploaded?: (key: string, id: number) => void,
+): Promise<{ ids: number[]; error: string | null }> {
   const s = pendingStore();
   const ids: number[] = [];
+  let error: string | null = null;
   for (const p of await s.all()) {
     try {
       const id = await upload(p);
       await s.remove(p.key);
       ids.push(id);
       onUploaded?.(p.key, id);
-    } catch {
+    } catch (e) {
       // offline or server error: keep it for the next attempt
+      error = e instanceof TypeError ? "offline" : (e as Error).message;
     }
   }
-  return ids;
+  return { ids, error };
 }

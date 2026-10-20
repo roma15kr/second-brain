@@ -102,7 +102,7 @@ test("offline: the recording waits and uploads when the connection returns", asy
   render(<Recorder onUploaded={onUploaded} />);
   await userEvent.click(screen.getByRole("button", { name: /Dictate/ }));
   await userEvent.click(await screen.findByRole("button", { name: "Stop" }));
-  expect(await screen.findByText(/1 waiting to upload/)).toBeInTheDocument();
+  expect(await screen.findByText(/1 waiting to upload \(offline\)/)).toBeInTheDocument();
   expect(onUploaded).not.toHaveBeenCalled();
   online = true;
   act(() => {
@@ -110,4 +110,17 @@ test("offline: the recording waits and uploads when the connection returns", asy
   });
   await waitFor(() => expect(onUploaded).toHaveBeenCalledWith(41));
   await waitFor(() => expect(screen.queryByText(/waiting to upload/)).not.toBeInTheDocument());
+});
+
+test("a server error is shown with the waiting recording", async () => {
+  vi.stubGlobal(
+    "fetch",
+    async () => new Response(JSON.stringify({ detail: "Internal Server Error" }), { status: 500 }),
+  );
+  render(<Recorder onUploaded={vi.fn()} />);
+  await userEvent.click(screen.getByRole("button", { name: /Dictate/ }));
+  await userEvent.click(await screen.findByRole("button", { name: "Stop" }));
+  expect(
+    await screen.findByText(/1 waiting to upload \(Internal Server Error\)/),
+  ).toBeInTheDocument();
 });
