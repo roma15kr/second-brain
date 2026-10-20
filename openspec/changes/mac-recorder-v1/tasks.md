@@ -16,11 +16,11 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 ## 2. Mac app skeleton, CI and install
 
 - [x] 2.1 `mac/` Swift package (app + library targets, universal), menu-bar shell, settings window, Keychain token store, pairing with a one-time code, "not paired" on 401; `.github/workflows/mac.yml` (macos-15: build + test on `mac/**`); verify CI green with `PairingTests`, `KeychainStoreTests` (in-memory backend)
-- [ ] 2.2 `mac/install.sh`: release build, sherpa-onnx + Parakeet download with checksums, `.app` bundle with Info.plist usage strings, signing (Apple Development certificate if present, else ad-hoc with a warning), /Applications, Login Item; permissions screen (microphone, system audio, accessibility) with links to System Settings; verify CI runs `install.sh --dry-run` and `PermissionsModelTests`
+- [x] 2.2 `mac/install.sh`: release build, sherpa-onnx + Parakeet download with checksums, `.app` bundle with Info.plist usage strings, signing (Apple Development certificate if present, else ad-hoc with a warning), /Applications, Login Item; permissions screen (microphone, system audio, accessibility) with links to System Settings; verify CI runs `install.sh --dry-run` and `PermissionsModelTests`
 
 ## 3. Hotkeys and recording
 
-- [ ] 3.1 Changeable hotkeys: Carbon registration, defaults ⌃⌥R / ⌃⌥D / ⇧, recorder fields in Settings, taken combinations refused with the previous kept, hold-vs-toggle for dictation; verify `HotkeyConfigTests` (persist, conflict, immediate re-register with a fake registrar), `HotkeyTimingTests`
+- [x] 3.1 Changeable hotkeys: Carbon registration, defaults ⌃⌥R / ⌃⌥D / ⇧, recorder fields in Settings, taken combinations refused with the previous kept, hold-vs-toggle for dictation; verify `HotkeyConfigTests` (persist, conflict, immediate re-register with a fake registrar), `HotkeyTimingTests`
 - [ ] 3.2 Microphone track (AVAudioEngine, route-change restart) and computer-audio track (Core Audio process tap; ScreenCaptureKit fallback) as 5-minute AAC 16 kHz segments; join on stop; crash recovery; 4-hour limit; menu-bar state and timer; verify `SegmentJoinTests`, `RecoveryTests`, `RecorderStateTests` (fake audio sources)
 
 ## 4. Call transcription on the Mac
