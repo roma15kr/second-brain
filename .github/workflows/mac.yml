@@ -1,0 +1,22 @@
+# Builds and tests the Mac recorder (mac/) on a macOS runner; this repository is public, so the
+# macOS minutes are free. Audio capture and speech-model speed are checked on the owner's Mac.
+name: Mac recorder
+on:
+  push:
+    paths: ["mac/**", ".github/workflows/mac.yml"]
+  pull_request:
+    paths: ["mac/**", ".github/workflows/mac.yml"]
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
