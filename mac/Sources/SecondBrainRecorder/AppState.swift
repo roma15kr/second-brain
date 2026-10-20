@@ -22,6 +22,9 @@ final class AppState: ObservableObject {
     @Published var meetings: [MeetingSummary] = []
     @Published var currentMeeting = MeetingChoice.automatic.label
     let meetingPicker = MeetingPicker(store: UserDefaults.standard)
+    let dictation = DictationRecorder()
+    @Published var dictating = false
+    var dictationRecognizer: SpeechRecognizer?
     var systemAudioWorked: Bool?
 
     let store: TokenStore = KeychainTokenStore()
@@ -206,11 +209,6 @@ final class AppState: ObservableObject {
     func reloadItems() { items = itemStore.all() }
 
     func processQueue() { pipeline.run() }
-
-    // MARK: dictation
-
-    func startDictation(structured: Bool) { status = structured ? "Dictating (structured)…" : "Dictating…" }
-    func stopDictation() { status = nil }
 
     func notify(_ text: String) { Notifier.show(text) }
 }

@@ -12,7 +12,9 @@ struct SecondBrainRecorderApp: App {
         MenuBarExtra {
             MenuContent().environmentObject(state)
         } label: {
-            if state.isRecording {
+            if state.dictating {
+                Image(systemName: "mic.fill")
+            } else if state.isRecording {
                 Image(systemName: "record.circle.fill")
                 Text(Self.clock(state.elapsed))
             } else {
@@ -91,6 +93,8 @@ struct SettingsView: View {
             Divider()
             CallSettingsView()
             Divider()
+            DictationSettings()
+            Divider()
             HotkeySettings()
             Divider()
             PermissionsView()
@@ -156,6 +160,22 @@ struct RecentItems: View {
         case .delivered: return item.pendingLink == nil ? "delivered" : "updating the meeting"
         case .waiting: return item.reason ?? "waiting"
         case .failed: return "failed"
+        }
+    }
+}
+
+struct DictationSettings: View {
+    @AppStorage("dictation.form") private var form = "clean"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Dictation").font(.headline)
+            Picker("Default text", selection: $form) {
+                Text(DictationForm.verbatim.label).tag("verbatim")
+                Text(DictationForm.clean.label).tag("clean")
+            }
+            Text("With the structured modifier the text becomes a summary with points and actions. Dictation uses OpenAI through your server; offline the Mac types it as said.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 }
