@@ -17,9 +17,15 @@ struct CallSettingsView: View {
                 Text("Cloud (the server's provider)").tag("cloud")
             }
             if engine == "mac" {
-                if !Models.installed {
-                    Text("The speech model is not installed: run install.sh again. Until then calls are transcribed in the cloud.")
+                if !state.models.installed {
+                    Text("The speech model (0.5 GB) is not downloaded yet. Until then calls are transcribed in the cloud.")
                         .font(.caption).foregroundStyle(.orange)
+                    if let p = state.models.progress {
+                        ProgressView(value: p) { Text("Downloading the speech model…") }
+                    } else {
+                        Button("Download the speech model") { Task { await state.models.install() } }
+                    }
+                    if let e = state.models.error { Text(e).font(.caption).foregroundStyle(.red) }
                 }
                 Picker("Processor", selection: $provider) {
                     Text("Automatic (the faster one)").tag("auto")

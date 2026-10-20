@@ -18,6 +18,7 @@ final class AppState: ObservableObject {
     lazy var pipeline = Pipeline(state: self)
     private var ticks = 0
     private var live: LiveSession?
+    let models = ModelInstaller()
     var systemAudioWorked: Bool?
 
     let store: TokenStore = KeychainTokenStore()
@@ -47,6 +48,9 @@ final class AppState: ObservableObject {
             self?.tick(now)
         }
         Task { await recoverInterrupted() }
+        if CallSettings.engine == "mac" && !models.installed {
+            Task { await models.install() }  // first launch after installing from the .dmg
+        }
     }
 
     // MARK: pairing and permissions

@@ -4,6 +4,8 @@
 #   ./install.sh             build, download the speech runtime and model once, sign, install, open
 #   ./install.sh --dry-run   build and assemble the signed bundle in .build/dist only (used by CI):
 #                            no downloads, nothing copied to /Applications
+#   ./install.sh --dmg       build "Second Brain Recorder.dmg" in .build/dist (runtime inside, ad-hoc
+#                            signed; the app downloads the speech model on first launch)
 #   ./install.sh --fetch-speech DIR
 #                            only download and verify the speech runtime and models into DIR/lib
 #                            and DIR/models (CI's speech check)
@@ -29,12 +31,14 @@ VAD_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sile
 VAD_SHA256="9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
 
 DRY_RUN=0
+DMG=0
 FETCH_DIR=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
+    --dmg) DMG=1 ;;
     --fetch-speech) FETCH_DIR="${2:?--fetch-speech needs a folder}"; shift ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -133,14 +137,21 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 plutil -lint "$APP/Contents/Info.plist" >/dev/null || fail "Info.plist is not valid"
 
-if [ "$DRY_RUN" = 0 ]; then
+if [ "$DMG" = 1 ]; then
+  # runtime only; the model is downloaded by the app (keeps the image small)
+  fetch_dir="$(mktemp -d)"
+  lib="$(download "$SHERPA_URL" "$SHERPA_SHA256")"
+  tar xjf "$lib" -C "$fetch_dir"
+  cp "$fetch_dir"/*/lib/libsherpa-onnx-c-api.dylib "$fetch_dir"/*/lib/libonnxruntime*.dylib "$APP/Contents/Frameworks/"
+  rm -rf "$fetch_dir"
+elif [ "$DRY_RUN" = 0 ]; then
   fetch_speech "$APP/Contents/Frameworks" "$SUPPORT/models"
 else
   step "Dry run: speech runtime and model downloads skipped"
 fi
 
 step "Signing"
-IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Apple Development: [^"]*\)".*/\1/p' | head -1)"
+[ "$DMG" = 1 ] && IDENTITY="" || IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(Apple Development: [^"]*\)".*/\1/p' | head -1)"
 if [ -z "$IDENTITY" ]; then
   IDENTITY="-"
   echo "warning: no Apple Development certificate found; signing ad-hoc."
@@ -157,6 +168,18 @@ codesign --verify --strict "$APP" || fail "the signed bundle does not verify"
 
 if [ "$DRY_RUN" = 1 ]; then
   step "Dry run finished: $APP"
+  exit 0
+fi
+
+if [ "$DMG" = 1 ]; then
+  step "Disk image"
+  stage="$(mktemp -d)"
+  cp -R "$APP" "$stage/"
+  ln -s /Applications "$stage/Applications"
+  rm -f "$DIST/$APP_NAME.dmg"
+  hdiutil create -volname "$APP_NAME" -srcfolder "$stage" -ov -format UDZO "$DIST/$APP_NAME.dmg" >/dev/null
+  rm -rf "$stage"
+  step "Built $DIST/$APP_NAME.dmg"
   exit 0
 fi
 
