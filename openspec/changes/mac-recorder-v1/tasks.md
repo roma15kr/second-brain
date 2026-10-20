@@ -25,13 +25,13 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 
 ## 4. Call transcription on the Mac
 
-- [ ] 4.1 sherpa-onnx + Parakeet v3: VAD segmentation, per-track transcription, me/others merge by time, long-segment split; CPU vs Core ML measurement on a bundled sample with the result in Settings; verify `MergeTests`, `ProviderChoiceTests` (fake timings), `SegmentationTests` (fixture VAD output)
-- [ ] 4.2 Scheduling: utility QoS, ≤ 3 threads, pause while recording, wait for power on battery unless allowed, dictation queue first; "Call transcription: On this Mac / Cloud" setting; verify `SchedulerTests` (fake power and recording state)
+- [x] 4.1 sherpa-onnx + Parakeet v3: VAD segmentation, per-track transcription, me/others merge by time, long-segment split; CPU vs Core ML measurement on a bundled sample with the result in Settings; verify `MergeTests`, `ProviderChoiceTests` (fake timings), `SegmentationTests` (fixture VAD output)
+- [x] 4.2 Scheduling: utility QoS, ≤ 3 threads, pause while recording, wait for power on battery unless allowed, dictation queue first; "Call transcription: On this Mac / Cloud" setting; verify `SchedulerTests` (fake power and recording state)
 - [ ] 4.3 Live mode (off by default): phrase-by-phrase transcription during recording, floating caption window, transcript complete at stop; verify `LiveAssemblerTests` (streamed fake segments → same transcript as the after-call path)
 
 ## 5. Delivery
 
-- [ ] 5.1 Item store and state machine, uploader (register with idempotency key, announce/HEAD/PUT 8 MB chunks, resume on 409/offline, 401 → paused), Cloud mode (register, upload, request `/transcribe`), "Separate speakers" with cost estimate, local audio cleanup 7 days after delivery, menu list with reasons; verify `UploaderTests` (URLProtocol mock incl. 409 and offline), `StateMachineTests`, `CloudModeTests`, `CleanupTests`
+- [x] 5.1 Item store and state machine, uploader (register with idempotency key, announce/HEAD/PUT 8 MB chunks, resume on 409/offline, 401 → paused), Cloud mode (register, upload, request `/transcribe`), "Separate speakers" with cost estimate, local audio cleanup 7 days after delivery, menu list with reasons; verify `UploaderTests` (URLProtocol mock incl. 409 and offline), `StateMachineTests`, `CloudModeTests`, `CleanupTests`
 - [ ] 5.2 Meeting choice: at recording start the menu offers meetings around now (in progress first, "Automatic" default) and "New meeting…" (title required, project, participants by name or email), sent as `event_id` or `new_meeting`; recent recordings list with "Change meeting" / "New meeting…" / "Set project" before and after delivery; offline → choices kept and sent on delivery; verify `MeetingPickerTests` (fake server list, offline), `NewMeetingFormTests`, `RelinkTests`
 
 ## 6. Dictation
