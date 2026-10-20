@@ -30,3 +30,19 @@ request". Still native-only: system-wide dictation (typing into other apps), bac
 and call/meeting recording (`voice-apps-v1`). Reason: the owner asked to dictate requests and notes
 in the web OS; research showed in-app foreground recording works in the installed PWA on iPhone,
 macOS Safari and Chrome (docs/research/web-os-pwa-voice.md).
+
+## Amendment (2026-10-20, change `mac-recorder-v1`)
+- **Mac first, iPhone later** (owner: "Start with mac, skip phone"); phone recordings reach the
+  second brain by import on the Mac (drop, "Import…", or a watched Voice Memos folder).
+- **Calls are transcribed on the Mac** with NVIDIA Parakeet TDT 0.6B v3 through sherpa-onnx
+  (CPU or Core ML, whichever the built-in measurement finds faster), after the call by default,
+  optionally live. Reason: 100–150 h of calls a month would cost $20–45 in the cloud against a
+  $30 budget for everything; Parakeet matches Whisper large-v3 on Ukrainian (6.8% vs 6.5% WER).
+  System audio is captured with a Core Audio process tap (ScreenCaptureKit as fallback).
+- **Dictation stays on OpenAI** through the server (`gpt-transcribe`, then as said / cleaned /
+  structured); offline the Mac types it as said with Parakeet.
+- **Cloud fallback without an app update:** Settings → "Cloud" sends calls to the server's provider
+  (OpenAI diarize or Whisper, or Groq Whisper large-v3-turbo when `GROQ_API_KEY` is set).
+- **Distribution:** no App Store. `mac/install.sh` (signed with a free Apple Development
+  certificate so permissions survive updates) or the universal `.dmg` from the `mac-latest`
+  GitHub release (ad-hoc signed: "Open Anyway" once; the app downloads the model itself).

@@ -71,6 +71,21 @@ Tables added: `webauthn_credentials`, `sessions`, `routine_runs`, `briefs`, `pus
 `devices`, `device_pair_codes`, `recordings`, `recording_audio`, `assistant_threads`,
 `assistant_requests`, `dictations`.
 
+### Mac recorder (`mac-recorder-v1`, `mac/`)
+A Swift package built and tested by GitHub Actions on macOS (this workspace cannot run Xcode).
+
+| Target / file | Responsibility |
+|--------|----------------|
+| `RecorderCore` (library, unit-tested) | API client and pairing, items on disk (`items/<uuid>/state.json`), segmented track writer with gap padding, recorder state machine, crash recovery, VAD-driven streaming transcriber, me/others merge, CPU/GPU choice, scheduling policy, delivery state machine and resumable uploader, meeting picker, re-linking, dictation flow, import ledger and watched folder |
+| `SpeechKit` | sherpa-onnx loaded with `dlopen` (header vendored in `CSherpaOnnx`), Parakeet recognizer, Silero VAD, benchmark, in-app model download, audio decode/resample |
+| `SecondBrainRecorder` (app) | Menu bar UI, Settings, Carbon hotkeys, AVAudioEngine microphone, process tap / ScreenCaptureKit, AAC segments and joining, pipeline (transcribe → deliver), Live captions, dictation paste, imports |
+| `speech-check` | CLI: runs VAD + Parakeet on audio files (CI's real speech check) |
+| `install.sh` | Build, pinned downloads with checksums, bundle, signing, `/Applications`; `--dmg`, `--dry-run`, `--fetch-speech` |
+
+Server side: `transcription.py` (cloud call providers, costs, jobs run by routines), device
+dictation in `dictation.py`, meetings around now / linking / local meetings in `meetings.py` and
+`recordings.py`.
+
 ### Web OS assistant (`assistant-command-v1`)
 | Module | Responsibility |
 |--------|----------------|
@@ -119,10 +134,11 @@ Tables added: `webauthn_credentials`, `sessions`, `routine_runs`, `briefs`, `pus
   anomalies vs 7-day baseline, decisions from meetings, draft team message); weekly CMO report;
   leaked-secret alerts; weekly vault hygiene report; domain/TLS expiry and subscription renewal /
   failed-payment alerts.
-- **Meeting app (macOS):** ScreenCaptureKit system audio + mic as separate tracks (you vs others),
-  streaming cloud STT for live transcript, live KB assistant and end-of-call action items; after the
-  call batch re-transcription becomes the canonical transcript; audio kept 12 months (ADR 0010
-  amendment), uploaded through the device API.
+- **Mac recorder (`mac/`, mac-recorder-v1, ADR 0014 amendment):** menu-bar app; calls as two
+  tracks (microphone "me", computer audio "others" via a Core Audio process tap), transcribed on the
+  Mac with Parakeet (or by the server's provider in Cloud mode), delivered with both audio tracks
+  through the device API (audio kept 12 months, ADR 0010 amendment); dictation into any app through
+  `POST /api/devices/dictations`; imports. See "Mac recorder" below.
 
 ## Passwords and secrets
 Passwords live in a self-hosted Vaultwarden (Coolify, Tailscale only), never in the KB. The KB only

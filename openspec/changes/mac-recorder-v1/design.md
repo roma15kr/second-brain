@@ -46,6 +46,10 @@ Apple ID) so macOS keeps granted permissions across updates; without it the scri
 warns that permissions will be asked again after each update.
 *Alternatives:* an Xcode project (needs Xcode UI for every change); App Store / TestFlight (needs
 the paid program; one user).
+*Added 2026-10-20 (owner asked for an install-ready .dmg):* CI also builds a universal `.dmg`
+(`install.sh --dmg`, runtime inside, ad-hoc signed) published as the `mac-latest` release; the app
+downloads the Parakeet model itself on first launch (same pinned checksums). Gatekeeper asks once
+("Open Anyway"); permissions may be asked again after updates installed this way.
 
 ### D2. Audio capture: two tracks, written continuously
 - **Microphone:** `AVAudioEngine` input, mono; on a route/configuration change (AirPods) the engine

@@ -1,0 +1,92 @@
+# Builds and tests the Mac recorder (mac/) on a macOS runner; this repository is public, so the
+# macOS minutes are free. Audio capture and speech-model speed are checked on the owner's Mac.
+name: Mac recorder
+on:
+  push:
+    paths: ["mac/**", ".github/workflows/mac.yml"]
+  pull_request:
+    paths: ["mac/**", ".github/workflows/mac.yml"]
+  workflow_dispatch:
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Speech download pins match install.sh
+        run: |
+          for sum in $(grep -oE '[0-9a-f]{64}' Sources/SpeechKit/ModelInstaller.swift); do
+            grep -q "$sum" install.sh || { echo "pin $sum missing in install.sh"; exit 1; }
+          done
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: "Install script (dry run: build, bundle, sign, verify)"
+        run: ./install.sh --dry-run
+
+  # Real speech check: Silero VAD + Parakeet through the pinned sherpa-onnx on sample audio
+  # (downloads verified by install.sh, cached between runs).
+  speech:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/SecondBrainRecorder/downloads
+          key: speech-${{ hashFiles('mac/install.sh') }}
+      - name: Fetch speech runtime and models
+        run: ./install.sh --fetch-speech "$RUNNER_TEMP/speech"
+      - name: Build speech-check
+        run: swift build --product speech-check
+      - name: Transcribe samples
+        run: |
+          M="$RUNNER_TEMP/speech/models"
+          samples=("$M"/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/test_wavs/*.wav)
+          if say -v '?' | grep -q '^Lesya'; then
+            say -v Lesya -o "$RUNNER_TEMP/uk.aiff" "Добрий день. Давайте обговоримо ціни на жовтень і домовимося про наступну зустріч."
+            samples+=("$RUNNER_TEMP/uk.aiff")
+          fi
+          SBR_SHERPA_LIB="$RUNNER_TEMP/speech/lib/libsherpa-onnx-c-api.dylib" SBR_MODELS_DIR="$M" \
+            "$(swift build --show-bin-path)/speech-check" "${samples[@]}"
+
+  # The ready-to-install disk image; published as the "mac-latest" release from main.
+  dmg:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/SecondBrainRecorder/downloads
+          key: dmg-${{ hashFiles('mac/install.sh') }}
+      - name: Build the disk image
+        run: ./install.sh --dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Second-Brain-Recorder-dmg
+          path: mac/.build/dist/Second Brain Recorder.dmg
+      - name: Publish the mac-latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp ".build/dist/Second Brain Recorder.dmg" Second-Brain-Recorder.dmg
+          notes="Mac recorder built from ${GITHUB_SHA::7}. First open: System Settings → Privacy & Security → Open Anyway."
+          if gh release view mac-latest >/dev/null 2>&1; then
+            gh release upload mac-latest Second-Brain-Recorder.dmg --clobber
+            gh release edit mac-latest --notes "$notes" --target "$GITHUB_SHA"
+          else
+            gh release create mac-latest Second-Brain-Recorder.dmg --title "Mac recorder (latest)" --notes "$notes" --target "$GITHUB_SHA" --prerelease
+          fi
