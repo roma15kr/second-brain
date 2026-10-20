@@ -18,11 +18,80 @@ export type Suggestion = {
   applied_ref: string | null;
   error: string | null;
   created_at: string;
+  files?: { id: number; filename: string; size: number }[];
 };
+
+function dataBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",", 2)[1] ?? "");
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+// Images for a ClickUp comment draft: attached to the task and linked in the comment on approval.
+function CommentImages({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const add = useMutation({
+    mutationFn: async (files: File[]) => {
+      for (const f of files) {
+        await api(`/api/suggestions/${s.id}/files`, {
+          method: "POST",
+          body: { filename: f.name, mime: f.type, data: await dataBase64(f) },
+        });
+      }
+    },
+    onSuccess: () => {
+      setError(null);
+      onChanged();
+    },
+    onError: (e) => {
+      setError(e.message);
+      onChanged();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (fid: number) => api(`/api/suggestions/${s.id}/files/${fid}`, { method: "DELETE" }),
+    onSuccess: onChanged,
+  });
+  return (
+    <div className="row">
+      {(s.files ?? []).map((f) => (
+        <span key={f.id} className="tag">
+          🖼 {f.filename}{" "}
+          <button
+            className="link"
+            aria-label={`Remove ${f.filename}`}
+            onClick={() => remove.mutate(f.id)}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <label className="btn">
+        {add.isPending ? "Adding…" : "Add images"}
+        <input
+          aria-label="Add images"
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp,image/heic"
+          multiple
+          hidden
+          onChange={(e) => add.mutate([...(e.target.files ?? [])])}
+        />
+      </label>
+      <span className="muted small">
+        attached to the task and linked in the comment when posted
+      </span>
+      {error && <span className="error">{error}</span>}
+    </div>
+  );
+}
 
 const KIND: Record<string, string> = {
   reply_email: "Email reply",
   reply_tg: "Telegram reply",
+  clickup_comment: "ClickUp comment",
   task: "ClickUp task",
   delegate: "Delegate",
   nudge: "Nudge",
@@ -45,7 +114,7 @@ function isEmail(s: Suggestion): boolean {
   return s.kind === "reply_email" || (s.kind === "nudge" && s.payload.channel === "email");
 }
 function isText(s: Suggestion): boolean {
-  return ["reply_email", "reply_tg", "nudge", "decline"].includes(s.kind);
+  return ["reply_email", "reply_tg", "nudge", "decline", "clickup_comment"].includes(s.kind);
 }
 function isTask(s: Suggestion): boolean {
   return s.kind === "task" || s.kind === "delegate";
@@ -108,6 +177,12 @@ export function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void })
         ))}
       </div>
       {s.reason && <div className="muted">{s.reason}</div>}
+      {s.kind === "clickup_comment" && <CommentImages s={s} onChanged={onChanged} />}
+      {s.kind === "clickup_comment" && str(s.payload.assignee_name) && (
+        <div className="muted">
+          Assigned to {str(s.payload.assignee_name)} (ClickUp notifies them)
+        </div>
+      )}
       {isText(s) && s.payload.ai_pending === true && <div className="muted">Drafting a reply…</div>}
       {isText(s) && (
         <textarea
@@ -153,7 +228,7 @@ export function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void })
               Send
             </button>
           )}
-          {isText(s) && !isEmail(s) ? (
+          {isText(s) && !isEmail(s) && s.kind !== "clickup_comment" ? (
             <button
               className="btn primary"
               onClick={() => {
@@ -166,7 +241,13 @@ export function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void })
             </button>
           ) : (
             <button className="btn" disabled={approve.isPending} onClick={() => approve.mutate()}>
-              {isEmail(s) ? "Save to Drafts" : isTask(s) ? "Create task" : "Approve"}
+              {isEmail(s)
+                ? "Save to Drafts"
+                : isTask(s)
+                  ? "Create task"
+                  : s.kind === "clickup_comment"
+                    ? "Post comment"
+                    : "Approve"}
             </button>
           )}
           <button className="btn" onClick={() => discard.mutate()}>
@@ -194,11 +275,13 @@ function Recent({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
       ? sent
         ? "Sent"
         : "Saved to Drafts"
-      : s.applied_ref === "copied"
-        ? "Copied"
-        : sent && s.status !== "failed"
-          ? "Sending…"
-          : (DONE[s.status] ?? s.status);
+      : s.kind === "clickup_comment" && s.status === "applied"
+        ? "Posted"
+        : s.applied_ref === "copied"
+          ? "Copied"
+          : sent && s.status !== "failed"
+            ? "Sending…"
+            : (DONE[s.status] ?? s.status);
   return (
     <li>
       <span className={s.status === "failed" ? "state error" : "state ok"}>{what}</span>{" "}

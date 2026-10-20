@@ -104,3 +104,71 @@ test("a Telegram nudge is copied and its chat opened", async () => {
   expect(open).toHaveBeenCalledWith("https://t.me/c/1/2", "_blank", "noreferrer");
   open.mockRestore();
 });
+
+test("a ClickUp comment draft is posted on approval", async () => {
+  window.history.pushState({}, "", "/assistant");
+  let posted: unknown = null;
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/suggestions": {
+      suggestions: [
+        {
+          ...reply,
+          id: 11,
+          kind: "clickup_comment",
+          item_title: "Time optimization",
+          payload: {
+            item_id: 5,
+            task_id: "86abc",
+            body: "Bogdan, please check",
+            assignee_name: "Bogdan",
+          },
+        },
+      ],
+    },
+    "GET /api/suggestions?status=recent": { suggestions: [] },
+    "GET /api/assistant/threads": { threads: [] },
+    "POST /api/suggestions/11/approve": (init?: RequestInit) => {
+      posted = JSON.parse(String(init?.body));
+      return { applied_ref: "90150" };
+    },
+  });
+  renderApp();
+  expect(await screen.findByText(/Assigned to Bogdan/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Post comment" }));
+  await waitFor(() => expect(posted).toEqual({ payload: { body: "Bogdan, please check" } }));
+});
+
+test("images can be added to a ClickUp comment draft", async () => {
+  window.history.pushState({}, "", "/assistant");
+  let files: { id: number; filename: string; size: number }[] = [];
+  let uploaded: { filename: string; mime: string; data: string } | null = null;
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/suggestions": () => ({
+      suggestions: [
+        {
+          ...reply,
+          id: 12,
+          kind: "clickup_comment",
+          item_title: "Time optimization",
+          payload: { item_id: 5, task_id: "86abc", body: "See the screenshots" },
+          files,
+        },
+      ],
+    }),
+    "GET /api/suggestions?status=recent": { suggestions: [] },
+    "GET /api/assistant/threads": { threads: [] },
+    "POST /api/suggestions/12/files": (init?: RequestInit) => {
+      uploaded = JSON.parse(String(init?.body));
+      files = [{ id: 1, filename: "chart.png", size: 4 }];
+      return { id: 1 };
+    },
+  });
+  renderApp();
+  const input = await screen.findByLabelText("Add images");
+  await userEvent.upload(input, new File(["png!"], "chart.png", { type: "image/png" }));
+  expect(await screen.findByText(/chart\.png/)).toBeInTheDocument();
+  expect(uploaded).toEqual({ filename: "chart.png", mime: "image/png", data: btoa("png!") });
+});

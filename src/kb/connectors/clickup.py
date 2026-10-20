@@ -153,6 +153,22 @@ class ClickUpClient:
     def create_task(self, list_id: str, body: dict[str, Any]) -> dict[str, Any]:
         return dict(self._req("POST", f"/list/{list_id}/task", json=body))
 
+    def attach(self, task_id: str, filename: str, data: bytes, mime: str) -> str:
+        """Uploads a file to the task's attachments; returns its URL."""
+        made = self._req(
+            "POST", f"/task/{task_id}/attachment", files={"attachment": (filename, data, mime)}
+        )
+        return str(made.get("url") or "")
+
+    def create_comment(
+        self, task_id: str, text: str, assignee: int | None = None
+    ) -> dict[str, Any]:
+        """A comment on a task (approved by the owner); assigning it notifies that person."""
+        body: dict[str, Any] = {"comment_text": text, "notify_all": False}
+        if assignee is not None:
+            body["assignee"] = assignee
+        return dict(self._req("POST", f"/task/{task_id}/comment", json=body))
+
     def team_members(self, team_id: str) -> dict[str, dict[str, Any]]:
         """user id → {username, email} for the workspace (chat messages carry only ids)."""
         for t in self.teams():

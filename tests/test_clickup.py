@@ -790,3 +790,91 @@ def test_inbox_walk_is_time_sliced(conn, fake, watched, monkeypatch):
     assert state is None  # the cursor moves only after a full walk
     monkeypatch.setattr(clickup, "_clock", lambda: 0.0)
     assert clickup.sync_inbox(conn, fake.client(), watched, datetime.now(UTC), seconds=1) == 1
+
+
+# --- comment drafts (owner feedback 2026-10-20) ------------------------------------------------
+
+
+def test_comment_draft_posted_once_with_images(client, conn, fake, account):
+    import base64
+    import json
+
+    from psycopg.types.json import Jsonb
+
+    from kb.assistant import actions, agent
+
+    fake.tasks["L1"] = [task("a", now_ms())]
+    clickup.sync_account(conn, fake.client(), account)
+    item = conn.execute("SELECT id FROM items WHERE source_item_key = 'a'").fetchone()["id"]
+    conn.execute(
+        "UPDATE connector_accounts SET settings = settings || %s",
+        (Jsonb({"members": {"7": {"username": "Bogdan", "email": "b@quokka.example"}}}),),
+    )
+    posted, attached = [], []
+    original = fake.handler
+
+    def writes(request):
+        p = request.url.path
+        if p == "/api/v2/task/a/comment" and request.method == "POST":
+            posted.append(json.loads(request.content))
+            return httpx.Response(200, json={"id": "90150", "date": now_ms()})
+        if p == "/api/v2/task/a/attachment":
+            attached.append(request.headers["content-type"].split(";")[0])
+            return httpx.Response(200, json={"url": "https://t.clickup/att/chart.png"})
+        return original(request)
+
+    fake.handler = writes
+    run = agent.Run(conn, 0, None, thread_id=0, now=datetime.now(UTC))
+    conn.execute("INSERT INTO assistant_threads (id, title) VALUES (1, 't')")
+    rid = conn.execute(
+        "INSERT INTO assistant_requests (thread_id, text) VALUES (1, 'x') RETURNING id"
+    ).fetchone()["id"]
+    run.request_id, run.thread_id = rid, 1
+    out = actions.draft_clickup_comment(run, item, "Please check the chart", "Bogdan")
+    sid = out["draft_id"]
+    assert posted == []  # nothing until approved
+    r = client.post(
+        f"/api/suggestions/{sid}/files",
+        json={
+            "filename": "chart.png",
+            "mime": "image/png",
+            "data": base64.b64encode(b"png").decode(),
+        },
+        headers=CSRF,
+    )
+    assert r.status_code == 200
+    bad = client.post(
+        f"/api/suggestions/{sid}/files",
+        json={"filename": "x.exe", "mime": "application/octet-stream", "data": "eA=="},
+        headers=CSRF,
+    )
+    assert bad.status_code == 400
+    app_factory = lambda conn: fake.client  # noqa: E731
+    client.app.state.clickup_factory = app_factory
+    ok = client.post(f"/api/suggestions/{sid}/approve", json={}, headers=CSRF)
+    assert ok.json() == {"applied_ref": "90150"}
+    [body] = posted
+    assert body["assignee"] == 7 and body["notify_all"] is False
+    assert body["comment_text"].startswith("Please check the chart")
+    assert "📎 chart.png: https://t.clickup/att/chart.png" in body["comment_text"]
+    assert attached == ["multipart/form-data"]
+    # approving again does nothing more
+    client.post(f"/api/suggestions/{sid}/approve", json={}, headers=CSRF)
+    assert len(posted) == 1 and len(attached) == 1
+
+
+def test_interrupted_comment_is_not_posted_twice(conn, fake, account):
+    from kb.assistant import suggestions
+
+    fake.comments["a"] = [
+        {**comment("c1", now_ms(), "Already there"), "comment_text": "Already there"}
+    ]
+    sid = suggestions.propose(
+        conn, "clickup_comment", {"task_id": "a", "body": "Already there", "item_id": None}
+    )
+    conn.execute(
+        "UPDATE suggestions SET status = 'applying', attempt_started_at = now() WHERE id = %s",
+        (sid,),
+    )
+    ref = suggestions.approve(conn, sid, datetime.now(UTC), clickup_client=fake.client)
+    assert ref == "c1"  # found the earlier post instead of posting again

@@ -334,7 +334,54 @@ def report_markdown(rep: dict[str, Any], titles: dict[str, str], origin: str = "
     return "\n".join(out)
 
 
+def draft_clickup_comment(run: Run, item_id: int, body: str, assign_to: str | None) -> Any:
+    """A comment for a ClickUp task, waiting for the owner's approval; assigning it to a
+    teammate notifies them in ClickUp."""
+    item = _item(run.conn, item_id, "clickup_task")
+    row = run.conn.execute(
+        "SELECT source_id, source_item_key, locator FROM items WHERE id = %s", (item_id,)
+    ).fetchone()
+    assert row is not None
+    assignee_id, assignee_name = None, ""
+    if assign_to:
+        settings = run.conn.execute(
+            "SELECT settings FROM connector_accounts WHERE kind = 'clickup'"
+            " AND 'clickup-' || id = %s",
+            (row["source_id"],),
+        ).fetchone()
+        members = ((settings or {}).get("settings") or {}).get("members") or {}
+        who = assign_to.strip().lower()
+        for uid, m in members.items():
+            name, email = (m.get("username") or "").lower(), (m.get("email") or "").lower()
+            if who in (name, email) or (name and (who in name or name in who)):
+                assignee_id, assignee_name = int(uid), m.get("username") or email
+                break
+    sid = suggestions.propose(
+        run.conn,
+        "clickup_comment",
+        {
+            "item_id": item_id,
+            "task_id": row["source_item_key"],
+            "link": row["locator"],
+            "body": body.strip(),
+            "assignee_id": assignee_id,
+            "assignee_name": assignee_name,
+        },
+        reason="From your request",
+        refs=[f"item:{item_id}"],
+        scopes=list(item["scopes"]),
+        item_id=item_id,
+        request_id=run.request_id,
+    )
+    run.seen.add(item_id)
+    result = _drafted(run, "draft_clickup_comment", sid, f"a comment on “{item['title']}”")
+    if assign_to and assignee_id is None:
+        result["note"] = f"no ClickUp member matches “{assign_to}”; the comment is not assigned"
+    return result
+
+
 HANDLERS: dict[str, Callable[..., Any]] = {
+    "draft_clickup_comment": draft_clickup_comment,
     "activity": activity,
     "report": report,
     "loops": loops_tool,

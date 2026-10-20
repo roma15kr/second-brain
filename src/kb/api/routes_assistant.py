@@ -70,6 +70,59 @@ def reply_draft(conn: Db, item_id: int) -> dict[str, int]:
         raise HTTPException(400, str(e)) from e
 
 
+MAX_FILES, MAX_FILE_BYTES = 5, 10 * 1024 * 1024
+IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/heic"}
+
+
+@router.post("/api/suggestions/{sid}/files")
+def add_file(
+    conn: Db,
+    sid: int,
+    filename: Annotated[str, Body(embed=True)],
+    mime: Annotated[str, Body(embed=True)],
+    data: Annotated[str, Body(embed=True)],
+) -> dict[str, int]:
+    """An image for a ClickUp comment draft (base64), uploaded to the task when approved."""
+    import base64
+    import binascii
+
+    s = conn.execute("SELECT kind, status FROM suggestions WHERE id = %s", (sid,)).fetchone()
+    if s is None:
+        raise HTTPException(404, f"no suggestion {sid}")
+    if s["kind"] != "clickup_comment" or s["status"] not in ("proposed", "failed"):
+        raise HTTPException(400, "images can be added to pending ClickUp comment drafts only")
+    if mime not in IMAGE_TYPES:
+        raise HTTPException(400, "add PNG, JPEG, GIF, WebP or HEIC images")
+    try:
+        raw = base64.b64decode(data, validate=True)
+    except binascii.Error as e:
+        raise HTTPException(400, "the file is not valid base64") from e
+    if not raw or len(raw) > MAX_FILE_BYTES:
+        raise HTTPException(400, "images are limited to 10 MB")
+    count = conn.execute(
+        "SELECT count(*) AS n FROM suggestion_files WHERE suggestion_id = %s", (sid,)
+    ).fetchone()
+    if count and count["n"] >= MAX_FILES:
+        raise HTTPException(400, f"at most {MAX_FILES} images per comment")
+    row = conn.execute(
+        "INSERT INTO suggestion_files (suggestion_id, filename, mime, data)"
+        " VALUES (%s, %s, %s, %s) RETURNING id",
+        (sid, filename.strip()[:120] or "image", mime, raw),
+    ).fetchone()
+    assert row is not None
+    return {"id": int(row["id"])}
+
+
+@router.delete("/api/suggestions/{sid}/files/{fid}")
+def remove_file(conn: Db, sid: int, fid: int) -> dict[str, bool]:
+    conn.execute(
+        "DELETE FROM suggestion_files WHERE id = %s AND suggestion_id = %s"
+        " AND uploaded_url IS NULL",
+        (fid, sid),
+    )
+    return {"ok": True}
+
+
 @router.post("/api/suggestions/{sid}/discard")
 def discard(
     conn: Db, sid: int, reason: Annotated[str | None, Body(embed=True)] = None

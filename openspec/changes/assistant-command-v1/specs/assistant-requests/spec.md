@@ -31,7 +31,7 @@ An answer that uses knowledge-base content SHALL cite the items it used, each op
 - **THEN** the answer says nothing was found and lists what was searched
 
 ### Requirement: Drafts and tasks go to the approval queue
-Email drafts (replies or new emails), ClickUp task drafts and Telegram reply drafts prepared from a request SHALL be created as suggestions in the approval queue, shown inline in the thread with approve, edit and discard. A request SHALL never send, save to a mailbox or create a task by itself.
+Email drafts (replies or new emails), ClickUp task drafts, ClickUp comment drafts and Telegram reply drafts prepared from a request SHALL be created as suggestions in the approval queue, shown inline in the thread with approve, edit and discard. A request SHALL never send, save to a mailbox or create a task by itself.
 
 #### Scenario: Email draft from a request
 - **WHEN** the owner asks "reply to Olena that we accept the new price from November"
@@ -40,6 +40,10 @@ Email drafts (replies or new emails), ClickUp task drafts and Telegram reply dra
 #### Scenario: New email
 - **WHEN** the owner asks "write to dealer@example.com asking for the October price list"
 - **THEN** a new-email draft with that recipient appears for approval, from the mailbox the owner last used with that address or the default mailbox
+
+#### Scenario: ClickUp comment with images
+- **WHEN** the owner asks "comment in Time optimization for Bogdan to check the chart" and adds two screenshots to the draft
+- **THEN** the comment is posted only after approval, assigned to Bogdan, with the screenshots attached to the task and linked in the comment
 
 #### Scenario: Task draft
 - **WHEN** the owner asks "task for Max: update the banners by Friday, Marketing list"
