@@ -58,6 +58,7 @@ struct MenuContent: View {
         if let status = state.status { Text(status) }
         RecentItems()
         Divider()
+        Button("Import recordings…") { ImportPanel.show(state) }
         SettingsLink { Text("Settings…") }
         Button("Quit") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
     }

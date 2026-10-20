@@ -25,6 +25,9 @@ final class AppState: ObservableObject {
     let dictation = DictationRecorder()
     @Published var dictating = false
     var dictationRecognizer: SpeechRecognizer?
+    lazy var importLedger = ImportLedger(url: itemStore.root.appendingPathComponent("imported.json"))
+    @Published var importHint: String?
+    var folderWatcher: DispatchSourceFileSystemObject?
     var systemAudioWorked: Bool?
 
     let store: TokenStore = KeychainTokenStore()
@@ -54,6 +57,7 @@ final class AppState: ObservableObject {
             self?.tick(now)
         }
         Task { await recoverInterrupted() }
+        if let dir = watchedFolder { watch(dir) }
         if CallSettings.engine == "mac" && !models.installed {
             Task { await models.install() }  // first launch after installing from the .dmg
         }
@@ -165,7 +169,10 @@ final class AppState: ObservableObject {
 
     private func tick(_ now: Date) {
         ticks += 1
-        if ticks % 60 == 0 { processQueue() }  // retry waiting deliveries every minute
+        if ticks % 60 == 0 {
+            processQueue()  // retry waiting deliveries every minute
+            scanWatchedFolder()
+        }
         guard isRecording else { return }
         elapsed = recorder.elapsed(now: now)
         if (try? recorder.tick(now: now)) ?? nil != nil {
