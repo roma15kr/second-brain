@@ -11,11 +11,13 @@ export function Recorder({
   compact?: boolean;
 }) {
   const [waiting, setWaiting] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   const send = useCallback(async () => {
-    const ids = await flush();
+    const { ids, error } = await flush();
     ids.forEach((id) => onUploaded(id));
+    setUploadError(error);
     setWaiting((await pendingStore().all()).length);
   }, [onUploaded]);
 
@@ -65,7 +67,7 @@ export function Recorder({
       )}
       {waiting > 0 && (
         <span className="muted">
-          {waiting} waiting to upload{" "}
+          {waiting} waiting to upload{uploadError && ` (${uploadError})`}{" "}
           <button type="button" className="btn" onClick={() => void send()}>
             Retry
           </button>

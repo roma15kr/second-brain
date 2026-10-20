@@ -106,7 +106,10 @@ _Last updated: 2026-10-19 by Claude_
 - WhatsApp approach for v2 (Quokka discussions are a known blind spot).
 
 ## Known problems / gotchas
-- Calendars and recorder uploads use volumes `kb-dictations` and `kb-audio` mounted in web and routines (backup
+- The app runs as user `kb`: any new `/data/...` volume must be created and chowned in `docker/Dockerfile`
+  (a new named volume takes the image folder's owner; `tests/test_deploy_volumes.py` checks it). Old empty
+  root-owned volumes `kb-dictations`/`kb-audio` can be deleted in Coolify.
+- Dictation and recorder audio use volumes `kb-dictation-files` and `kb-audio-files` (web + routines; backup
   mounts `kb-audio` read-only); a new service that needs them must mount them too.
 - `/api/devices/*` bypasses the session middleware on purpose (device bearer tokens, upload only); never add a
   read endpoint under that prefix.

@@ -21,7 +21,8 @@ ENV KB_WEB_DIST=/app/web/dist
 
 RUN useradd --create-home --uid 1000 kb \
     && mkdir -p /data/telegram && chown kb:kb /data/telegram && chmod 700 /data/telegram \
-    && mkdir -p /models && chown kb:kb /models
+    && mkdir -p /models && chown kb:kb /models \
+    && mkdir -p /data/dictations /data/audio && chown kb:kb /data/dictations /data/audio
 USER kb
 ENV PATH="/app/.venv/bin:$PATH"
 CMD ["kb", "--help"]
