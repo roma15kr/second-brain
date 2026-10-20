@@ -211,6 +211,14 @@ public final class Recorder: @unchecked Sendable {
         return item
     }
 
+    /// The meeting chosen while recording (default "Automatic").
+    public func setMeeting(_ meeting: MeetingChoice) throws {
+        guard var item = current else { return }
+        item.meeting = meeting
+        try store.save(item)
+        current = item
+    }
+
     /// Called every second while recording; stops at the 4-hour limit.
     public func tick(now: Date) throws -> Item? {
         guard elapsed(now: now) >= Self.limit else { return nil }

@@ -19,6 +19,9 @@ final class AppState: ObservableObject {
     private var ticks = 0
     private var live: LiveSession?
     let models = ModelInstaller()
+    @Published var meetings: [MeetingSummary] = []
+    @Published var currentMeeting = MeetingChoice.automatic.label
+    let meetingPicker = MeetingPicker(store: UserDefaults.standard)
     var systemAudioWorked: Bool?
 
     let store: TokenStore = KeychainTokenStore()
@@ -121,7 +124,9 @@ final class AppState: ObservableObject {
             }
             try recorder.start(meeting: meeting, source: front, cloud: CallSettings.engine == "cloud", now: Date())
             live?.captions.show()
+            currentMeeting = meeting.label
             isRecording = true
+            refreshMeetings()
             pipeline.flags.recording = true
             elapsed = 0
             lastError = nil

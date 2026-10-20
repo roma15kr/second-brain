@@ -36,11 +36,20 @@ struct MenuContent: View {
     @EnvironmentObject var state: AppState
 
     var body: some View {
-        if state.isRecording {
-            Button("Stop recording (\(state.hotkeys.record.description))") { state.toggleRecording() }
-        } else {
-            Button("Record a call (\(state.hotkeys.record.description))") { state.toggleRecording() }
+        Group {
+            if state.isRecording {
+                Button("Stop recording (\(state.hotkeys.record.description))") { state.toggleRecording() }
+                Menu("Meeting: \(state.currentMeeting)") {
+                    MeetingChoices(includeAutomatic: true, pick: { state.chooseMeeting($0) }, newMeeting: { state.newMeeting(for: nil) })
+                }
+            } else {
+                Button("Record a call (\(state.hotkeys.record.description))") { state.toggleRecording() }
+                Menu("Record for a meeting") {
+                    MeetingChoices(includeAutomatic: false, pick: { state.startRecording(meeting: $0) }, newMeeting: { state.newMeeting(for: nil) })
+                }
+            }
         }
+        .onAppear { state.refreshMeetings() }
         if !state.isPaired { Text("Not paired — open Settings to pair") }
         if let error = state.lastError { Text(error) }
         if let warning = state.permissions.menuWarning { Text(warning) }
@@ -104,6 +113,13 @@ struct RecentItems: View {
                 Menu(Self.title(item)) {
                     if let reason = item.reason { Text(reason) }
                     if let note = item.note { Text(note) }
+                    if item.status != .recording && item.status != .failed {
+                        Menu("Change meeting") {
+                            MeetingChoices(includeAutomatic: false, pick: { state.relink(item.id, meeting: $0) },
+                                           newMeeting: { state.newMeeting(for: item.id) })
+                        }
+                        Menu("Set project") { ProjectChoices { state.relink(item.id, meeting: nil, scope: $0) } }
+                    }
                     if let s = item.transcribeSeconds { Text("Transcribed on this Mac in \(SecondBrainRecorderApp.clock(s))") }
                     if item.recordingId != nil && item.tracks.allSatisfy(\.uploaded) && item.speakers != true {
                         Button("Separate speakers…") { Task { await state.pipeline.separateSpeakers(item) } }
