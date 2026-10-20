@@ -15,7 +15,7 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 
 ## 2. Mac app skeleton, CI and install
 
-- [ ] 2.1 `mac/` Swift package (app + library targets, universal), menu-bar shell, settings window, Keychain token store, pairing with a one-time code, "not paired" on 401; `.github/workflows/mac.yml` (macos-15: build + test on `mac/**`); verify CI green with `PairingTests`, `KeychainStoreTests` (in-memory backend)
+- [x] 2.1 `mac/` Swift package (app + library targets, universal), menu-bar shell, settings window, Keychain token store, pairing with a one-time code, "not paired" on 401; `.github/workflows/mac.yml` (macos-15: build + test on `mac/**`); verify CI green with `PairingTests`, `KeychainStoreTests` (in-memory backend)
 - [ ] 2.2 `mac/install.sh`: release build, sherpa-onnx + Parakeet download with checksums, `.app` bundle with Info.plist usage strings, signing (Apple Development certificate if present, else ad-hoc with a warning), /Applications, Login Item; permissions screen (microphone, system audio, accessibility) with links to System Settings; verify CI runs `install.sh --dry-run` and `PermissionsModelTests`
 
 ## 3. Hotkeys and recording
