@@ -47,6 +47,9 @@ week, and transcription spend per month.
   - **Dictate anywhere** with a second global hotkey (hold to talk, or press to start/stop): the
     text is typed into the app in front, as said or cleaned up; with a modifier it is structured
     (summary, points, actions). Dictation uses OpenAI through the server.
+  - **Link each recording to a meeting**: at the start the app offers the calendar meetings around
+    now (or "Automatic" matching by time); the meeting or project can be changed later in the app
+    or on the recording's page in the web OS.
   - **All hotkeys can be changed** in Settings (recording, dictation, the structured modifier);
     taken combinations are refused with a message.
   - **Import** voice memos and call recordings: drag files onto the app, "Import…", or a watched
@@ -59,6 +62,8 @@ week, and transcription spend per month.
   uploaded tracks with OpenAI (gpt-transcribe or mini) or Groq (Whisper large-v3-turbo); the owner
   chooses the call engine in the app (Mac / cloud) and the cloud provider on the server. Speaker
   separation (OpenAI diarize) can be requested per meeting, with the cost shown first.
+- **Audio is stored on the owner's server**: both tracks of every call and import, whatever engine
+  transcribes them (12 months, backups, playback beside the transcript); dictation keeps text only.
 - **Delivery to the second brain**: transcript, timing and both audio tracks through the existing
   device API (resumable, survives sleep and network loss); attached to the calendar event or saved
   as an unscheduled call; processed as today.
@@ -76,7 +81,8 @@ week, and transcription spend per month.
 - `mac-recorder`: the Mac app — recording calls and meetings with two tracks, dictation into any
   app, changeable hotkeys, importing recordings, local call transcription (after the call or live),
   reliable delivery, permissions and privacy behaviour.
-- `device-api`: what the server offers paired devices beyond uploads — dictation with OpenAI and
+- `device-api`: what the server offers paired devices beyond uploads — meetings around now (the only
+  read), linking recordings to meetings or projects, dictation with OpenAI and
   text forms, cloud transcription of uploaded tracks (OpenAI or Groq, optional speaker
   separation) — and the coverage/cost figures on Status.
 
@@ -93,7 +99,7 @@ unarchived `web-os-v1` change (`calendar-meetings`) and are used unchanged.
   `src/kb/transcription.py` (OpenAI / Groq providers, costs), `src/kb/recordings.py` (replace
   segments from cloud results), Status figures.
 - **CI:** a GitHub Actions macOS job builds and tests `mac/` when it changes (this workspace
-  cannot run Xcode).
+  cannot run Xcode; the repository is public, so the macOS minutes are free).
 - **Dependencies:** sherpa-onnx + Parakeet model (Mac app); Groq only if the fallback is chosen
   (OpenAI-compatible HTTP API, no new library).
 - **Docs:** ADR 0014 amendment, architecture, external (Mac permissions, Groq key), STATUS.

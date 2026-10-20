@@ -21,6 +21,10 @@ the monthly AI budget is $30 for everything while calls are 100–150 h/month.
 quality; free call transcription on the Mac with a switch to cloud if quality disappoints;
 changeable hotkeys; delivery that never loses a recording; small server changes.
 
+Audio: both tracks of every recording and import are always uploaded to the server's `kb-audio`
+store (12 months, backups, playback) regardless of the transcription engine; dictation audio is
+not stored (text only).
+
 **Non-Goals:**
 - iPhone app (owner: "skip phone"); phone recordings arrive by import on the Mac.
 - A live assistant during calls (ADR 0010 direction; later change). Live *captions* are optional.
@@ -119,6 +123,20 @@ requests transcription. Retries with backoff; `NWPathMonitor` resumes on network
 paired", delivery paused. Local audio deleted 7 days after delivery. The menu lists pending,
 waiting (e.g. "waiting for power"), failed with reasons.
 
+### D7a. Linking to meetings and projects
+- `GET /api/devices/meetings?around=now` (device token): events of marked calendars within ±12 h,
+  fields id, title, start, end, `in_progress` only. This is the one read a device token gets
+  (design D22 of web-os-v1 anticipated a narrow device read); everything else stays upload-only.
+- At recording start the menu shows those meetings (in progress first) with "Automatic" selected;
+  the choice is stored in the item and sent as `event_id` when registering. `store()` already
+  accepts an explicit `event_id` (used by notes import).
+- Changing later: `POST /api/devices/recordings/{id}/link {event_id | null, scope}` for the
+  device's own recordings, and the same as an owner route `POST /api/recordings/{id}/link` with a
+  meeting picker and project select on the recording page in the web OS. Re-linking updates
+  `recordings.event_id`, title and scopes, re-indexes the `meeting` item (new locator, scopes),
+  and re-runs processing (summary, loops, task drafts for the new meeting; earlier task drafts
+  from this recording that are still pending are discarded with reason "re-linked").
+
 ### D8. Imports
 Drag & drop on the menu-bar icon or window, "Import…" (`NSOpenPanel`), and an optional watched
 folder (security-scoped bookmark + FSEvents; for Voice Memos the owner selects
@@ -135,9 +153,11 @@ AVFoundation; ogg via sherpa-onnx's decoder).
   (D4); `kb.transcription` providers; `app_settings` key for the call provider (Settings page).
 - Status: meetings with attendees vs meetings with a recording per week; transcription spend by
   kind this month.
+- Meetings for devices and re-linking (D7a).
 
 ### D10. CI and tests
-- `.github/workflows/mac.yml`: on `mac/**` changes, a `macos-15` runner runs `swift build` and
+- `.github/workflows/mac.yml` (the repository is public, so macOS runner minutes are free): on
+  `mac/**` changes, a `macos-15` runner runs `swift build` and
   `swift test` for the logic (segment merge, state machine, uploader against a URLProtocol mock of
   the device API, import de-duplication, hotkey hold/toggle and conflict handling, scheduling rules
   for battery/recording, provider benchmark choice with fake timings). Real audio capture, Parakeet

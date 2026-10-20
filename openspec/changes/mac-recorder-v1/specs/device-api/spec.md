@@ -30,6 +30,20 @@ For a recording whose audio was uploaded, a device SHALL be able to request clou
 - **WHEN** the Mac requests cloud transcription for an uploaded 60-minute recording
 - **THEN** the transcript with separate speakers is stored, its cost is recorded, and the summary and actions follow
 
+### Requirement: Meetings around now for devices
+A paired device SHALL be able to read the owner's calendar meetings within 12 hours of now — only id, title, start, end, and whether it is in progress — to offer them when a recording starts; nothing else from the knowledge base SHALL be readable with a device token.
+
+#### Scenario: Offer at recording start
+- **WHEN** the Mac asks for meetings around now at 15:02
+- **THEN** it receives today's nearby meetings with "15:00 Quokka sync" marked in progress, and no attendees, notes or other data
+
+### Requirement: Recordings can be linked to a meeting or marked
+A recording SHALL be linkable to a chosen meeting when it is registered, and re-linkable or markable with a project afterwards, by its device (its own recordings) and by the owner on the recording's page in the web OS; moving a recording SHALL move its transcript, audio and search item, and re-run processing for the new meeting.
+
+#### Scenario: Re-linked in the web OS
+- **WHEN** the owner opens an unscheduled call in the web OS and picks yesterday's "Dealer call" meeting
+- **THEN** the recording appears on that meeting's page with its audio, and its summary and actions are redone for that meeting
+
 ### Requirement: Recording coverage and cost on Status
 Status SHALL show, per week, how many calendar meetings with other attendees have a recording, and the transcription spend of the month split into dictation and calls (on-device transcription counts as free).
 

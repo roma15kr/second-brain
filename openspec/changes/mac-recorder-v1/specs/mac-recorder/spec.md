@@ -19,6 +19,28 @@ The app SHALL start and stop a recording with a global hotkey (default ⌃⌥R) 
 - **WHEN** the owner records a Google Meet call in a browser
 - **THEN** the other participants are on the "others" track like with any desktop app
 
+### Requirement: Link a recording to a meeting
+When a recording starts, the app SHALL offer the owner's calendar meetings around now (the one in progress first, the previous and next ones) to link the recording to, with "Automatic" as the default (matched by time on the server). The owner SHALL be able to change the linked meeting, or set a project for a call without a meeting, from the app's list of recent recordings until and after delivery.
+
+#### Scenario: Picked at start
+- **WHEN** the owner starts recording at 15:02 and picks "15:00 Quokka sync" from the offered meetings
+- **THEN** the transcript and audio are attached to that meeting even if the call ran past its end time
+
+#### Scenario: Call without a meeting
+- **WHEN** the owner records a Telegram call that is not in the calendar and sets the project "rdim" in the recent list
+- **THEN** the call is saved as an unscheduled call marked rdim
+
+#### Scenario: Corrected later
+- **WHEN** a recording was matched automatically to the wrong meeting and the owner picks another one
+- **THEN** the recording moves to the chosen meeting in the second brain
+
+### Requirement: Audio is stored on the owner's server
+Both audio tracks of every recording and import SHALL be uploaded to the owner's server and kept there (12 months, in backups, playable beside the transcript), whichever transcription engine is used; the Mac's copy SHALL be deleted only after the server confirmed the complete upload. Dictation audio SHALL not be stored; only its text is kept.
+
+#### Scenario: Local transcription
+- **WHEN** a call is transcribed on the Mac
+- **THEN** its "me" and "others" audio tracks are still on the server and play on the meeting page
+
 ### Requirement: Recording survives interruptions
 A recording SHALL be written to disk continuously; if the app quits, the Mac sleeps or the microphone changes, the part recorded so far SHALL be kept and finished as a recording. Recording SHALL stop automatically after 4 hours, with a notification.
 

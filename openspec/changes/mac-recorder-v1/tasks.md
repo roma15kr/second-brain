@@ -9,7 +9,8 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 
 - [ ] 1.1 Migration: `dictations.device_id`, `transcription_costs`; `POST /api/devices/dictations` (raw audio, `form` = verbatim/clean/structured; OpenAI `gpt-transcribe` via `kb.dictation`; audio not kept; redacted; budget-aware; in the dictation history; device reads only its own result); dictation transcription cost recorded; verify `test_device_dictation_forms`, `test_device_dictation_over_budget_returns_verbatim`, `test_device_dictation_audio_not_kept`, `test_device_token_still_cannot_read_kb`
 - [ ] 1.2 `kb.transcription` providers (OpenAI mini / gpt-transcribe / diarize, Groq via OpenAI-compatible endpoint when `GROQ_API_KEY` is set) with cost; migration `transcription_jobs`; `POST /api/devices/recordings/{id}/transcribe {speakers}` (own recordings, uploaded tracks); routines job replaces segments per track, records cost, re-processes; call provider setting in Settings; month spend includes transcription; verify `test_cloud_transcription_replaces_segments_and_records_cost`, `test_groq_provider_uses_openai_compatible_endpoint`, `test_speakers_use_diarize_for_others_track`, `test_transcribe_refuses_other_devices_and_missing_audio`, `test_month_spend_includes_transcription`
-- [ ] 1.3 Status: meetings with attendees vs meetings with a recording per week; transcription spend this month by kind (dictation, calls); verify `test_status_recording_coverage_and_spend`, `Status.test.tsx` case
+- [ ] 1.3 Meetings for devices and linking: `GET /api/devices/meetings?around=now` (±12 h, minimal fields), `event_id` at registration, `POST /api/devices/recordings/{id}/link` (own recordings) and owner `POST /api/recordings/{id}/link` (meeting or project; re-index, re-process, stale task drafts discarded); meeting picker and project select on the recording page in the web OS; verify `test_device_meetings_minimal_fields`, `test_device_token_reads_only_meetings`, `test_relink_moves_recording_and_reprocesses`, `test_link_refuses_other_devices`, `Meetings.test.tsx` re-link case
+- [ ] 1.4 Status: meetings with attendees vs meetings with a recording per week; transcription spend this month by kind (dictation, calls); verify `test_status_recording_coverage_and_spend`, `Status.test.tsx` case
 
 ## 2. Mac app skeleton, CI and install
 
@@ -30,6 +31,7 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 ## 5. Delivery
 
 - [ ] 5.1 Item store and state machine, uploader (register with idempotency key, announce/HEAD/PUT 8 MB chunks, resume on 409/offline, 401 → paused), Cloud mode (register, upload, request `/transcribe`), "Separate speakers" with cost estimate, local audio cleanup 7 days after delivery, menu list with reasons; verify `UploaderTests` (URLProtocol mock incl. 409 and offline), `StateMachineTests`, `CloudModeTests`, `CleanupTests`
+- [ ] 5.2 Meeting choice: at recording start the menu offers meetings around now (in progress first, "Automatic" default), sent as `event_id`; recent recordings list with "Change meeting" / "Set project" before and after delivery; verify `MeetingPickerTests` (fake server list, offline → Automatic only), `RelinkTests`
 
 ## 6. Dictation
 
@@ -42,7 +44,7 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 ## 8. Docs and acceptance
 
 - [ ] 8.1 ADR 0014 amendment (Mac first, iPhone later; calls on-device with Parakeet, dictation via OpenAI, cloud fallback), `docs/architecture.md`, `docs/external/README.md` (Mac permissions, certificate, macOS CI minutes, optional `GROQ_API_KEY`), STATUS; verify `openspec validate --all`
-- [ ] 8.2 Owner acceptance on the Mac: install, pair, change a hotkey; record a Zoom, a Telegram and a Meet call (both tracks; note the measured speed and CPU/GPU choice); compare 2–3 real calls Parakeet vs OpenAI gpt-transcribe and decide the call engine (Mac / OpenAI / Groq); dictate into Telegram and mail (uk, ru, mixed; as said / cleaned / structured; once offline); import an iPhone call recording and a watched voice memo; go offline and back; Live mode once; record results and costs in STATUS
+- [ ] 8.2 Owner acceptance on the Mac: install, pair, change a hotkey; record a Zoom, a Telegram and a Meet call (both tracks; pick the meeting at the start once, re-link one afterwards, mark one unscheduled call with a project; check both audio tracks play on the meeting page; note the measured speed and CPU/GPU choice); compare 2–3 real calls Parakeet vs OpenAI gpt-transcribe and decide the call engine (Mac / OpenAI / Groq); dictate into Telegram and mail (uk, ru, mixed; as said / cleaned / structured; once offline); import an iPhone call recording and a watched voice memo; go offline and back; Live mode once; record results and costs in STATUS
 
 ## Workflow follow-up
 
