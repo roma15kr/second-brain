@@ -41,11 +41,11 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 
 ## 7. Imports
 
-- [ ] 7.1 Drag & drop and "Import…" (m4a, mp3, wav, caf, ogg), kind choice, watched folder (bookmark + FSEvents, imported once, Full Disk Access hint for Voice Memos); verify `ImportDedupTests`, `WatchedFolderTests` (temporary folder)
+- [x] 7.1 Drag & drop and "Import…" (m4a, mp3, wav, caf, ogg), kind choice, watched folder (bookmark + FSEvents, imported once, Full Disk Access hint for Voice Memos); verify `ImportDedupTests`, `WatchedFolderTests` (temporary folder)
 
 ## 8. Docs and acceptance
 
-- [ ] 8.1 ADR 0014 amendment (Mac first, iPhone later; calls on-device with Parakeet, dictation via OpenAI, cloud fallback), `docs/architecture.md`, `docs/external/README.md` (Mac permissions, certificate, macOS CI minutes, optional `GROQ_API_KEY`), STATUS; verify `openspec validate --all`
+- [x] 8.1 ADR 0014 amendment (Mac first, iPhone later; calls on-device with Parakeet, dictation via OpenAI, cloud fallback), `docs/architecture.md`, `docs/external/README.md` (Mac permissions, certificate, macOS CI minutes, optional `GROQ_API_KEY`), STATUS; verify `openspec validate --all`
 - [ ] 8.2 Owner acceptance on the Mac: install, pair, change a hotkey; record a Zoom, a Telegram and a Meet call (both tracks; pick the meeting at the start once, create a new meeting for one spontaneous call, re-link one afterwards, mark one unscheduled call with a project; check both audio tracks play on the meeting page; note the measured speed and CPU/GPU choice); compare 2–3 real calls Parakeet vs OpenAI gpt-transcribe and decide the call engine (Mac / OpenAI / Groq); dictate into Telegram and mail (uk, ru, mixed; as said / cleaned / structured; once offline); import an iPhone call recording and a watched voice memo; go offline and back; Live mode once; record results and costs in STATUS
 
 ## Workflow follow-up

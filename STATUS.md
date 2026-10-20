@@ -1,10 +1,11 @@
 # Status
-_Last updated: 2026-10-19 by Claude_
+_Last updated: 2026-10-20 by Claude_
 
 ## Current focus
 - **Everything built, waiting for the owner's acceptance test** (one consolidated list below, owner asked to
   test at the end). `web-os-v1`: 36/40 tasks (left: real-device checks 11.3, 12.1, 12.2 and acceptance 14.1).
   `assistant-command-v1`: 10/13 (left: 1.3, 4.3, 5.2 real-device checks). `v1-mail-telegram-search`: 29/30 (10.3).
+  `mac-recorder-v1`: all built (server + Mac app, CI green on macOS); left: owner acceptance on the Mac (8.2).
 - Production: Coolify app `second-brain` (uuid sgu30h2aphvigaaehbsvvjvg), branch `main`.
   Web OS https://os.zhukovsky.biz (passkeys) · MCP https://kb.zhukovsky.biz/mcp (token + lockout) · Cloudflare-proxied.
 
@@ -16,11 +17,38 @@ _Last updated: 2026-10-19 by Claude_
 5. Connectors → Calendars: Google secret address and/or iCloud app-specific password; mark calendars; a meeting
    with attendees shows prep 30 min before and a reminder push 10 min before (14.1).
 6. Settings → Working hours; morning brief shows focus blocks; evening wrap warns about a heavy tomorrow.
-7. Settings → Recorder apps: pairing works once the recorder apps exist (`voice-apps-v1`); until then, attach notes
-   or a .vtt/.docx to a meeting → summary, decisions, your loops, team task drafts.
+7. Mac recorder (mac-recorder-v1 8.2) — install: download `Second-Brain-Recorder.dmg` from the GitHub release
+   `mac-latest` (drag to Applications; first open: System Settings → Privacy & Security → Open Anyway; the app
+   downloads the 0.5 GB speech model itself) **or** run `mac/install.sh` (keeps permissions across updates if Xcode
+   has your Apple ID). Then:
+   a. Pair: web OS Settings → Recorder apps → Pair a device → code into the app's Settings. Change a hotkey (try ⌥Space;
+      ⌘Space must be refused).
+   b. Record a Zoom, a Telegram and a Google Meet call (⌃⌥R): pick the meeting once from "Record for a meeting", create
+      "New meeting…" for one spontaneous call, re-link one afterwards ("Change meeting"), mark one unscheduled call with
+      a project ("Set project"). On the web meeting page: transcript with me/others lines, both audio tracks play.
+   c. Note Settings → "Measured speed" (CPU or GPU) and how long a 60–90 min call took (shown in the recent list).
+   d. Quality: compare 2–3 real calls Parakeet vs cloud (Settings → Cloud, or "Separate speakers…") and decide the
+      call engine (Mac / OpenAI / Groq).
+   e. Dictate (⌃⌥D, hold or press twice) into Telegram and mail: Ukrainian, Russian, mixed; cleaned and structured
+      (⇧⌃⌥D); once with Wi-Fi off (typed as said + notification); once with no text field (clipboard notice).
+   f. Import an iPhone call recording (Import recordings… → Call) and watch the Voice Memos folder (may need Full Disk
+      Access); a new memo arrives once.
+   g. Go offline during delivery and back; Live captions once (Settings → Live captions); unplug power after a call
+      (transcription waits unless "Transcribe on battery").
+   h. Check Status: recording coverage and transcription spend.
 8. Library: upload the constitution and 2026 plans, confirm goals (goal links in priority and the weekly audit
    need confirmed goals).
 9. v1 10.3: 30 evaluation questions → `kb eval`.
+
+## Done recently (2026-10-20)
+- `mac-recorder-v1` (PR #43 server; Mac app on branch `change/mac-recorder-v1`): Swift package `mac/` — menu-bar app
+  with pairing (Keychain), changeable Carbon hotkeys, two-track recording (AVAudioEngine mic + Core Audio process tap,
+  ScreenCaptureKit fallback) in 5-min AAC segments with gap padding and crash recovery, Parakeet v3 via sherpa-onnx
+  (dlopen; VAD, ≤30 s phrases, me/others merge, CPU vs GPU measured), low-priority scheduling (pauses for calls,
+  dictation, battery), Live captions, resumable delivery with both tracks, Cloud mode and "Separate speakers…",
+  meeting picker / New meeting / re-link / project, dictation via the server with offline Parakeet fallback, imports
+  (drop, picker, watched folder). CI (`.github/workflows/mac.yml`): unit tests, install dry run, real speech check
+  (Ukrainian sample transcribed exactly), universal `.dmg` → `mac-latest` release from `main`.
 
 ## Done recently (2026-10-19)
 - ClickUp feedback: the owner's inbox is rebuilt (involved tasks from every list, not only synced ones), DMs, group
@@ -96,7 +124,9 @@ _Last updated: 2026-10-19 by Claude_
 4. Owner: add reserve storage → off-site copy of `/backups` (now including `/backups/audio`) + Vaultwarden export.
 5. Owner: check `gpt-transcribe` price vs `llm.transcribe_usd_per_minute` (0.006).
 6. After acceptance: archive `web-os-v1`, `assistant-command-v1`, `v1-mail-telegram-search` (owner).
-7. Next changes: `voice-apps-v1` (macOS/iOS recorder apps against the device API), GitHub/Karakeep, metrics warehouse.
+7. After the Mac acceptance: decide the call engine; archive `mac-recorder-v1`; after 4 weeks check its success metric
+   on Status (≥ 90% of meetings recorded, ≤ $10/month transcription).
+8. Next changes: iPhone recorder (later, ADR 0014 amendment), GitHub/Karakeep, metrics warehouse.
 
 ## Open questions
 - AI scope classifier (planned in v1 design, never wired): build it, or keep rules + unsorted review?
@@ -111,8 +141,11 @@ _Last updated: 2026-10-19 by Claude_
   root-owned volumes `kb-dictations`/`kb-audio` can be deleted in Coolify.
 - Dictation and recorder audio use volumes `kb-dictation-files` and `kb-audio-files` (web + routines; backup
   mounts `kb-audio` read-only); a new service that needs them must mount them too.
-- `/api/devices/*` bypasses the session middleware on purpose (device bearer tokens, upload only); never add a
-  read endpoint under that prefix.
+- `/api/devices/*` bypasses the session middleware on purpose (device bearer tokens, upload only); the one read is
+  `GET /api/devices/meetings` (titles/times ±12 h); never add another read endpoint under that prefix.
+- Mac app code cannot be compiled here: push and read the `Mac recorder` workflow (macos-15). sherpa-onnx's VAD must
+  get one 512-sample window per call (bigger blocks merge into one speech decision). The `.dmg` must be built with
+  `--arch arm64 --arch x86_64` (runners are Apple Silicon, the owner's Mac is Intel).
 - Focus blocks appear only when at least one calendar is marked for sync.
 - Mail executors (Save to Drafts, Send) run in the `routines` service: it needs IMAP_USER_MAIN/IMAP_PASSWORD_MAIN; a send leaves 10–40 s after the tap (30 s cycle).
 - Test DB: schema is built once per session; each test empties tables with DELETE (TRUNCATE costs ~3 s per test). `make check` ≈ 4 min.

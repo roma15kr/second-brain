@@ -34,5 +34,10 @@ Things outside this repository that agents need to know exist. NAMES only, never
   - Google Calendar secret iCal address — read-only calendar feed, no OAuth (Settings → Integrate calendar); resetting it in Google breaks sync until replaced
   - Web Push services (Apple, Google, Mozilla push endpoints) — deliver notifications to subscribed devices; no content in payloads
   - Reserve storage (S3-compatible, different provider/region than the server; provider TBD) — Coolify Postgres backups and nightly encrypted Vaultwarden export; its credentials are in the printed emergency kit, not only in the vault
-  - Recorder apps (`voice-apps-v1`, to be built) — pair in Settings → Recorder apps; upload-only API under `/api/devices/*` with a device token
+  - Mac recorder (`mac-recorder-v1`) — pair in the web OS Settings → Recorder apps; device token (upload-only plus meetings around now) kept in the Mac's Keychain
+  - GitHub Actions macOS runners (`macos-15`) — build/test `mac/`, run the real speech check and build the `.dmg`; free because the repository is public. The `.dmg` is published as the `mac-latest` release from `main`
+  - k2-fsa/sherpa-onnx GitHub releases — the pinned speech runtime (v1.13.8) and the Parakeet TDT 0.6B v3 int8 model + Silero VAD (`asr-models` release); checksums pinned in `mac/install.sh` and `mac/Sources/SpeechKit/ModelInstaller.swift`
+  - Apple Development certificate (free; Xcode → Settings → Accounts → any Apple ID) — `install.sh` signs with it so macOS keeps the recorder's permissions across updates; without it (and for the `.dmg`) the app is ad-hoc signed
+  - macOS permissions the recorder asks for: Microphone, System Audio Recording (Screen & System Audio Recording), Accessibility (typing dictation); Full Disk Access only to watch the Voice Memos folder
+  - Groq (optional) — `GROQ_API_KEY` in Coolify enables the `groq` call provider (Whisper large-v3-turbo, OpenAI-compatible API at api.groq.com); only needed if calls move to the cloud
 - Test accounts: none yet.
