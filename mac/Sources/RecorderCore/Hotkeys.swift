@@ -259,7 +259,7 @@ public struct DictationGesture: Sendable {
     public mutating func release(at t: TimeInterval) -> Output? {
         switch phase {
         case let .pressed(start):
-            if t - start >= Self.holdThreshold {
+            if t - start >= Self.holdThreshold - 1e-6 {  // float timestamps
                 phase = .idle
                 return .stop
             }
