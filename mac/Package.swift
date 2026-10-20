@@ -14,7 +14,9 @@ let package = Package(
     targets: [
         .target(name: "RecorderCore"),
         .target(name: "CSherpaOnnx"),
-        .executableTarget(name: "SecondBrainRecorder", dependencies: ["RecorderCore", "CSherpaOnnx"]),
+        .target(name: "SpeechKit", dependencies: ["RecorderCore", "CSherpaOnnx"]),
+        .executableTarget(name: "SecondBrainRecorder", dependencies: ["RecorderCore", "SpeechKit"]),
+        .executableTarget(name: "speech-check", dependencies: ["RecorderCore", "SpeechKit"]),
         .testTarget(name: "RecorderCoreTests", dependencies: ["RecorderCore"]),
     ],
     swiftLanguageModes: [.v5]

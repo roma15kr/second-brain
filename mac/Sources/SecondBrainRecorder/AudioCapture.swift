@@ -3,44 +3,7 @@ import CoreAudio
 import Foundation
 import RecorderCore
 import ScreenCaptureKit
-
-struct CaptureError: LocalizedError {
-    let message: String
-    var errorDescription: String? { message }
-}
-
-/// Converts any PCM buffer to 16 kHz mono Float32 (what the segment files and models use).
-final class Resampler {
-    static let target = AVAudioFormat(
-        commonFormat: .pcmFormatFloat32, sampleRate: RecorderCore.sampleRate, channels: 1, interleaved: false)!
-    private var converter: AVAudioConverter?
-    private var from: AVAudioFormat?
-
-    func convert(_ buffer: AVAudioPCMBuffer) -> [Float] {
-        if from != buffer.format {
-            from = buffer.format
-            converter = AVAudioConverter(from: buffer.format, to: Self.target)
-            converter?.downmix = true
-        }
-        guard let converter, buffer.frameLength > 0 else { return [] }
-        let ratio = Self.target.sampleRate / buffer.format.sampleRate
-        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
-        guard let out = AVAudioPCMBuffer(pcmFormat: Self.target, frameCapacity: capacity) else { return [] }
-        var fed = false
-        var error: NSError?
-        converter.convert(to: out, error: &error) { _, status in
-            if fed {
-                status.pointee = .noDataNow
-                return nil
-            }
-            fed = true
-            status.pointee = .haveData
-            return buffer
-        }
-        guard error == nil, let data = out.floatChannelData else { return [] }
-        return Array(UnsafeBufferPointer(start: data[0], count: Int(out.frameLength)))
-    }
-}
+import SpeechKit
 
 /// The owner's microphone (AVAudioEngine); restarts on a device or route change (AirPods).
 final class MicrophoneSource: AudioSource {

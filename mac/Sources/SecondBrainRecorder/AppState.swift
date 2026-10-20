@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import RecorderCore
+import SpeechKit
 import SwiftUI
 
 @MainActor

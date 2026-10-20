@@ -4,7 +4,7 @@ import Foundation
 import RecorderCore
 
 /// sherpa-onnx loaded from the app bundle (Contents/Frameworks) with dlopen (design D3).
-final class SherpaRuntime: @unchecked Sendable {
+public final class SherpaRuntime: @unchecked Sendable {
     typealias CreateRecognizer = @convention(c) (UnsafePointer<SherpaOnnxOfflineRecognizerConfig>?) -> OpaquePointer?
     typealias Destroy = @convention(c) (OpaquePointer?) -> Void
     typealias CreateStream = @convention(c) (OpaquePointer?) -> OpaquePointer?
@@ -36,10 +36,12 @@ final class SherpaRuntime: @unchecked Sendable {
     let vadReset: Destroy
     let destroySegment: DestroySegment
 
-    static let shared: Result<SherpaRuntime, Error> = Result { try SherpaRuntime() }
+    public static let shared: Result<SherpaRuntime, Error> = Result { try SherpaRuntime() }
 
-    static var libraryURL: URL? {
-        Bundle.main.privateFrameworksURL?.appendingPathComponent("libsherpa-onnx-c-api.dylib")
+    /// In the app bundle's Frameworks, or `SBR_SHERPA_LIB` (the CI speech check).
+    public static var libraryURL: URL? {
+        if let path = ProcessInfo.processInfo.environment["SBR_SHERPA_LIB"] { return URL(fileURLWithPath: path) }
+        return Bundle.main.privateFrameworksURL?.appendingPathComponent("libsherpa-onnx-c-api.dylib")
     }
 
     private init() throws {
@@ -75,18 +77,20 @@ final class SherpaRuntime: @unchecked Sendable {
     }
 }
 
-enum Models {
-    static let parakeet = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
+public enum Models {
+    public static let parakeet = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
 
-    static var dir: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    /// Application Support, or `SBR_MODELS_DIR` (the CI speech check).
+    public static var dir: URL {
+        if let path = ProcessInfo.processInfo.environment["SBR_MODELS_DIR"] { return URL(fileURLWithPath: path) }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("SecondBrainRecorder/models")
     }
 
-    static var parakeetDir: URL { dir.appendingPathComponent(parakeet) }
-    static var vad: URL { dir.appendingPathComponent("silero_vad.onnx") }
+    public static var parakeetDir: URL { dir.appendingPathComponent(parakeet) }
+    public static var vad: URL { dir.appendingPathComponent("silero_vad.onnx") }
 
-    static var installed: Bool {
+    public static var installed: Bool {
         FileManager.default.fileExists(atPath: parakeetDir.appendingPathComponent("encoder.int8.onnx").path)
             && FileManager.default.fileExists(atPath: vad.path)
     }
@@ -104,11 +108,11 @@ private final class CStrings {
 }
 
 /// Parakeet TDT 0.6B v3 (uk/ru/en and more; punctuation and capitals included).
-final class ParakeetRecognizer: SpeechRecognizer {
+public final class ParakeetRecognizer: SpeechRecognizer {
     private let rt: SherpaRuntime
     private let recognizer: OpaquePointer
 
-    init(provider: String, threads: Int) throws {
+    public init(provider: String, threads: Int) throws {
         let rt = try SherpaRuntime.shared.get()
         self.rt = rt
         let s = CStrings()
@@ -132,7 +136,7 @@ final class ParakeetRecognizer: SpeechRecognizer {
 
     deinit { rt.destroyRecognizer(recognizer) }
 
-    func recognize(_ samples: [Float]) throws -> String {
+    public func recognize(_ samples: [Float]) throws -> String {
         guard !samples.isEmpty, let stream = rt.createStream(recognizer) else { return "" }
         defer { rt.destroyStream(stream) }
         samples.withUnsafeBufferPointer {
@@ -146,13 +150,13 @@ final class ParakeetRecognizer: SpeechRecognizer {
 }
 
 /// Silero VAD: speech chunks with their start, silence skipped.
-final class SileroVAD: VoiceDetector {
+public final class SileroVAD: VoiceDetector {
     private let rt: SherpaRuntime
     private let vad: OpaquePointer
     private var pending: [Float] = []
     static let window = 512
 
-    init() throws {
+    public init() throws {
         let rt = try SherpaRuntime.shared.get()
         self.rt = rt
         let s = CStrings()
@@ -174,7 +178,7 @@ final class SileroVAD: VoiceDetector {
 
     deinit { rt.destroyVad(vad) }
 
-    func accept(_ samples: [Float]) {
+    public func accept(_ samples: [Float]) {
         pending += samples
         let whole = pending.count / Self.window * Self.window
         guard whole > 0 else { return }
@@ -182,7 +186,7 @@ final class SileroVAD: VoiceDetector {
         pending.removeFirst(whole)
     }
 
-    func flush() {
+    public func flush() {
         if !pending.isEmpty {
             pending.withUnsafeBufferPointer { rt.vadAccept(vad, $0.baseAddress, Int32(pending.count)) }
             pending = []
@@ -190,7 +194,7 @@ final class SileroVAD: VoiceDetector {
         rt.vadFlush(vad)
     }
 
-    func pop() -> [SpeechChunk] {
+    public func pop() -> [SpeechChunk] {
         var out: [SpeechChunk] = []
         while rt.vadEmpty(vad) == 0 {
             if let seg = rt.vadFront(vad) {
@@ -205,15 +209,15 @@ final class SileroVAD: VoiceDetector {
         return out
     }
 
-    func reset() {
+    public func reset() {
         pending = []
         rt.vadReset(vad)
     }
 }
 
 /// Measures CPU vs Core ML on the model's own sample recordings (design D3).
-enum SpeechBenchmark {
-    static func run() -> [Benchmark] {
+public enum SpeechBenchmark {
+    public static func run() -> [Benchmark] {
         let wavs = ((try? FileManager.default.contentsOfDirectory(
             at: Models.parakeetDir.appendingPathComponent("test_wavs"), includingPropertiesForKeys: nil)) ?? [])
             .filter { $0.pathExtension == "wav" }

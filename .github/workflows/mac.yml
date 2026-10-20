@@ -22,3 +22,31 @@ jobs:
         run: swift test
       - name: "Install script (dry run: build, bundle, sign, verify)"
         run: ./install.sh --dry-run
+
+  # Real speech check: Silero VAD + Parakeet through the pinned sherpa-onnx on sample audio
+  # (downloads verified by install.sh, cached between runs).
+  speech:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/SecondBrainRecorder/downloads
+          key: speech-${{ hashFiles('mac/install.sh') }}
+      - name: Fetch speech runtime and models
+        run: ./install.sh --fetch-speech "$RUNNER_TEMP/speech"
+      - name: Build speech-check
+        run: swift build --product speech-check
+      - name: Transcribe samples
+        run: |
+          M="$RUNNER_TEMP/speech/models"
+          samples=("$M"/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/test_wavs/*.wav)
+          if say -v '?' | grep -q '^Lesya'; then
+            say -v Lesya -o "$RUNNER_TEMP/uk.aiff" "Добрий день. Давайте обговоримо ціни на жовтень і домовимося про наступну зустріч."
+            samples+=("$RUNNER_TEMP/uk.aiff")
+          fi
+          SBR_SHERPA_LIB="$RUNNER_TEMP/speech/lib/libsherpa-onnx-c-api.dylib" SBR_MODELS_DIR="$M" \
+            "$(swift build --show-bin-path)/speech-check" "${samples[@]}"

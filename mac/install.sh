@@ -4,6 +4,9 @@
 #   ./install.sh             build, download the speech runtime and model once, sign, install, open
 #   ./install.sh --dry-run   build and assemble the signed bundle in .build/dist only (used by CI):
 #                            no downloads, nothing copied to /Applications
+#   ./install.sh --fetch-speech DIR
+#                            only download and verify the speech runtime and models into DIR/lib
+#                            and DIR/models (CI's speech check)
 #
 # Needs the Xcode command line tools (xcode-select --install). For permissions that survive
 # updates, add an Apple ID in Xcode → Settings → Accounts once (a free "Apple Development"
@@ -26,12 +29,15 @@ VAD_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sile
 VAD_SHA256="9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
 
 DRY_RUN=0
-for arg in "$@"; do
-  case "$arg" in
+FETCH_DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --dry-run) DRY_RUN=1 ;;
-    -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
-    *) echo "unknown option: $arg" >&2; exit 2 ;;
+    --fetch-speech) FETCH_DIR="${2:?--fetch-speech needs a folder}"; shift ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
+  shift
 done
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -67,6 +73,33 @@ download() {
   echo "$file"
 }
 
+# fetch_speech <lib dir> <models dir>: runtime dylibs and models, checksums verified
+fetch_speech() {
+  local libdir="$1" models="$2" lib tmp model vad
+  step "Speech runtime (sherpa-onnx $SHERPA_VERSION)"
+  mkdir -p "$libdir" "$models"
+  lib="$(download "$SHERPA_URL" "$SHERPA_SHA256")"
+  tmp="$(mktemp -d)"
+  tar xjf "$lib" -C "$tmp"
+  cp "$tmp"/*/lib/libsherpa-onnx-c-api.dylib "$tmp"/*/lib/libonnxruntime*.dylib "$libdir/"
+  rm -rf "$tmp"
+  step "Speech model (Parakeet TDT 0.6B v3, about 0.5 GB, downloaded once)"
+  if [ ! -f "$models/$MODEL_NAME/encoder.int8.onnx" ]; then
+    model="$(download "$MODEL_URL" "$MODEL_SHA256")"
+    tar xjf "$model" -C "$models"
+  fi
+  vad="$(download "$VAD_URL" "$VAD_SHA256")"
+  cp "$vad" "$models/silero_vad.onnx"
+}
+
+if [ -n "$FETCH_DIR" ]; then
+  mkdir -p "$FETCH_DIR"
+  FETCH_DIR="$(cd "$FETCH_DIR" && pwd)"
+  fetch_speech "$FETCH_DIR/lib" "$FETCH_DIR/models"
+  step "Speech files ready in $FETCH_DIR"
+  exit 0
+fi
+
 step "Building (release)"
 (cd "$HERE" && swift build -c release --product SecondBrainRecorder)
 BIN="$(cd "$HERE" && swift build -c release --show-bin-path)/SecondBrainRecorder"
@@ -101,21 +134,7 @@ PLIST
 plutil -lint "$APP/Contents/Info.plist" >/dev/null || fail "Info.plist is not valid"
 
 if [ "$DRY_RUN" = 0 ]; then
-  step "Speech runtime (sherpa-onnx $SHERPA_VERSION)"
-  lib="$(download "$SHERPA_URL" "$SHERPA_SHA256")"
-  tmp="$(mktemp -d)"
-  tar xjf "$lib" -C "$tmp"
-  cp "$tmp"/*/lib/libsherpa-onnx-c-api.dylib "$tmp"/*/lib/libonnxruntime*.dylib "$APP/Contents/Frameworks/"
-  rm -rf "$tmp"
-
-  step "Speech model (Parakeet TDT 0.6B v3, about 0.5 GB, downloaded once)"
-  mkdir -p "$SUPPORT/models"
-  if [ ! -f "$SUPPORT/models/$MODEL_NAME/encoder.int8.onnx" ]; then
-    model="$(download "$MODEL_URL" "$MODEL_SHA256")"
-    tar xjf "$model" -C "$SUPPORT/models"
-  fi
-  vad="$(download "$VAD_URL" "$VAD_SHA256")"
-  cp "$vad" "$SUPPORT/models/silero_vad.onnx"
+  fetch_speech "$APP/Contents/Frameworks" "$SUPPORT/models"
 else
   step "Dry run: speech runtime and model downloads skipped"
 fi
