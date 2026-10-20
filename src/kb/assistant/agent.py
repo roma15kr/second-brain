@@ -225,6 +225,16 @@ TOOLS += [
 
 TOOLS += [
     _fn(
+        "draft_clickup_comment",
+        "Prepare a comment on a ClickUp task (item id from search) for the owner's approval; "
+        "optionally assign it to a teammate so ClickUp notifies them. Never posts by itself.",
+        {
+            "item_id": {"type": "integer"},
+            "body": {"type": "string"},
+            "assign_to": {**_NULLABLE_STR, "description": "teammate name or email"},
+        },
+    ),
+    _fn(
         "meetings",
         "The owner's calendar: meetings between two dates (Kyiv time), with attendees, call "
         "link and the owner's response. Use it for any question about meetings or the schedule.",

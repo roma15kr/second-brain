@@ -152,7 +152,72 @@ def approve(
             )
             raise
         return ref
+    if s["kind"] == "clickup_comment":
+        if clickup_client is None:
+            raise SuggestionError("ClickUp is not connected")
+        try:
+            ref = _post_comment(conn, sid, payload, clickup_client(), now, s["attempt_started_at"])
+        except Exception as e:
+            conn.execute(
+                "UPDATE suggestions SET status = 'failed', error = %s WHERE id = %s",
+                (str(e)[:500], sid),
+            )
+            raise
+        return ref
     raise SuggestionError(f"no executor for {s['kind']} yet")
+
+
+def _post_comment(
+    conn: Conn,
+    sid: int,
+    payload: dict[str, Any],
+    client: Any,
+    now: datetime,
+    previous_attempt: datetime | None,
+) -> str:
+    """Posts the approved comment once: after an interrupted attempt the task's newest comments
+    are checked for the same text first."""
+    text = str(payload.get("body") or "").strip()
+    if not text:
+        raise SuggestionError("the comment is empty")
+    task_id = str(payload["task_id"])
+    if previous_attempt is not None:
+        for c in client.comments(task_id)[-25:]:
+            if (c.get("comment_text") or "").strip().startswith(text):
+                ref = str(c.get("id"))
+                conn.execute(
+                    "UPDATE suggestions SET status = 'applied', applied_ref = %s WHERE id = %s",
+                    (ref, sid),
+                )
+                return ref
+    conn.execute(
+        "UPDATE suggestions SET status = 'applying', attempt_started_at = %s WHERE id = %s",
+        (now, sid),
+    )
+    # images: ClickUp cannot embed files in a comment via the API, so they are attached to the
+    # task and linked at the end of the comment (each uploaded once, also across retries)
+    links = []
+    for f in conn.execute(
+        "SELECT id, filename, mime, data, uploaded_url FROM suggestion_files"
+        " WHERE suggestion_id = %s ORDER BY id",
+        (sid,),
+    ).fetchall():
+        url = f["uploaded_url"]
+        if not url:
+            url = client.attach(task_id, f["filename"], bytes(f["data"]), f["mime"])
+            conn.execute(
+                "UPDATE suggestion_files SET uploaded_url = %s WHERE id = %s", (url, f["id"])
+            )
+        links.append(f"📎 {f['filename']}: {url}")
+    if links:
+        text = text + "\n\n" + "\n".join(links)
+    assignee = payload.get("assignee_id")
+    made = client.create_comment(task_id, text, int(assignee) if assignee else None)
+    ref = str(made.get("id") or "posted")
+    conn.execute(
+        "UPDATE suggestions SET status = 'applied', applied_ref = %s WHERE id = %s", (ref, sid)
+    )
+    return ref
 
 
 UNDO_SECONDS = 10
@@ -436,6 +501,15 @@ def listing(conn: Conn, status: str = "proposed", limit: int = 100) -> list[dict
         " ORDER BY coalesce(s.decided_at, s.created_at) DESC LIMIT %s",
         (statuses, status != "recent", limit),
     ).fetchall()
+    files: dict[int, list[dict[str, Any]]] = {}
+    for f in conn.execute(
+        "SELECT id, suggestion_id, filename, length(data) AS size FROM suggestion_files"
+        " WHERE suggestion_id = ANY(%s) ORDER BY id",
+        ([r["id"] for r in rows],),
+    ).fetchall():
+        files.setdefault(f["suggestion_id"], []).append(
+            {"id": f["id"], "filename": f["filename"], "size": f["size"]}
+        )
     return [
         {
             "id": r["id"],
@@ -446,6 +520,7 @@ def listing(conn: Conn, status: str = "proposed", limit: int = 100) -> list[dict
             "scopes": list(r["scopes"]),
             "item_id": r["item_id"],
             "item_title": r["item_title"],
+            "files": files.get(r["id"], []),
             "status": r["status"],
             "applied_ref": r["applied_ref"],
             "error": r["error"],
