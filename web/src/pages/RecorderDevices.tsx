@@ -13,6 +13,11 @@ type Device = {
   last_seen_at: string | null;
 };
 
+// The Mac recorder's disk image, rebuilt by CI from main (mac-recorder-v1).
+export const MAC_APP_URL =
+  "https://github.com/roma15kr/second-brain/releases/download/mac-latest/Second-Brain-Recorder.dmg";
+export const MAC_RELEASE_URL = "https://github.com/roma15kr/second-brain/releases/tag/mac-latest";
+
 // Settings › Recorder apps: pair the macOS / iOS recorder apps with a one-time code; revoke.
 export function RecorderDevices() {
   const queryClient = useQueryClient();
@@ -44,6 +49,18 @@ export function RecorderDevices() {
       <p className="muted">
         The recorder apps deliver call and meeting transcripts and voice notes here. A device can
         only upload; it cannot read your knowledge base.
+      </p>
+      <p>
+        <a className="btn" href={MAC_APP_URL}>
+          Download the Mac app (.dmg)
+        </a>{" "}
+        <a href={MAC_RELEASE_URL} target="_blank" rel="noreferrer">
+          release notes
+        </a>
+      </p>
+      <p className="muted">
+        Drag it to Applications. First open: System Settings → Privacy &amp; Security → Open Anyway.
+        The app downloads its speech model (0.5 GB) on first launch; then pair it with a code below.
       </p>
       <div className="row">
         <button className="btn" onClick={() => newCode.mutate()}>
