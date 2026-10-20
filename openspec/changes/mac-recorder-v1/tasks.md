@@ -33,7 +33,7 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 ## 5. Delivery
 
 - [x] 5.1 Item store and state machine, uploader (register with idempotency key, announce/HEAD/PUT 8 MB chunks, resume on 409/offline, 401 → paused), Cloud mode (register, upload, request `/transcribe`), "Separate speakers" with cost estimate, local audio cleanup 7 days after delivery, menu list with reasons; verify `UploaderTests` (URLProtocol mock incl. 409 and offline), `StateMachineTests`, `CloudModeTests`, `CleanupTests`
-- [ ] 5.2 Meeting choice: at recording start the menu offers meetings around now (in progress first, "Automatic" default) and "New meeting…" (title required, project, participants by name or email), sent as `event_id` or `new_meeting`; recent recordings list with "Change meeting" / "New meeting…" / "Set project" before and after delivery; offline → choices kept and sent on delivery; verify `MeetingPickerTests` (fake server list, offline), `NewMeetingFormTests`, `RelinkTests`
+- [x] 5.2 Meeting choice: at recording start the menu offers meetings around now (in progress first, "Automatic" default) and "New meeting…" (title required, project, participants by name or email), sent as `event_id` or `new_meeting`; recent recordings list with "Change meeting" / "New meeting…" / "Set project" before and after delivery; offline → choices kept and sent on delivery; verify `MeetingPickerTests` (fake server list, offline), `NewMeetingFormTests`, `RelinkTests`
 
 ## 6. Dictation
 
