@@ -18,6 +18,7 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 - [x] 2.1 `mac/` Swift package (app + library targets, universal), menu-bar shell, settings window, Keychain token store, pairing with a one-time code, "not paired" on 401; `.github/workflows/mac.yml` (macos-15: build + test on `mac/**`); verify CI green with `PairingTests`, `KeychainStoreTests` (in-memory backend)
 - [x] 2.2 `mac/install.sh`: release build, sherpa-onnx + Parakeet download with checksums, `.app` bundle with Info.plist usage strings, signing (Apple Development certificate if present, else ad-hoc with a warning), /Applications, Login Item; permissions screen (microphone, system audio, accessibility) with links to System Settings; verify CI runs `install.sh --dry-run` and `PermissionsModelTests`
 
+- [x] 2.3 Ready-to-install `.dmg` (owner request 2026-10-20): `install.sh --dmg` builds a universal (Intel + Apple Silicon) app with the speech runtime inside, ad-hoc signed; the app downloads the Parakeet model on first launch (checksums pinned, CI checks they match `install.sh`); CI builds it on every Mac change and publishes the `mac-latest` release from `main`; verify CI `dmg` job
 ## 3. Hotkeys and recording
 
 - [x] 3.1 Changeable hotkeys: Carbon registration, defaults ⌃⌥R / ⌃⌥D / ⇧, recorder fields in Settings, taken combinations refused with the previous kept, hold-vs-toggle for dictation; verify `HotkeyConfigTests` (persist, conflict, immediate re-register with a fake registrar), `HotkeyTimingTests`

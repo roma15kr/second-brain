@@ -105,8 +105,11 @@ if [ -n "$FETCH_DIR" ]; then
 fi
 
 step "Building (release)"
-(cd "$HERE" && swift build -c release --product SecondBrainRecorder)
-BIN="$(cd "$HERE" && swift build -c release --show-bin-path)/SecondBrainRecorder"
+ARCHS=()
+# the .dmg runs on Intel and Apple Silicon Macs (CI's runners are Apple Silicon)
+[ "$DMG" = 1 ] && ARCHS=(--arch arm64 --arch x86_64)
+(cd "$HERE" && swift build -c release --product SecondBrainRecorder ${ARCHS[@]+"${ARCHS[@]}"})
+BIN="$(cd "$HERE" && swift build -c release --show-bin-path ${ARCHS[@]+"${ARCHS[@]}"})/SecondBrainRecorder"
 [ -x "$BIN" ] || fail "build output not found at $BIN"
 
 step "Assembling $APP_NAME.app"
@@ -172,6 +175,7 @@ if [ "$DRY_RUN" = 1 ]; then
 fi
 
 if [ "$DMG" = 1 ]; then
+  lipo -info "$APP/Contents/MacOS/SecondBrainRecorder"
   step "Disk image"
   stage="$(mktemp -d)"
   cp -R "$APP" "$stage/"
