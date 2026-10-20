@@ -65,7 +65,7 @@ public struct DeviceAPI: Sendable {
         switch item.meeting {
         case let .event(id, _): eventId = id
         case let .new(m): newMeeting = m
-        case .automatic, .none: break
+        case .automatic, .noMeeting: break
         }
         let body = Registration(
             kind: item.kind.rawValue, startedAt: item.startedAt, endedAt: item.endedAt ?? item.startedAt,
@@ -89,7 +89,7 @@ public struct DeviceAPI: Sendable {
             switch meeting {
             case let .event(id, _): try c.encode(id, forKey: .eventId)
             case let .new(m): try c.encode(m, forKey: .newMeeting)
-            case .none?: try c.encodeNil(forKey: .eventId)
+            case .noMeeting?: try c.encodeNil(forKey: .eventId)
             case .automatic?, nil: break
             }
             try c.encodeIfPresent(scope, forKey: .scope)

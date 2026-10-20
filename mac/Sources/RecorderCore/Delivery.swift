@@ -33,8 +33,8 @@ public enum Delivery {
     /// The link to send right after registering: "no meeting" and a project are not part of the
     /// registration body.
     public static func initialLink(_ item: Item) -> LinkRequest? {
-        if item.meeting == .none || item.scope != nil {
-            return LinkRequest(meeting: item.meeting == .none ? MeetingChoice.none : nil, scope: item.scope)
+        if item.meeting == .noMeeting || item.scope != nil {
+            return LinkRequest(meeting: item.meeting == .noMeeting ? MeetingChoice.noMeeting : nil, scope: item.scope)
         }
         return nil
     }

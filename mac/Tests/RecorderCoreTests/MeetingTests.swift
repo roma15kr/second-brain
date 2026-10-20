@@ -58,8 +58,8 @@ final class RelinkTests: XCTestCase {
         var item = Item(kind: .call, startedAt: Date(), source: "", status: .delivered)
         item.recordingId = 42
         Relink.apply(&item, meeting: nil, scope: "rdim")
-        Relink.apply(&item, meeting: .none)
-        XCTAssertEqual(item.pendingLink, LinkRequest(meeting: MeetingChoice.none, scope: "rdim"))
+        Relink.apply(&item, meeting: .noMeeting)
+        XCTAssertEqual(item.pendingLink, LinkRequest(meeting: MeetingChoice.noMeeting, scope: "rdim"))
         XCTAssertEqual(Delivery.next(item, paired: true), .link)
     }
 

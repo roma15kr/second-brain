@@ -51,7 +51,7 @@ struct MeetingChoices: View {
             Button(Self.label(m)) { pick(.event(id: m.id, title: m.title)) }
         }
         if state.meetings.isEmpty { Text(state.isPaired ? "No meetings around now" : "Pair to see meetings") }
-        Button("No meeting") { pick(.none) }
+        Button("No meeting") { pick(.noMeeting) }
         Button("New meeting…", action: newMeeting)
     }
 

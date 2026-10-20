@@ -115,14 +115,14 @@ public enum MeetingChoice: Codable, Equatable, Sendable {
     case automatic  // matched by time on the server
     case event(id: Int, title: String)
     case new(NewMeeting)
-    case none  // explicitly not a meeting (unscheduled call)
+    case noMeeting  // explicitly not a meeting (unscheduled call)
 
     public var label: String {
         switch self {
         case .automatic: return "Automatic"
         case let .event(_, title): return title
         case let .new(m): return m.title
-        case .none: return "No meeting"
+        case .noMeeting: return "No meeting"
         }
     }
 }

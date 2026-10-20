@@ -135,7 +135,7 @@ final class DeliveryTests: XCTestCase {
     }
 
     func testUnscheduledCallWithProjectSendsExplicitNullMeeting() async throws {
-        var item = try makeItem(meeting: .none)
+        var item = try makeItem(meeting: .noMeeting)
         item.scope = "rdim"
         try store.save(item)
         _ = await runner.deliver(item.id)
@@ -202,8 +202,8 @@ final class StateMachineTests: XCTestCase {
         XCTAssertNil(Delivery.initialLink(i))
         i.scope = "rdim"
         XCTAssertEqual(Delivery.initialLink(i), LinkRequest(meeting: nil, scope: "rdim"))
-        i.meeting = .none
-        XCTAssertEqual(Delivery.initialLink(i), LinkRequest(meeting: MeetingChoice.none, scope: "rdim"))
+        i.meeting = .noMeeting
+        XCTAssertEqual(Delivery.initialLink(i), LinkRequest(meeting: MeetingChoice.noMeeting, scope: "rdim"))
     }
 
     func testErrors() {
