@@ -30,6 +30,8 @@ public final class SegmentedTrackWriter: @unchecked Sendable {
     public private(set) var firstSampleAt: Date?
     public private(set) var heardSound = false
     public private(set) var lastError: Error?
+    /// Everything written, silence padding included (Live mode transcribes exactly the file's audio).
+    public var onWrite: (([Float]) -> Void)?
 
     public init(dir: URL, factory: SegmentFileFactory, segmentSeconds: Double = SegmentedTrackWriter.segmentSeconds) {
         self.dir = dir
@@ -52,9 +54,14 @@ public final class SegmentedTrackWriter: @unchecked Sendable {
         lock.withLock {
             if firstSampleAt == nil { firstSampleAt = at }
             let pad = Self.zerosNeeded(elapsed: at.timeIntervalSince(firstSampleAt!), written: samplesWritten)
-            if pad > 0 { write([Float](repeating: 0, count: pad)) }
+            if pad > 0 {
+                let zeros = [Float](repeating: 0, count: pad)
+                write(zeros)
+                onWrite?(zeros)
+            }
             if !heardSound, samples.contains(where: { abs($0) > 1e-4 }) { heardSound = true }
             write(samples)
+            onWrite?(samples)
         }
     }
 
@@ -131,8 +138,8 @@ public final class Recorder: @unchecked Sendable {
     public private(set) var current: Item?
     private var writers: [String: SegmentedTrackWriter] = [:]
     private var sources: [AudioSource] = []
-    /// Extra consumers (Live mode): track name and samples.
-    public var onSamples: ((String, [Float]) -> Void)?
+    /// Extra consumer (Live mode): track name, samples as written, the track's offset.
+    public var onSamples: ((String, [Float], TimeInterval) -> Void)?
 
     public init(store: ItemStore, factory: SegmentFileFactory, sources: @escaping () -> (owner: AudioSource, others: AudioSource)) {
         self.store = store
@@ -155,10 +162,12 @@ public final class Recorder: @unchecked Sendable {
         var started: [AudioSource] = []
         for (name, src) in [("owner", owner), ("others", others)] {
             let writer = SegmentedTrackWriter(dir: store.url(item, name), factory: factory)
-            src.onSamples = { [weak self] samples, at in
-                writer.append(samples, at: at)
-                self?.onSamples?(name, samples)
+            let startedAt = item.startedAt
+            writer.onWrite = { [weak self, weak writer] samples in
+                let offset = max(0, (writer?.firstSampleAt ?? startedAt).timeIntervalSince(startedAt))
+                self?.onSamples?(name, samples, offset)
             }
+            src.onSamples = { samples, at in writer.append(samples, at: at) }
             do {
                 try src.start()
                 writers[name] = writer

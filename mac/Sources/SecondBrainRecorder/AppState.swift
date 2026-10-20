@@ -17,6 +17,7 @@ final class AppState: ObservableObject {
     @Published var speedLabel: String? = CallSettings.speedLabel
     lazy var pipeline = Pipeline(state: self)
     private var ticks = 0
+    private var live: LiveSession?
     var systemAudioWorked: Bool?
 
     let store: TokenStore = KeychainTokenStore()
@@ -107,7 +108,15 @@ final class AppState: ObservableObject {
     func startRecording(meeting: MeetingChoice) {
         do {
             let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+            live = nil
+            recorder.onSamples = nil
+            if CallSettings.liveMode && CallSettings.engine == "mac", let r = try? pipeline.transcriber.liveRecognizer() {
+                let session = LiveSession(recognizer: r)
+                live = session
+                recorder.onSamples = { session.feed($0, $1, $2) }
+            }
             try recorder.start(meeting: meeting, source: front, cloud: CallSettings.engine == "cloud", now: Date())
+            live?.captions.show()
             isRecording = true
             pipeline.flags.recording = true
             elapsed = 0
@@ -124,7 +133,19 @@ final class AppState: ObservableObject {
             isRecording = false
             pipeline.flags.recording = false
             refreshPermissions()
-            Task { await finish(item) }
+            let session = live
+            live = nil
+            recorder.onSamples = nil
+            Task {
+                if let session, let transcript = await session.finish() {
+                    _ = try? itemStore.update(item.id) {
+                        $0.segments = transcript
+                        $0.note = "Transcribed live"
+                    }
+                }
+                session?.captions.close()
+                await finish(itemStore.load(item.id) ?? item)
+            }
         } catch {
             lastError = error.localizedDescription
         }
@@ -157,6 +178,7 @@ final class AppState: ObservableObject {
                 item.reason = "Could not join the \(name) track: \(error.localizedDescription)"
             }
         }
+        if item.segments != nil && item.status == .recorded { item.status = .transcribed }
         try? itemStore.save(item)
         reloadItems()
         processQueue()

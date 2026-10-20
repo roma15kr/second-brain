@@ -65,6 +65,13 @@ final class CallTranscriber: @unchecked Sendable {
         return r
     }
 
+    /// A recognizer for Live mode (its own instance: the after-call queue may be using the other).
+    func liveRecognizer() throws -> ParakeetRecognizer {
+        guard available else { throw CaptureError(message: "the speech model is not installed") }
+        let provider = CallSettings.provider
+        return try ParakeetRecognizer(provider: provider, threads: ProviderChoice.threads())
+    }
+
     /// Returns the merged "me"/"others" transcript and how long it took.
     func transcribe(_ item: Item, store: ItemStore) async throws -> (segments: [TranscriptSegment], seconds: Double) {
         try await withCheckedThrowingContinuation { continuation in
