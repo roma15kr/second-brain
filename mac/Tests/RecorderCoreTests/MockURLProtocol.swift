@@ -4,6 +4,7 @@ import Foundation
 final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handler: ((URLRequest) throws -> (Int, Data))?
     nonisolated(unsafe) static var requests: [URLRequest] = []
+    nonisolated(unsafe) static var headers: (URLRequest) -> [String: String] = { _ in [:] }
 
     static func session() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
@@ -14,6 +15,7 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     static func reset() {
         handler = nil
         requests = []
+        headers = { _ in [:] }
     }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -42,7 +44,7 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
         do {
             let (status, body) = try handler(req)
             let response = HTTPURLResponse(
-                url: req.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: nil)!
+                url: req.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: Self.headers(req))!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: body)
             client?.urlProtocolDidFinishLoading(self)

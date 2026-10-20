@@ -37,6 +37,9 @@ public struct Item: Codable, Equatable, Sendable, Identifiable {
     public var pendingLink: LinkRequest?  // a meeting/project change not yet sent
     public var importedFrom: String?
     public var note: String?
+    public var cloudRequested: Bool?  // the server was asked to transcribe (Cloud mode / speakers)
+    public var speakers: Bool?  // "Separate speakers" requested for this recording
+    public var audioRemoved: Bool?  // local audio deleted 7 days after delivery
 
     public init(
         id: UUID = UUID(), kind: Kind, startedAt: Date, source: String, meeting: MeetingChoice = .automatic,

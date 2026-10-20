@@ -178,11 +178,18 @@ public final class SileroVAD: VoiceDetector {
 
     deinit { rt.destroyVad(vad) }
 
+    /// sherpa-onnx decides speech per call, so it gets one 512-sample window at a time.
     public func accept(_ samples: [Float]) {
         pending += samples
         let whole = pending.count / Self.window * Self.window
         guard whole > 0 else { return }
-        pending.withUnsafeBufferPointer { rt.vadAccept(vad, $0.baseAddress, Int32(whole)) }
+        pending.withUnsafeBufferPointer { buf in
+            var i = 0
+            while i < whole {
+                rt.vadAccept(vad, buf.baseAddress! + i, Int32(Self.window))
+                i += Self.window
+            }
+        }
         pending.removeFirst(whole)
     }
 
