@@ -48,8 +48,9 @@ week, and transcription spend per month.
     text is typed into the app in front, as said or cleaned up; with a modifier it is structured
     (summary, points, actions). Dictation uses OpenAI through the server.
   - **Link each recording to a meeting**: at the start the app offers the calendar meetings around
-    now (or "Automatic" matching by time); the meeting or project can be changed later in the app
-    or on the recording's page in the web OS.
+    now (or "Automatic" matching by time), or **"New meeting…" for a spontaneous call** (title,
+    project, participants); the meeting or project can be changed later in the app or on the
+    recording's page in the web OS, where meetings outside the calendar can also be created.
   - **All hotkeys can be changed** in Settings (recording, dictation, the structured modifier);
     taken combinations are refused with a message.
   - **Import** voice memos and call recordings: drag files onto the app, "Import…", or a watched

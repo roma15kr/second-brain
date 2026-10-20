@@ -34,6 +34,17 @@ When a recording starts, the app SHALL offer the owner's calendar meetings aroun
 - **WHEN** a recording was matched automatically to the wrong meeting and the owner picks another one
 - **THEN** the recording moves to the chosen meeting in the second brain
 
+### Requirement: Create a meeting for a spontaneous call
+Next to the offered calendar meetings, the app SHALL offer "New meeting…" when a recording starts and in the recent recordings afterwards: the owner enters a title (required), a project and optionally participants by name or email, and the recording is linked to that new meeting.
+
+#### Scenario: Unplanned call with a dealer
+- **WHEN** the owner starts recording an unplanned Telegram call and creates "Dealer — October prices", project quokka, participant "Oleh"
+- **THEN** a meeting with that title, project and participant appears in Meetings for the call's time, with the transcript and audio attached
+
+#### Scenario: Created after the call
+- **WHEN** the owner recorded with "Automatic" and no calendar meeting matched
+- **THEN** the owner can choose "New meeting…" on that recording in the recent list and the call moves to the new meeting
+
 ### Requirement: Audio is stored on the owner's server
 Both audio tracks of every recording and import SHALL be uploaded to the owner's server and kept there (12 months, in backups, playable beside the transcript), whichever transcription engine is used; the Mac's copy SHALL be deleted only after the server confirmed the complete upload. Dictation audio SHALL not be stored; only its text is kept.
 

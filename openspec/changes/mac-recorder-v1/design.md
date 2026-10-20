@@ -137,6 +137,23 @@ waiting (e.g. "waiting for power"), failed with reasons.
   and re-runs processing (summary, loops, task drafts for the new meeting; earlier task drafts
   from this recording that are still pending are discarded with reason "re-linked").
 
+### D7b. Meetings that are not in a calendar
+- A built-in calendar "Second brain": a `connector_accounts` row (kind `calendar`,
+  `settings.type = 'local'`, no secret) with one `calendars` row (sync on, mark per meeting),
+  created by migration; `calendar.sync_due` skips type `local` (nothing to fetch). Events in it are
+  ordinary `events` rows (uid `local-<uuid>`), so Meetings, prep, reminders (if in the future),
+  matching and processing work unchanged. Their project is stored per event (`events.scopes`
+  override, falling back to the calendar's) because one local calendar holds several projects.
+- Device: registering a recording may carry `new_meeting {title, scope, participants[]}`
+  instead of `event_id`; the server creates the event for the recording's time and links it.
+  `POST /api/devices/recordings/{id}/link` accepts the same `new_meeting` for "New meeting…" after
+  the call. Participants are names or emails; the server matches emails to identities and names to
+  people (unambiguous display name), stores them as attendees `{email?, name, person_id?}`.
+- Web OS: Meetings page "New meeting" (title, project, start/end, participants with People
+  autocomplete — the owner's session can read People), "Make a meeting" on an unscheduled call
+  (re-link to a new local event), and edit title/project/participants of local events only.
+  Connected Google/iCloud events stay read-only.
+
 ### D8. Imports
 Drag & drop on the menu-bar icon or window, "Import…" (`NSOpenPanel`), and an optional watched
 folder (security-scoped bookmark + FSEvents; for Voice Memos the owner selects
