@@ -1,4 +1,5 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { mockApi, renderApp } from "../test-utils";
 
 afterEach(() => {
@@ -123,4 +124,73 @@ test("a processed recording shows summary, decisions, actions and the transcript
   expect(screen.getByText("Update the listings")).toBeInTheDocument();
   expect(screen.getByText("01:02")).toBeInTheDocument();
   expect(screen.getByText("Attach notes or a transcript")).toBeInTheDocument();
+});
+
+const recording = {
+  id: 9,
+  kind: "call",
+  source: "Telegram",
+  title: "Call with Олена · 2026-10-20 15:00",
+  event_id: null,
+  started_at: "2026-10-20T12:00:00Z",
+  ended_at: "2026-10-20T12:30:00Z",
+  segments: [],
+  scopes: ["unsorted"],
+  notes: "",
+  item_id: 40,
+  result: null,
+  processed: false,
+  audio: [],
+};
+
+test("an unscheduled call can be attached to a nearby meeting or a new one", async () => {
+  window.history.pushState({}, "", "/recordings/9");
+  const linked: unknown[] = [];
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/recordings/9": recording,
+    "GET /api/meetings?around=2026-10-20T12%3A00%3A00Z&hours=36": { meetings: [meeting] },
+    "POST /api/recordings/9/link": (init?: RequestInit) => {
+      linked.push(JSON.parse(String(init?.body)));
+      return { event_id: 3, title: "RDIM sync", scopes: ["rdim"] };
+    },
+    "GET /api/meetings/3": meeting,
+  });
+  renderApp();
+  await userEvent.click(await screen.findByRole("button", { name: "Attach to a meeting" }));
+  await userEvent.click(await screen.findByRole("button", { name: /RDIM sync/ }));
+  await waitFor(() => expect(linked[0]).toEqual({ event_id: 3 }));
+  await waitFor(() => expect(window.location.pathname).toBe("/meetings/3"));
+});
+
+test("a spontaneous call gets a new meeting with participants", async () => {
+  window.history.pushState({}, "", "/recordings/9");
+  const linked: unknown[] = [];
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/recordings/9": recording,
+    "GET /api/meetings?around=2026-10-20T12%3A00%3A00Z&hours=36": { meetings: [] },
+    "GET /api/projects": { projects: [{ name: "quokka" }, { name: "rdim" }] },
+    "POST /api/recordings/9/link": (init?: RequestInit) => {
+      linked.push(JSON.parse(String(init?.body)));
+      return { event_id: 12, title: "Dealer — October prices", scopes: ["quokka"] };
+    },
+    "GET /api/meetings/12": { ...meeting, id: 12, title: "Dealer — October prices", local: true },
+  });
+  renderApp();
+  await userEvent.click(await screen.findByRole("button", { name: "Attach to a meeting" }));
+  await userEvent.click(await screen.findByRole("button", { name: "New meeting…" }));
+  await userEvent.type(screen.getByLabelText("Meeting title"), "Dealer — October prices");
+  await userEvent.type(screen.getByLabelText("Participants"), "Oleh, max@quokka.example");
+  await userEvent.click(screen.getByRole("button", { name: "Create and attach" }));
+  await waitFor(() =>
+    expect(linked[0]).toEqual({
+      new_meeting: {
+        title: "Dealer — October prices",
+        scope: "quokka",
+        participants: ["Oleh", "max@quokka.example"],
+      },
+    }),
+  );
+  expect(await screen.findByRole("button", { name: "Edit meeting" })).toBeInTheDocument();
 });

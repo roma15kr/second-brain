@@ -222,6 +222,43 @@ class Segment(BaseModel):
     text: str
 
 
+class NewMeeting(BaseModel):
+    title: str
+    scope: str | None = None
+    participants: list[str] = Field(default_factory=list)
+
+
+class LinkBody(BaseModel):
+    """`event_id: null` detaches; `new_meeting` creates a meeting outside the calendar; `scope`
+    alone marks the project of a call without a meeting."""
+
+    event_id: int | None = None
+    new_meeting: NewMeeting | None = None
+    scope: str | None = None
+
+
+def _link(conn: Conn, rid: int, body: LinkBody) -> dict[str, Any]:
+    try:
+        return recordings.link(
+            conn,
+            rid,
+            event_id=body.event_id,
+            unlink="event_id" in body.model_fields_set and body.event_id is None,
+            new_meeting=body.new_meeting.model_dump() if body.new_meeting else None,
+            scope=body.scope,
+        )
+    except recordings.RecordingError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/api/recordings/{rid}/link")
+def link(conn: Db, rid: int, body: LinkBody) -> dict[str, Any]:
+    """The owner moves a recording to another meeting, a new meeting, or marks its project."""
+    if not conn.execute("SELECT 1 FROM recordings WHERE id = %s", (rid,)).fetchone():
+        raise HTTPException(404, f"no recording {rid}")
+    return _link(conn, rid, body)
+
+
 class Upload(BaseModel):
     kind: Literal["call", "meeting", "voice_note"]
     started_at: datetime
@@ -231,6 +268,8 @@ class Upload(BaseModel):
     segments: list[Segment] = Field(default_factory=list)
     notes: str = ""
     idempotency_key: str | None = None
+    event_id: int | None = None  # the meeting chosen on the Mac (else matched by time)
+    new_meeting: NewMeeting | None = None  # "New meeting…" for a spontaneous call
 
 
 @router.post("/api/devices/recordings")
@@ -246,11 +285,29 @@ def upload(conn: Db, dev: Device, body: Upload) -> dict[str, int]:
             source=body.source,
             language=body.language,
             device=dev,
+            event_id=body.event_id,
             idempotency_key=body.idempotency_key,
         )
+        if body.new_meeting is not None and body.event_id is None:
+            # a new meeting beats the automatic time match (the call was spontaneous)
+            recordings.link(conn, rid, new_meeting=body.new_meeting.model_dump())
     except recordings.RecordingError as e:
         raise HTTPException(400, str(e)) from e
     return {"recording_id": rid}
+
+
+@router.get("/api/devices/meetings")
+def device_meetings(conn: Db, dev: Device) -> dict[str, Any]:
+    """The one read a device token gets: meetings within 12 hours, titles and times only."""
+    from kb import meetings
+
+    return {"meetings": meetings.around(conn, datetime.now(UTC))}
+
+
+@router.post("/api/devices/recordings/{rid}/link")
+def device_link(conn: Db, dev: Device, rid: int, body: LinkBody) -> dict[str, Any]:
+    _own(conn, dev, rid)
+    return _link(conn, rid, body)
 
 
 def _own(conn: Conn, dev: dict[str, Any], rid: int) -> dict[str, Any]:
@@ -341,3 +398,75 @@ async def chunk(request: Request, rid: int, track: str) -> Any:
                 return _audio_error(e, conn, rid, track)
 
     return await run_in_threadpool(work)
+
+
+@router.post("/api/devices/dictations", response_model=None)
+async def device_dictation(
+    request: Request,
+    form: Literal["verbatim", "clean", "structured"] = "verbatim",
+    seconds: float = 0,
+) -> Any:
+    """Dictated audio (raw body, Content-Type = the recorder's audio type) → text from OpenAI,
+    as said, cleaned or structured. The device reads back only this text."""
+    from starlette.concurrency import run_in_threadpool
+
+    from kb import dictation
+
+    data = await request.body()
+    mime = request.headers.get("content-type", "")
+    token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    state = request.app.state
+
+    def work() -> Any:
+        with state.connect() as conn:
+            dev = recordings.device_for(conn, token, datetime.now(UTC)) if token else None
+            if dev is None:
+                return JSONResponse({"detail": "unknown or revoked device"}, status_code=401)
+            try:
+                return dictation.for_device(
+                    conn,
+                    state.config,
+                    state.transcriber,
+                    state.dictation_llm,
+                    int(dev["id"]),
+                    data,
+                    mime,
+                    seconds,
+                    form,
+                    datetime.now(UTC),
+                )
+            except dictation.DictationError as e:
+                return JSONResponse({"detail": str(e)}, status_code=422)
+
+    return await run_in_threadpool(work)
+
+
+class TranscribeRequest(BaseModel):
+    speakers: bool = False
+    dry_run: bool = False  # only the cost estimate
+
+
+@router.post("/api/devices/recordings/{rid}/transcribe")
+def transcribe(conn: Db, dev: Device, rid: int, body: TranscribeRequest) -> dict[str, Any]:
+    """Cloud transcription of an uploaded recording (the Mac's "Cloud" mode or "Separate
+    speakers"); `dry_run` returns the estimate shown before the owner confirms."""
+    from kb import settings_store, transcription
+
+    rec = _own(conn, dev, rid)
+    provider = "openai-diarize" if body.speakers else settings_store.load(conn).calls_provider
+    seconds = conn.execute(
+        "SELECT coalesce(sum(duration_seconds), 0) AS s FROM recording_audio"
+        " WHERE recording_id = %s AND complete AND deleted_at IS NULL"
+        + (" AND track <> 'owner'" if body.speakers else ""),
+        (rid,),
+    ).fetchone()
+    estimate = transcription.estimate_usd(provider, float(seconds["s"] if seconds else 0))
+    if body.dry_run:
+        return {"provider": provider, "estimated_usd": estimate}
+    if not transcription.available(provider):
+        raise HTTPException(400, f"the call provider {provider!r} is not configured on the server")
+    try:
+        job = transcription.request(conn, rec, body.speakers)
+    except transcription.TranscriptionError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"job_id": job, "provider": provider, "estimated_usd": estimate}

@@ -17,7 +17,7 @@ from typing import Any, Protocol
 
 from psycopg.types.json import Jsonb
 
-from kb import distill
+from kb import distill, transcription
 from kb.config import Config
 from kb.db import Conn
 from kb.distill import StructuredLlm
@@ -72,7 +72,9 @@ def default_transcriber() -> Transcriber | None:
     return OpenAITranscriber() if os.environ.get("OPENAI_API_KEY") else None
 
 
-def store_upload(conn: Conn, data: bytes, mime: str, seconds: float) -> int:
+def store_upload(
+    conn: Conn, data: bytes, mime: str, seconds: float, device_id: int | None = None
+) -> int:
     base = mime.split(";")[0].strip().lower()
     if base not in EXT:
         raise DictationError(f"unsupported audio type {mime!r}")
@@ -81,8 +83,8 @@ def store_upload(conn: Conn, data: bytes, mime: str, seconds: float) -> int:
     if len(data) > MAX_BYTES:
         raise DictationError("the recording is too large (25 MB)")
     row = conn.execute(
-        "INSERT INTO dictations (mime, seconds) VALUES (%s, %s) RETURNING id",
-        (base, min(max(seconds, 0.0), MAX_SECONDS)),
+        "INSERT INTO dictations (mime, seconds, device_id) VALUES (%s, %s, %s) RETURNING id",
+        (base, min(max(seconds, 0.0), MAX_SECONDS), device_id),
     ).fetchone()
     assert row is not None
     did = int(row["id"])
@@ -119,6 +121,15 @@ def transcribe(
         "UPDATE dictations SET status = 'done', transcript = %s, error = NULL, cost_usd = %s,"
         " audio_path = NULL WHERE id = %s",
         (redact_text(text.strip()), cost, did),
+    )
+    transcription.record_cost(
+        conn,
+        "dictation",
+        "openai",
+        config.llm.transcribe_model,
+        float(row["seconds"]),
+        cost,
+        now.date(),
     )
     _delete_audio(row["audio_path"])
 
@@ -300,6 +311,44 @@ def render(
         (Jsonb({form: result}), distill.cost_usd(model, usage), did),
     )
     return result
+
+
+def for_device(
+    conn: Conn,
+    config: Config,
+    transcriber: Transcriber | None,
+    llm: StructuredLlm | None,
+    device_id: int,
+    data: bytes,
+    mime: str,
+    seconds: float,
+    form: str,
+    now: datetime,
+) -> dict[str, Any]:
+    """A dictation from a paired device, answered right away: transcribed with OpenAI, then as
+    said / cleaned / structured. The audio is never kept; if transcription fails the device types
+    its own local version, so the failed audio is not retried either."""
+    if form not in ("verbatim", *FORMS):
+        raise DictationError(f"unknown form {form!r}")
+    did = store_upload(conn, data, mime, seconds, device_id)
+    transcribe(conn, config, transcriber, did, now)
+    row = conn.execute("SELECT * FROM dictations WHERE id = %s", (did,)).fetchone()
+    assert row is not None
+    if row["status"] != "done":
+        _delete_audio(row["audio_path"])
+        conn.execute("UPDATE dictations SET audio_path = NULL WHERE id = %s", (did,))
+        raise DictationError(row["error"] or "transcription failed")
+    if form == "verbatim":
+        return {"id": did, "text": row["transcript"]}
+    try:
+        result = render(conn, config, llm, did, form, now)
+    except DictationError as e:  # over budget or no model: the device still gets the words
+        return {"id": did, "text": row["transcript"], "note": str(e)}
+    return {
+        "id": did,
+        "text": result["text"],
+        **({"note": result["note"]} if result.get("note") else {}),
+    }
 
 
 def _budget(conn: Conn, config: Config) -> float:

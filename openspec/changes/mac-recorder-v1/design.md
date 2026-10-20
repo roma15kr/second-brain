@@ -81,8 +81,10 @@ the paid program; one user).
 Settings → "Call transcription": **On this Mac** (default) or **Cloud**. In Cloud mode the app
 skips local transcription and, after both tracks are uploaded, calls
 `POST /api/devices/recordings/{id}/transcribe {speakers: false}`. The server's provider is a
-setting (`transcription.calls_provider`: `openai-mini` | `openai` | `groq`; default `openai-mini`),
-so switching between OpenAI and Groq needs no app change. Per recording, "Separate speakers"
+setting (`calls_provider`: `openai-diarize` | `openai-whisper` | `groq`; default `openai-diarize`),
+so switching between OpenAI and Groq needs no app change. Only providers that return timed
+segments can interleave the two tracks: OpenAI's `gpt-4o-mini-transcribe` and `gpt-transcribe`
+return text without timestamps, so they are used for dictation only (found while building 1.2). Per recording, "Separate speakers"
 (`{speakers: true}`) uses OpenAI `gpt-4o-transcribe-diarize` for the "others" track, with the
 estimated cost (speech minutes × price) shown before confirming.
 Server: `kb.transcription` with providers behind one function

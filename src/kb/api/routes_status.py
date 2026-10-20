@@ -8,7 +8,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 
-from kb import audio, distill, health, metrics, settings_store
+from kb import audio, distill, health, metrics, recordings, settings_store, transcription
 from kb.api.deps import get_conn
 from kb.assistant import proactive
 from kb.connectors import accounts
@@ -64,4 +64,8 @@ def status(request: Request, conn: Db) -> dict[str, Any]:
         "suggestions": proactive.acceptance(conn, now),
         "assistant": proactive.assistant_metric(conn, now),
         "audio": audio.storage(conn, now),
+        "recording": {
+            **recordings.coverage(conn, now),
+            "transcription_usd": transcription.month_by_kind(conn, now.date()),
+        },
     }

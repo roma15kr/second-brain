@@ -416,14 +416,18 @@ def cost_usd(model: str, usage: Usage) -> float:
 
 
 def month_spend_usd(conn: Conn, today: date | None = None) -> float:
-    """All server-side AI spend this calendar month (UTC), at list prices."""
+    """All server-side AI spend this calendar month (UTC), at list prices: language models plus
+    transcription."""
+    from kb import transcription
+
     day = today or datetime.now(UTC).date()
     rows = conn.execute(
         "SELECT model, sum(input_tokens) AS i, sum(output_tokens) AS o FROM llm_usage"
         " WHERE day >= %s AND day <= %s GROUP BY model",
         (day.replace(day=1), day),
     ).fetchall()
-    return sum(cost_usd(r["model"], Usage(int(r["i"]), int(r["o"]))) for r in rows)
+    models = sum(cost_usd(r["model"], Usage(int(r["i"]), int(r["o"]))) for r in rows)
+    return models + transcription.month_spend_usd(conn, day)
 
 
 def used_today(conn: Conn, source_id: str, day: date | None = None) -> int:

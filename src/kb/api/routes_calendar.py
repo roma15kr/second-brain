@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 
 from kb import meetings, people, scopes
 from kb.api.deps import get_conn
@@ -127,13 +128,59 @@ def disconnect(conn: Db, account_id: int) -> dict[str, bool]:
 
 
 @router.get("/api/meetings")
-def listing(conn: Db, days: int = 7) -> dict[str, Any]:
+def listing(
+    conn: Db, days: int = 7, around: datetime | None = None, hours: int = 36
+) -> dict[str, Any]:
+    """The next days' meetings, or (`around`) meetings near a moment — e.g. to re-link a call."""
     from kb.routines import KYIV
 
+    if around is not None:
+        span = timedelta(hours=max(1, min(hours, 24 * 7)))
+        return {"meetings": meetings.between(conn, around - span, around + span)}
     start = datetime.now(UTC).astimezone(KYIV).replace(hour=0, minute=0, second=0, microsecond=0)
     return {
         "meetings": meetings.between(conn, start, start + timedelta(days=max(1, min(days, 60))))
     }
+
+
+class MeetingBody(BaseModel):
+    title: str
+    scope: str | None = None
+    start: datetime
+    end: datetime
+    participants: list[str] = Field(default_factory=list)
+
+
+class MeetingPatch(BaseModel):
+    title: str | None = None
+    scope: str | None = None
+    participants: list[str] | None = None
+
+
+@router.post("/api/meetings")
+def create_meeting(conn: Db, body: MeetingBody) -> dict[str, int]:
+    """A meeting that is not in any connected calendar (kept in the built-in calendar)."""
+    try:
+        eid = meetings.create_local(
+            conn, body.title, body.scope, body.start, body.end, body.participants
+        )
+    except meetings.MeetingError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"id": eid}
+
+
+@router.patch("/api/meetings/{event_id}")
+def edit_meeting(conn: Db, event_id: int, body: MeetingPatch) -> dict[str, bool]:
+    """Title, project and participants of meetings created in the second brain only."""
+    from kb import recordings
+
+    try:
+        meetings.update_local(conn, event_id, body.title, body.scope, body.participants)
+    except meetings.MeetingError as e:
+        raise HTTPException(400, str(e)) from e
+    for r in conn.execute("SELECT id FROM recordings WHERE event_id = %s", (event_id,)).fetchall():
+        recordings.link(conn, int(r["id"]), event_id=event_id)  # title/project follow the meeting
+    return {"ok": True}
 
 
 @router.get("/api/meetings/{event_id}")

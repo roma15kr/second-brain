@@ -60,7 +60,8 @@ week, and transcription spend per month.
   optional **Live** mode shows captions phrase by phrase during the call. The app measures whether
   the Mac's CPU or GPU is faster and uses that.
 - **Cloud fallback for calls, switchable without rebuilding the app:** the server can transcribe
-  uploaded tracks with OpenAI (gpt-transcribe or mini) or Groq (Whisper large-v3-turbo); the owner
+  uploaded tracks with OpenAI (diarize or Whisper — the models that return timestamps, needed to
+  interleave "me" and "others") or Groq (Whisper large-v3-turbo); the owner
   chooses the call engine in the app (Mac / cloud) and the cloud provider on the server. Speaker
   separation (OpenAI diarize) can be requested per meeting, with the cost shown first.
 - **Audio is stored on the owner's server**: both tracks of every call and import, whatever engine
