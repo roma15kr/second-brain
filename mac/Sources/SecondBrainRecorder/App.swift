@@ -28,12 +28,46 @@ final class AppState: ObservableObject {
     @Published var permissions = PermissionsModel()
     var systemAudioWorked: Bool?
 
+    @Published var status: String?
+
     let store: TokenStore = KeychainTokenStore()
+    let registrar = CarbonRegistrar()
+    lazy var hotkeys = HotkeyConfig(store: UserDefaults.standard, registrar: registrar)
+    var gesture = DictationGesture()
+    var dictationStructured = false
 
     init() {
         isPaired = store.load() != nil
         refreshPermissions()
+        registrar.onEvent = { [weak self] action, pressed in
+            Task { @MainActor in self?.hotkey(action, pressed: pressed) }
+        }
+        let failed = hotkeys.registerAll()
+        if !failed.isEmpty {
+            lastError = "Hotkeys taken by another app: " + failed.map { hotkeys.combo($0).description }
+                .joined(separator: ", ") + ". Change them in Settings."
+        }
     }
+
+    func hotkey(_ action: HotkeyAction, pressed: Bool) {
+        let now = ProcessInfo.processInfo.systemUptime
+        switch action {
+        case .record:
+            if pressed { toggleRecording() }
+        case .dictate, .dictateStructured:
+            let output = pressed ? gesture.press(at: now) : gesture.release(at: now)
+            if output == .start { dictationStructured = action == .dictateStructured }
+            switch output {
+            case .start: startDictation(structured: dictationStructured)
+            case .stop: stopDictation()
+            case nil: break
+            }
+        }
+    }
+
+    func toggleRecording() { status = "Recording is not available yet" }
+    func startDictation(structured: Bool) { status = structured ? "Dictating (structured)…" : "Dictating…" }
+    func stopDictation() { status = nil }
 
     func refreshPermissions() {
         permissions = PermissionProbe.current(systemAudioWorked: systemAudioWorked)
@@ -72,6 +106,7 @@ struct MenuContent: View {
         }
         if let error = state.lastError { Text(error) }
         if let warning = state.permissions.menuWarning { Text(warning) }
+        if let status = state.status { Text(status) }
         Divider()
         SettingsLink { Text("Settings…") }
         Button("Quit") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
@@ -105,6 +140,8 @@ struct SettingsView: View {
                     .disabled(code.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             if let error = state.lastError { Text(error).foregroundStyle(.red) }
+            Divider()
+            HotkeySettings()
             Divider()
             PermissionsView()
         }
