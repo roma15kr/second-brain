@@ -109,7 +109,8 @@ final class ParakeetRecognizer: SpeechRecognizer {
     private let recognizer: OpaquePointer
 
     init(provider: String, threads: Int) throws {
-        rt = try SherpaRuntime.shared.get()
+        let rt = try SherpaRuntime.shared.get()
+        self.rt = rt
         let s = CStrings()
         var config = SherpaOnnxOfflineRecognizerConfig()
         config.feat_config.sample_rate = Int32(RecorderCore.sampleRate)
@@ -152,7 +153,8 @@ final class SileroVAD: VoiceDetector {
     static let window = 512
 
     init() throws {
-        rt = try SherpaRuntime.shared.get()
+        let rt = try SherpaRuntime.shared.get()
+        self.rt = rt
         let s = CStrings()
         var config = SherpaOnnxVadModelConfig()
         config.silero_vad.model = s(Models.vad.path)
