@@ -13,7 +13,8 @@ let package = Package(
     ],
     targets: [
         .target(name: "RecorderCore"),
-        .executableTarget(name: "SecondBrainRecorder", dependencies: ["RecorderCore"]),
+        .target(name: "CSherpaOnnx"),
+        .executableTarget(name: "SecondBrainRecorder", dependencies: ["RecorderCore", "CSherpaOnnx"]),
         .testTarget(name: "RecorderCoreTests", dependencies: ["RecorderCore"]),
     ],
     swiftLanguageModes: [.v5]
