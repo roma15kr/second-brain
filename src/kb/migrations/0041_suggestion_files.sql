@@ -1,4 +1,5 @@
--- Images the owner adds to a ClickUp comment draft; uploaded to the task only when approved.
+-- Images for ClickUp comment drafts (unused since 2026-10-20: the owner adds images in ClickUp
+-- itself via "Copy & open in ClickUp"); kept because migrations are never rewritten.
 CREATE TABLE suggestion_files (
     id bigserial PRIMARY KEY,
     suggestion_id bigint NOT NULL REFERENCES suggestions (id) ON DELETE CASCADE,

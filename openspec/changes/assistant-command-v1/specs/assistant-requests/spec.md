@@ -41,9 +41,13 @@ Email drafts (replies or new emails), ClickUp task drafts, ClickUp comment draft
 - **WHEN** the owner asks "write to dealer@example.com asking for the October price list"
 - **THEN** a new-email draft with that recipient appears for approval, from the mailbox the owner last used with that address or the default mailbox
 
-#### Scenario: ClickUp comment with images
-- **WHEN** the owner asks "comment in Time optimization for Bogdan to check the chart" and adds two screenshots to the draft
-- **THEN** the comment is posted only after approval, assigned to Bogdan, with the screenshots attached to the task and linked in the comment
+#### Scenario: ClickUp comment with a mention
+- **WHEN** the owner asks "comment in Time optimization: @Bogdan, send the link" and taps "Post comment"
+- **THEN** the comment is posted only then, with @Bogdan as a real ClickUp mention that notifies him
+
+#### Scenario: Finish the comment in ClickUp
+- **WHEN** the owner taps "Copy & open in ClickUp" on the draft
+- **THEN** nothing is posted by the system; the text is copied and the task opens in ClickUp to paste, add images and post
 
 #### Scenario: Task draft
 - **WHEN** the owner asks "task for Max: update the banners by Friday, Marketing list"

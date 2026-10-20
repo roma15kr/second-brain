@@ -140,35 +140,44 @@ test("a ClickUp comment draft is posted on approval", async () => {
   await waitFor(() => expect(posted).toEqual({ payload: { body: "Bogdan, please check" } }));
 });
 
-test("images can be added to a ClickUp comment draft", async () => {
+test("a ClickUp comment can be copied and finished in ClickUp instead of posted", async () => {
   window.history.pushState({}, "", "/assistant");
-  let files: { id: number; filename: string; size: number }[] = [];
-  let uploaded: { filename: string; mime: string; data: string } | null = null;
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  const open = vi.spyOn(window, "open").mockReturnValue(null);
+  let approved: unknown = null;
   mockApi({
     "GET /api/auth/me": me,
-    "GET /api/suggestions": () => ({
+    "GET /api/suggestions": {
       suggestions: [
         {
           ...reply,
-          id: 12,
+          id: 13,
           kind: "clickup_comment",
           item_title: "Time optimization",
-          payload: { item_id: 5, task_id: "86abc", body: "See the screenshots" },
-          files,
+          payload: {
+            item_id: 5,
+            task_id: "86abc",
+            body: "@Bogdan, please check",
+            link: "https://app.clickup.com/t/86abc",
+          },
         },
       ],
-    }),
+    },
     "GET /api/suggestions?status=recent": { suggestions: [] },
     "GET /api/assistant/threads": { threads: [] },
-    "POST /api/suggestions/12/files": (init?: RequestInit) => {
-      uploaded = JSON.parse(String(init?.body));
-      files = [{ id: 1, filename: "chart.png", size: 4 }];
-      return { id: 1 };
+    "POST /api/suggestions/13/approve": (init?: RequestInit) => {
+      approved = JSON.parse(String(init?.body));
+      return { applied_ref: "copied" };
     },
   });
   renderApp();
-  const input = await screen.findByLabelText("Add images");
-  await userEvent.upload(input, new File(["png!"], "chart.png", { type: "image/png" }));
-  expect(await screen.findByText(/chart\.png/)).toBeInTheDocument();
-  expect(uploaded).toEqual({ filename: "chart.png", mime: "image/png", data: btoa("png!") });
+  expect(screen.queryByLabelText("Add images")).not.toBeInTheDocument();
+  await userEvent.click(await screen.findByRole("button", { name: "Copy & open in ClickUp" }));
+  expect(writeText).toHaveBeenCalledWith("@Bogdan, please check");
+  expect(open).toHaveBeenCalledWith("https://app.clickup.com/t/86abc", "_blank", "noreferrer");
+  await waitFor(() =>
+    expect(approved).toEqual({ payload: { body: "@Bogdan, please check", mode: "copy" } }),
+  );
+  open.mockRestore();
 });

@@ -10,6 +10,7 @@ limit (429 → pause until the reset time, resume from the saved cursor).
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -153,18 +154,21 @@ class ClickUpClient:
     def create_task(self, list_id: str, body: dict[str, Any]) -> dict[str, Any]:
         return dict(self._req("POST", f"/list/{list_id}/task", json=body))
 
-    def attach(self, task_id: str, filename: str, data: bytes, mime: str) -> str:
-        """Uploads a file to the task's attachments; returns its URL."""
-        made = self._req(
-            "POST", f"/task/{task_id}/attachment", files={"attachment": (filename, data, mime)}
-        )
-        return str(made.get("url") or "")
-
     def create_comment(
-        self, task_id: str, text: str, assignee: int | None = None
+        self,
+        task_id: str,
+        text: str,
+        assignee: int | None = None,
+        members: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """A comment on a task (approved by the owner); assigning it notifies that person."""
-        body: dict[str, Any] = {"comment_text": text, "notify_all": False}
+        """A comment on a task (approved by the owner); "@Name" of a workspace member becomes a
+        real mention (a tag with their user id), and assigning the comment notifies that person."""
+        parts = comment_parts(text, members or {}, assignee)
+        body: dict[str, Any] = {"notify_all": False}
+        if any(p.get("type") == "tag" for p in parts):
+            body["comment"] = parts
+        else:
+            body["comment_text"] = text
         if assignee is not None:
             body["assignee"] = assignee
         return dict(self._req("POST", f"/task/{task_id}/comment", json=body))
@@ -337,6 +341,50 @@ def refresh_lists(conn: Conn, client: ClickUpClient, account: Account) -> int:
 
 def _ms(value: Any) -> datetime | None:
     return datetime.fromtimestamp(int(value) / 1000, UTC) if value else None
+
+
+_MENTION = re.compile(r"@([^\s@,.;:!?]+)(?:\s([^\s@,.;:!?]+))?")
+
+
+def comment_parts(
+    text: str, members: dict[str, dict[str, Any]], assignee: int | None = None
+) -> list[dict[str, Any]]:
+    """ClickUp's rich comment: text pieces and `tag` mentions. "@Name" (full or first name of a
+    member, unambiguous) becomes a tag; the assignee is tagged first when not mentioned."""
+    by_name: dict[str, list[str]] = {}
+    for member_id, member in members.items():
+        name = (member.get("username") or "").strip().lower()
+        if name:
+            by_name.setdefault(name, []).append(member_id)
+            by_name.setdefault(name.split()[0], []).append(member_id)
+
+    def who(candidate: str) -> str | None:
+        ids = set(by_name.get(candidate.lower(), []))
+        return next(iter(ids)) if len(ids) == 1 else None
+
+    parts: list[dict[str, Any]] = []
+    tagged: set[str] = set()
+    pos = 0
+    for hit in _MENTION.finditer(text):
+        uid: str | None = None
+        end = hit.end(1)
+        if hit.group(2):
+            uid = who(f"{hit.group(1)} {hit.group(2)}")
+            end = hit.end()
+        if uid is None:
+            uid, end = who(hit.group(1)), hit.end(1)
+        if uid is None:
+            continue
+        if hit.start() > pos:
+            parts.append({"text": text[pos : hit.start()]})
+        parts.append({"type": "tag", "user": {"id": int(uid)}})
+        tagged.add(uid)
+        pos = end
+    if pos < len(text):
+        parts.append({"text": text[pos:]})
+    if assignee is not None and str(assignee) not in tagged and str(assignee) in members:
+        parts = [{"type": "tag", "user": {"id": int(assignee)}}, {"text": ", "}, *parts]
+    return parts
 
 
 def source_id(account_id: int) -> str:
