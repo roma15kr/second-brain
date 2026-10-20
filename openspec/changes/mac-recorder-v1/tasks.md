@@ -37,7 +37,7 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 
 ## 6. Dictation
 
-- [ ] 6.1 Dictation hotkey flow: record, send to `/api/devices/dictations` with the chosen form (default as said or cleaned; ⇧ structured), insertion by pasteboard + ⌘V with clipboard restore, clipboard fallback, offline local Parakeet as said with a notification; verify `DictationFlowTests` (fake server, fake paster, offline path)
+- [x] 6.1 Dictation hotkey flow: record, send to `/api/devices/dictations` with the chosen form (default as said or cleaned; ⇧ structured), insertion by pasteboard + ⌘V with clipboard restore, clipboard fallback, offline local Parakeet as said with a notification; verify `DictationFlowTests` (fake server, fake paster, offline path)
 
 ## 7. Imports
 
