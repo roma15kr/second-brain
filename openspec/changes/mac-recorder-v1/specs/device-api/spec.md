@@ -45,19 +45,22 @@ A recording SHALL be linkable to a chosen meeting when it is registered, and re-
 - **THEN** the recording appears on that meeting's page with its audio, and its summary and actions are redone for that meeting
 
 ### Requirement: Meetings that are not in a calendar
-A device (with a recording it registers or owns) and the owner in the web OS SHALL be able to create a meeting that is not in any connected calendar — title, project, time (the recording's time by default) and optional participants by name or email, matched to People where possible. Such meetings SHALL be kept in the second brain's own calendar (connected calendars stay read-only), appear in Meetings like others, and get recordings, summaries and actions the same way. In the web OS the owner SHALL also be able to turn an unscheduled call into a meeting and edit a created meeting's title, project and participants.
+A device (for a recording it registers or owns) and the owner in the web OS SHALL be able to create a meeting that is not in any connected calendar, with a title, project, time (the recording's by default) and optional participants matched to People. Such meetings SHALL live in the second brain's own calendar, appear in Meetings and get recordings, summaries and actions like others; connected calendars stay read-only.
 
 #### Scenario: Created from the Mac
 - **WHEN** the Mac registers a recording with a new meeting "Dealer — October prices", project quokka, participant "Oleh"
 - **THEN** the meeting exists in the second brain's own calendar, Oleh is linked to his person, and the recording is attached to it
 
-#### Scenario: Unscheduled call turned into a meeting
-- **WHEN** the owner opens an unscheduled call in the web OS and chooses "Make a meeting" with a title
-- **THEN** the call becomes that meeting, and its summary and actions are redone for it
-
 #### Scenario: Connected calendars untouched
 - **WHEN** a meeting is created in the second brain
 - **THEN** nothing is written to Google or iCloud calendars
+
+### Requirement: Created meetings can be edited and calls turned into meetings
+In the web OS the owner SHALL be able to edit the title, project and participants of meetings created in the second brain, and turn an unscheduled call into such a meeting.
+
+#### Scenario: Unscheduled call turned into a meeting
+- **WHEN** the owner opens an unscheduled call in the web OS and chooses "Make a meeting" with a title
+- **THEN** the call becomes that meeting, and its summary and actions are redone for it
 
 ### Requirement: Recording coverage and cost on Status
 Status SHALL show, per week, how many calendar meetings with other attendees have a recording, and the transcription spend of the month split into dictation and calls (on-device transcription counts as free).
