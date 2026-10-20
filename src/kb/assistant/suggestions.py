@@ -124,7 +124,10 @@ def approve(
         " decided_at = %s, error = NULL WHERE id = %s",
         (Jsonb(payload), bool(edited) and payload != s["payload"], now, sid),
     )
-    if s["kind"] in ("reply_tg", "nudge", "decline") and not is_email(s["kind"], payload):
+    copied = s["kind"] == "clickup_comment" and payload.get("mode") == "copy"
+    if copied or (
+        s["kind"] in ("reply_tg", "nudge", "decline") and not is_email(s["kind"], payload)
+    ):
         # Telegram: the owner copies the text and sends it; the system never writes to Telegram
         conn.execute(
             "UPDATE suggestions SET status = 'applied', applied_ref = 'copied' WHERE id = %s",
@@ -183,7 +186,7 @@ def _post_comment(
     task_id = str(payload["task_id"])
     if previous_attempt is not None:
         for c in client.comments(task_id)[-25:]:
-            if (c.get("comment_text") or "").strip().startswith(text):
+            if (c.get("comment_text") or "").strip() == text:
                 ref = str(c.get("id"))
                 conn.execute(
                     "UPDATE suggestions SET status = 'applied', applied_ref = %s WHERE id = %s",
@@ -194,25 +197,14 @@ def _post_comment(
         "UPDATE suggestions SET status = 'applying', attempt_started_at = %s WHERE id = %s",
         (now, sid),
     )
-    # images: ClickUp cannot embed files in a comment via the API, so they are attached to the
-    # task and linked at the end of the comment (each uploaded once, also across retries)
-    links = []
-    for f in conn.execute(
-        "SELECT id, filename, mime, data, uploaded_url FROM suggestion_files"
-        " WHERE suggestion_id = %s ORDER BY id",
-        (sid,),
-    ).fetchall():
-        url = f["uploaded_url"]
-        if not url:
-            url = client.attach(task_id, f["filename"], bytes(f["data"]), f["mime"])
-            conn.execute(
-                "UPDATE suggestion_files SET uploaded_url = %s WHERE id = %s", (url, f["id"])
-            )
-        links.append(f"📎 {f['filename']}: {url}")
-    if links:
-        text = text + "\n\n" + "\n".join(links)
     assignee = payload.get("assignee_id")
-    made = client.create_comment(task_id, text, int(assignee) if assignee else None)
+    members = conn.execute(
+        "SELECT settings->'members' AS m FROM connector_accounts WHERE kind = 'clickup'"
+        " ORDER BY id LIMIT 1"
+    ).fetchone()
+    made = client.create_comment(
+        task_id, text, int(assignee) if assignee else None, (members or {}).get("m") or {}
+    )
     ref = str(made.get("id") or "posted")
     conn.execute(
         "UPDATE suggestions SET status = 'applied', applied_ref = %s WHERE id = %s", (ref, sid)
@@ -501,15 +493,6 @@ def listing(conn: Conn, status: str = "proposed", limit: int = 100) -> list[dict
         " ORDER BY coalesce(s.decided_at, s.created_at) DESC LIMIT %s",
         (statuses, status != "recent", limit),
     ).fetchall()
-    files: dict[int, list[dict[str, Any]]] = {}
-    for f in conn.execute(
-        "SELECT id, suggestion_id, filename, length(data) AS size FROM suggestion_files"
-        " WHERE suggestion_id = ANY(%s) ORDER BY id",
-        ([r["id"] for r in rows],),
-    ).fetchall():
-        files.setdefault(f["suggestion_id"], []).append(
-            {"id": f["id"], "filename": f["filename"], "size": f["size"]}
-        )
     return [
         {
             "id": r["id"],
@@ -520,7 +503,6 @@ def listing(conn: Conn, status: str = "proposed", limit: int = 100) -> list[dict
             "scopes": list(r["scopes"]),
             "item_id": r["item_id"],
             "item_title": r["item_title"],
-            "files": files.get(r["id"], []),
             "status": r["status"],
             "applied_ref": r["applied_ref"],
             "error": r["error"],

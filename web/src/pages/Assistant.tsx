@@ -18,75 +18,7 @@ export type Suggestion = {
   applied_ref: string | null;
   error: string | null;
   created_at: string;
-  files?: { id: number; filename: string; size: number }[];
 };
-
-function dataBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(",", 2)[1] ?? "");
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(file);
-  });
-}
-
-// Images for a ClickUp comment draft: attached to the task and linked in the comment on approval.
-function CommentImages({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
-  const [error, setError] = useState<string | null>(null);
-  const add = useMutation({
-    mutationFn: async (files: File[]) => {
-      for (const f of files) {
-        await api(`/api/suggestions/${s.id}/files`, {
-          method: "POST",
-          body: { filename: f.name, mime: f.type, data: await dataBase64(f) },
-        });
-      }
-    },
-    onSuccess: () => {
-      setError(null);
-      onChanged();
-    },
-    onError: (e) => {
-      setError(e.message);
-      onChanged();
-    },
-  });
-  const remove = useMutation({
-    mutationFn: (fid: number) => api(`/api/suggestions/${s.id}/files/${fid}`, { method: "DELETE" }),
-    onSuccess: onChanged,
-  });
-  return (
-    <div className="row">
-      {(s.files ?? []).map((f) => (
-        <span key={f.id} className="tag">
-          🖼 {f.filename}{" "}
-          <button
-            className="link"
-            aria-label={`Remove ${f.filename}`}
-            onClick={() => remove.mutate(f.id)}
-          >
-            ×
-          </button>
-        </span>
-      ))}
-      <label className="btn">
-        {add.isPending ? "Adding…" : "Add images"}
-        <input
-          aria-label="Add images"
-          type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp,image/heic"
-          multiple
-          hidden
-          onChange={(e) => add.mutate([...(e.target.files ?? [])])}
-        />
-      </label>
-      <span className="muted small">
-        attached to the task and linked in the comment when posted
-      </span>
-      {error && <span className="error">{error}</span>}
-    </div>
-  );
-}
 
 const KIND: Record<string, string> = {
   reply_email: "Email reply",
@@ -129,6 +61,16 @@ export function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void })
   const approve = useMutation({
     mutationFn: () =>
       api(`/api/suggestions/${s.id}/approve`, { method: "POST", body: { payload: edited } }),
+    onSuccess: onChanged,
+    onError: (e) => setError(e.message),
+  });
+  // ClickUp has no API for comment drafts: copy the text and finish it in ClickUp (images, tags)
+  const copyToClickUp = useMutation({
+    mutationFn: () =>
+      api(`/api/suggestions/${s.id}/approve`, {
+        method: "POST",
+        body: { payload: { ...edited, mode: "copy" } },
+      }),
     onSuccess: onChanged,
     onError: (e) => setError(e.message),
   });
@@ -177,7 +119,6 @@ export function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void })
         ))}
       </div>
       {s.reason && <div className="muted">{s.reason}</div>}
-      {s.kind === "clickup_comment" && <CommentImages s={s} onChanged={onChanged} />}
       {s.kind === "clickup_comment" && str(s.payload.assignee_name) && (
         <div className="muted">
           Assigned to {str(s.payload.assignee_name)} (ClickUp notifies them)
@@ -250,6 +191,18 @@ export function Card({ s, onChanged }: { s: Suggestion; onChanged: () => void })
                     : "Approve"}
             </button>
           )}
+          {s.kind === "clickup_comment" && (
+            <button
+              className="btn"
+              onClick={() => {
+                void navigator.clipboard?.writeText(body);
+                if (str(s.payload.link)) window.open(str(s.payload.link), "_blank", "noreferrer");
+                copyToClickUp.mutate();
+              }}
+            >
+              Copy & open in ClickUp
+            </button>
+          )}
           <button className="btn" onClick={() => discard.mutate()}>
             Discard
           </button>
@@ -275,7 +228,7 @@ function Recent({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
       ? sent
         ? "Sent"
         : "Saved to Drafts"
-      : s.kind === "clickup_comment" && s.status === "applied"
+      : s.kind === "clickup_comment" && s.status === "applied" && s.applied_ref !== "copied"
         ? "Posted"
         : s.applied_ref === "copied"
           ? "Copied"
