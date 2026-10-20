@@ -45,6 +45,7 @@ struct MenuContent: View {
         if let error = state.lastError { Text(error) }
         if let warning = state.permissions.menuWarning { Text(warning) }
         if let status = state.status { Text(status) }
+        RecentItems()
         Divider()
         SettingsLink { Text("Settings…") }
         Button("Quit") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
@@ -79,11 +80,66 @@ struct SettingsView: View {
             }
             if let error = state.lastError { Text(error).foregroundStyle(.red) }
             Divider()
+            CallSettingsView()
+            Divider()
             HotkeySettings()
             Divider()
             PermissionsView()
         }
         .padding()
         .frame(width: 480)
+    }
+}
+
+/// The last recordings with their delivery state, and what can be done with them.
+struct RecentItems: View {
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        let recent = Array(state.items.suffix(8).reversed())
+        if !recent.isEmpty {
+            Divider()
+            Text("Recent")
+            ForEach(recent) { item in
+                Menu(Self.title(item)) {
+                    if let reason = item.reason { Text(reason) }
+                    if let note = item.note { Text(note) }
+                    if let s = item.transcribeSeconds { Text("Transcribed on this Mac in \(SecondBrainRecorderApp.clock(s))") }
+                    if item.recordingId != nil && item.tracks.allSatisfy(\.uploaded) && item.speakers != true {
+                        Button("Separate speakers…") { Task { await state.pipeline.separateSpeakers(item) } }
+                    }
+                    if item.status == .failed || item.status == .waiting {
+                        Button("Try again") {
+                            _ = try? state.itemStore.update(item.id) {
+                                if $0.status == .failed { $0.status = $0.segments == nil && !$0.cloud ? .recorded : .transcribed }
+                            }
+                            state.processQueue()
+                        }
+                    }
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([state.itemStore.folder(item.id)]) }
+                }
+            }
+        }
+    }
+
+    static func title(_ item: Item) -> String {
+        let f = DateFormatter()
+        f.dateFormat = Calendar.current.isDateInToday(item.startedAt) ? "HH:mm" : "d MMM HH:mm"
+        let what = item.title ?? (item.meeting == .automatic ? (item.source.isEmpty ? "Call" : item.source) : item.meeting.label)
+        return "\(f.string(from: item.startedAt)) \(what) · \(SecondBrainRecorderApp.clock(item.duration)) — \(status(item))"
+    }
+
+    static func status(_ item: Item) -> String {
+        switch item.status {
+        case .recording: return "recording"
+        case .recorded: return "waiting to transcribe"
+        case .transcribing: return item.reason ?? "transcribing"
+        case .transcribed: return "ready to send"
+        case .registering, .uploading: return "sending"
+        case .cloudTranscribing: return "transcribing on the server"
+        case .delivered: return item.pendingLink == nil ? "delivered" : "updating the meeting"
+        case .waiting: return item.reason ?? "waiting"
+        case .failed: return "failed"
+        }
     }
 }

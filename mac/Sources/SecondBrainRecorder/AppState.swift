@@ -14,6 +14,9 @@ final class AppState: ObservableObject {
     @Published var isRecording = false
     @Published var elapsed: TimeInterval = 0
     @Published var items: [Item] = []
+    @Published var speedLabel: String? = CallSettings.speedLabel
+    lazy var pipeline = Pipeline(state: self)
+    private var ticks = 0
     var systemAudioWorked: Bool?
 
     let store: TokenStore = KeychainTokenStore()
@@ -58,6 +61,7 @@ final class AppState: ObservableObject {
             try await pairing.pair(code: code, deviceName: Host.current().localizedName ?? "Mac")
             isPaired = true
             lastError = nil
+            processQueue()
         } catch {
             lastError = error.localizedDescription
         }
@@ -103,8 +107,9 @@ final class AppState: ObservableObject {
     func startRecording(meeting: MeetingChoice) {
         do {
             let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
-            try recorder.start(meeting: meeting, source: front, cloud: false, now: Date())
+            try recorder.start(meeting: meeting, source: front, cloud: CallSettings.engine == "cloud", now: Date())
             isRecording = true
+            pipeline.flags.recording = true
             elapsed = 0
             lastError = nil
         } catch {
@@ -117,6 +122,7 @@ final class AppState: ObservableObject {
             if recorder.othersHeardSound { systemAudioWorked = true }
             guard let item = try recorder.stop(now: Date(), reason: reason) else { return }
             isRecording = false
+            pipeline.flags.recording = false
             refreshPermissions()
             Task { await finish(item) }
         } catch {
@@ -125,6 +131,8 @@ final class AppState: ObservableObject {
     }
 
     private func tick(_ now: Date) {
+        ticks += 1
+        if ticks % 60 == 0 { processQueue() }  // retry waiting deliveries every minute
         guard isRecording else { return }
         elapsed = recorder.elapsed(now: now)
         if (try? recorder.tick(now: now)) ?? nil != nil {
@@ -166,8 +174,7 @@ final class AppState: ObservableObject {
 
     func reloadItems() { items = itemStore.all() }
 
-    /// Transcription and delivery of waiting items (added with the pipeline).
-    func processQueue() {}
+    func processQueue() { pipeline.run() }
 
     // MARK: dictation
 
