@@ -21,7 +21,7 @@ checks run on the owner's Mac at the end (one checklist, owner preference).
 ## 3. Hotkeys and recording
 
 - [x] 3.1 Changeable hotkeys: Carbon registration, defaults ⌃⌥R / ⌃⌥D / ⇧, recorder fields in Settings, taken combinations refused with the previous kept, hold-vs-toggle for dictation; verify `HotkeyConfigTests` (persist, conflict, immediate re-register with a fake registrar), `HotkeyTimingTests`
-- [ ] 3.2 Microphone track (AVAudioEngine, route-change restart) and computer-audio track (Core Audio process tap; ScreenCaptureKit fallback) as 5-minute AAC 16 kHz segments; join on stop; crash recovery; 4-hour limit; menu-bar state and timer; verify `SegmentJoinTests`, `RecoveryTests`, `RecorderStateTests` (fake audio sources)
+- [x] 3.2 Microphone track (AVAudioEngine, route-change restart) and computer-audio track (Core Audio process tap; ScreenCaptureKit fallback) as 5-minute AAC 16 kHz segments; join on stop; crash recovery; 4-hour limit; menu-bar state and timer; verify `SegmentJoinTests`, `RecoveryTests`, `RecorderStateTests` (fake audio sources)
 
 ## 4. Call transcription on the Mac
 
