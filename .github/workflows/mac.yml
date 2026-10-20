@@ -20,5 +20,5 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
-      - name: Install script (dry run: build, bundle, sign, verify)
+      - name: "Install script (dry run: build, bundle, sign, verify)"
         run: ./install.sh --dry-run
