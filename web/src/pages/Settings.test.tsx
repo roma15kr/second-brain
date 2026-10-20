@@ -80,3 +80,14 @@ test("server validation errors are shown", async () => {
   await userEvent.click(await screen.findByRole("button", { name: "Save" }));
   expect(await screen.findByRole("status")).toHaveTextContent("not mocked");
 });
+
+test("recorder apps offer the Mac app download", async () => {
+  window.history.pushState({}, "", "/settings");
+  mockApi({ ...routes, "GET /api/settings/devices": { devices: [] } });
+  renderApp();
+  const link = await screen.findByRole("link", { name: "Download the Mac app (.dmg)" });
+  expect(link).toHaveAttribute(
+    "href",
+    "https://github.com/roma15kr/second-brain/releases/download/mac-latest/Second-Brain-Recorder.dmg",
+  );
+});
