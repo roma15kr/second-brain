@@ -1,5 +1,6 @@
 import AppKit
 import RecorderCore
+import ServiceManagement
 import SwiftUI
 
 /// Menu-bar app (no Dock icon: LSUIElement in Info.plist, set by install.sh).
@@ -24,10 +25,19 @@ final class AppState: ObservableObject {
     @AppStorage("serverURL") var serverURL = "https://os.zhukovsky.biz"
     @Published var isPaired = false
     @Published var lastError: String?
+    @Published var permissions = PermissionsModel()
+    var systemAudioWorked: Bool?
 
     let store: TokenStore = KeychainTokenStore()
 
-    init() { isPaired = store.load() != nil }
+    init() {
+        isPaired = store.load() != nil
+        refreshPermissions()
+    }
+
+    func refreshPermissions() {
+        permissions = PermissionProbe.current(systemAudioWorked: systemAudioWorked)
+    }
 
     var pairing: Pairing? {
         guard let url = URL(string: serverURL) else { return nil }
@@ -61,6 +71,7 @@ struct MenuContent: View {
             Text("Not paired — open Settings to pair")
         }
         if let error = state.lastError { Text(error) }
+        if let warning = state.permissions.menuWarning { Text(warning) }
         Divider()
         SettingsLink { Text("Settings…") }
         Button("Quit") { NSApplication.shared.terminate(nil) }.keyboardShortcut("q")
@@ -70,10 +81,19 @@ struct MenuContent: View {
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @State private var code = ""
+    @State private var openAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         Form {
             TextField("Server", text: $state.serverURL)
+            Toggle("Open at login", isOn: $openAtLogin)
+                .onChange(of: openAtLogin) { _, on in
+                    do {
+                        if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+                    } catch {
+                        state.lastError = "Open at login: \(error.localizedDescription)"
+                    }
+                }
             if state.isPaired {
                 LabeledContent("Status", value: "Paired")
                 Button("Unpair this Mac") { state.unpaired() }
@@ -85,6 +105,8 @@ struct SettingsView: View {
                     .disabled(code.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             if let error = state.lastError { Text(error).foregroundStyle(.red) }
+            Divider()
+            PermissionsView()
         }
         .padding()
         .frame(width: 420)
