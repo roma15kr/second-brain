@@ -145,6 +145,18 @@ final class DeliveryTests: XCTestCase {
         XCTAssertEqual(link["scope"] as? String, "rdim")
     }
 
+    // CloudModeTests: the server's provider transcribes instead of the Mac
+    func testCloudRegistersWithoutSegmentsThenRequestsTranscription() async throws {
+        let item = try makeItem(cloud: true)
+        XCTAssertEqual(Delivery.next(item, paired: true), .register)  // no Mac transcription
+        let done = await runner.deliver(item.id)
+        XCTAssertEqual(done?.status, .delivered)
+        XCTAssertEqual((server.registered.first?["segments"] as? [Any])?.count, 0)
+        XCTAssertEqual(server.transcribeRequests.first?["speakers"] as? Bool, false)
+        XCTAssertEqual(server.tracks.count, 2)  // tracks uploaded before the request
+        XCTAssertEqual(done?.cloudRequested, true)
+    }
+
     func testRelinkAfterDelivery() async throws {
         let item = try makeItem()
         _ = await runner.deliver(item.id)
@@ -157,21 +169,6 @@ final class DeliveryTests: XCTestCase {
         XCTAssertEqual(meeting["title"] as? String, "Dealer — October prices")
         XCTAssertEqual(meeting["participants"] as? [String], ["Oleh"])
         XCTAssertEqual(done?.meeting.label, "Dealer — October prices")
-    }
-}
-
-final class CloudModeTests: XCTestCase {
-    func testCloudRegistersWithoutSegmentsThenRequestsTranscription() async throws {
-        let t = DeliveryTests()
-        t.setUp()
-        let item = try t.makeItem(cloud: true)
-        XCTAssertEqual(Delivery.next(item, paired: true), .register)  // no Mac transcription
-        let done = await t.runner.deliver(item.id)
-        XCTAssertEqual(done?.status, .delivered)
-        XCTAssertEqual((t.server.registered.first?["segments"] as? [Any])?.count, 0)
-        XCTAssertEqual(t.server.transcribeRequests.first?["speakers"] as? Bool, false)
-        XCTAssertEqual(t.server.tracks.count, 2)  // tracks uploaded before the request
-        XCTAssertEqual(done?.cloudRequested, true)
     }
 }
 
