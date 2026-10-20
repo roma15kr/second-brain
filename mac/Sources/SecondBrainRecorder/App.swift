@@ -12,86 +12,23 @@ struct SecondBrainRecorderApp: App {
         MenuBarExtra {
             MenuContent().environmentObject(state)
         } label: {
-            Image(systemName: state.isPaired ? "waveform.circle" : "waveform.circle.fill")
+            if state.isRecording {
+                Image(systemName: "record.circle.fill")
+                Text(Self.clock(state.elapsed))
+            } else {
+                Image(systemName: state.isPaired ? "waveform.circle" : "waveform.circle.fill")
+            }
         }
         Settings {
             SettingsView().environmentObject(state)
         }
     }
-}
 
-@MainActor
-final class AppState: ObservableObject {
-    @AppStorage("serverURL") var serverURL = "https://os.zhukovsky.biz"
-    @Published var isPaired = false
-    @Published var lastError: String?
-    @Published var permissions = PermissionsModel()
-    var systemAudioWorked: Bool?
-
-    @Published var status: String?
-
-    let store: TokenStore = KeychainTokenStore()
-    let registrar = CarbonRegistrar()
-    lazy var hotkeys = HotkeyConfig(store: UserDefaults.standard, registrar: registrar)
-    var gesture = DictationGesture()
-    var dictationStructured = false
-
-    init() {
-        isPaired = store.load() != nil
-        refreshPermissions()
-        registrar.onEvent = { [weak self] action, pressed in
-            Task { @MainActor in self?.hotkey(action, pressed: pressed) }
-        }
-        let failed = hotkeys.registerAll()
-        if !failed.isEmpty {
-            lastError = "Hotkeys taken by another app: " + failed.map { hotkeys.combo($0).description }
-                .joined(separator: ", ") + ". Change them in Settings."
-        }
-    }
-
-    func hotkey(_ action: HotkeyAction, pressed: Bool) {
-        let now = ProcessInfo.processInfo.systemUptime
-        switch action {
-        case .record:
-            if pressed { toggleRecording() }
-        case .dictate, .dictateStructured:
-            let output = pressed ? gesture.press(at: now) : gesture.release(at: now)
-            if output == .start { dictationStructured = action == .dictateStructured }
-            switch output {
-            case .start: startDictation(structured: dictationStructured)
-            case .stop: stopDictation()
-            case nil: break
-            }
-        }
-    }
-
-    func toggleRecording() { status = "Recording is not available yet" }
-    func startDictation(structured: Bool) { status = structured ? "Dictating (structured)…" : "Dictating…" }
-    func stopDictation() { status = nil }
-
-    func refreshPermissions() {
-        permissions = PermissionProbe.current(systemAudioWorked: systemAudioWorked)
-    }
-
-    var pairing: Pairing? {
-        guard let url = URL(string: serverURL) else { return nil }
-        return Pairing(serverURL: url, store: store)
-    }
-
-    func pair(code: String) async {
-        guard let pairing else { lastError = "The server address is not valid"; return }
-        do {
-            try await pairing.pair(code: code, deviceName: Host.current().localizedName ?? "Mac")
-            isPaired = true
-            lastError = nil
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    func unpaired() {
-        pairing?.forget()
-        isPaired = false
+    static func clock(_ t: TimeInterval) -> String {
+        let s = Int(t)
+        return s >= 3600
+            ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
+            : String(format: "%d:%02d", s / 60, s % 60)
     }
 }
 
@@ -99,11 +36,12 @@ struct MenuContent: View {
     @EnvironmentObject var state: AppState
 
     var body: some View {
-        if state.isPaired {
-            Text("Paired with the second brain")
+        if state.isRecording {
+            Button("Stop recording (\(state.hotkeys.record.description))") { state.toggleRecording() }
         } else {
-            Text("Not paired — open Settings to pair")
+            Button("Record a call (\(state.hotkeys.record.description))") { state.toggleRecording() }
         }
+        if !state.isPaired { Text("Not paired — open Settings to pair") }
         if let error = state.lastError { Text(error) }
         if let warning = state.permissions.menuWarning { Text(warning) }
         if let status = state.status { Text(status) }
@@ -146,6 +84,6 @@ struct SettingsView: View {
             PermissionsView()
         }
         .padding()
-        .frame(width: 420)
+        .frame(width: 480)
     }
 }
