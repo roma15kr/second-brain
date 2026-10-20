@@ -8,7 +8,7 @@ scheduler cycle without a restart.
 from __future__ import annotations
 
 from datetime import time
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
@@ -56,6 +56,8 @@ class AppSettings(BaseModel):
     ai_budget_usd: float | None = Field(default=None, ge=0, le=1000)  # None: config default
     reply_drafts_per_day: int = Field(default=5, ge=0, le=20)  # owner decision 2026-10-18: 3-5
     working_hours: WorkingHours = WorkingHours()  # focus blocks and meeting load
+    # cloud transcription of calls (when the Mac app is set to "Cloud" or speakers are asked for)
+    calls_provider: Literal["openai-diarize", "openai-whisper", "groq"] = "openai-diarize"
 
 
 class SettingsError(ValueError):

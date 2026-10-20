@@ -325,7 +325,9 @@ def sync_due(
     n = 0
     for cal in conn.execute(
         "SELECT c.* FROM calendars c JOIN connector_accounts a ON a.id = c.account_id"
-        " WHERE c.sync AND a.state = 'active' AND (c.synced_at IS NULL OR c.synced_at < %s)",
+        " WHERE c.sync AND a.state = 'active' AND (c.synced_at IS NULL OR c.synced_at < %s)"
+        # the built-in "Second brain" calendar has nothing to fetch
+        " AND coalesce(a.settings->>'type', '') <> 'local'",
         (now - SYNC_EVERY,),
     ).fetchall():
         try:

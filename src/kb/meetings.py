@@ -14,7 +14,9 @@ from psycopg.types.json import Jsonb
 from kb.db import Conn
 
 EVENT_SQL = """
-    SELECT e.*, c.name AS calendar, c.scopes, c.remind_minutes FROM events e
+    SELECT e.*, c.name AS calendar, c.remind_minutes, c.href = 'local' AS local,
+           coalesce(e.scopes, c.scopes) AS scopes  -- after e.*: the meeting's own mark wins
+    FROM events e
     JOIN calendars c ON c.id = e.calendar_id
     JOIN connector_accounts a ON a.id = c.account_id
     WHERE c.sync AND a.state = 'active'
@@ -36,6 +38,7 @@ def to_dict(r: dict[str, Any]) -> dict[str, Any]:
         "calendar": r["calendar"],
         "scopes": list(r["scopes"]),
         "prep": r.get("prep"),
+        "local": bool(r.get("local")),
     }
 
 
@@ -297,3 +300,164 @@ def early_meetings(conn: Conn, now: datetime) -> list[dict[str, Any]]:
         for m in between(conn, start, local.replace(hour=EARLY_HOUR, minute=0, second=0))
         if not m["all_day"] and m["my_status"] != "DECLINED"
     ]
+
+
+# --- meetings around now (for devices) and meetings outside the calendar ------------------------
+
+
+class MeetingError(ValueError):
+    pass
+
+
+def around(conn: Conn, now: datetime, hours: int = 12) -> list[dict[str, Any]]:
+    """Minimal fields for a device's meeting picker: the one in progress first."""
+    rows = conn.execute(
+        EVENT_SQL + " AND NOT e.all_day AND NOT e.cancelled AND e.start_at < %s AND e.end_at > %s"
+        " ORDER BY e.start_at",
+        (now + timedelta(hours=hours), now - timedelta(hours=hours)),
+    ).fetchall()
+    out = [
+        {
+            "id": r["id"],
+            "title": r["title"] or "Meeting",
+            "start": r["start_at"].isoformat(),
+            "end": r["end_at"].isoformat(),
+            "in_progress": r["start_at"] <= now < r["end_at"],
+        }
+        for r in rows
+    ]
+    return sorted(out, key=lambda m: (not m["in_progress"], abs(_dist(m, now))))
+
+
+def _dist(m: dict[str, Any], now: datetime) -> float:
+    return (datetime.fromisoformat(m["start"]) - now).total_seconds()
+
+
+def local_calendar(conn: Conn) -> int:
+    row = conn.execute(
+        "SELECT c.id FROM calendars c JOIN connector_accounts a ON a.id = c.account_id"
+        " WHERE a.kind = 'calendar' AND a.settings->>'type' = 'local' LIMIT 1"
+    ).fetchone()
+    if row is not None:
+        return int(row["id"])
+    account = conn.execute(  # created by migration 0044; recreated if it was removed
+        "INSERT INTO connector_accounts (kind, label, settings) VALUES ('calendar',"
+        " 'Second brain', '{\"type\": \"local\"}'::jsonb) RETURNING id"
+    ).fetchone()
+    assert account is not None
+    cal = conn.execute(
+        "INSERT INTO calendars (account_id, href, name, sync, scopes, remind_minutes)"
+        " VALUES (%s, 'local', 'Second brain', true, '{unsorted}', 0) RETURNING id",
+        (account["id"],),
+    ).fetchone()
+    assert cal is not None
+    return int(cal["id"])
+
+
+def participants(conn: Conn, entries: list[str]) -> list[dict[str, Any]]:
+    """Names or emails → attendees, linked to People when unambiguous."""
+    from kb import people
+
+    out = []
+    for raw in entries:
+        entry = raw.strip()
+        if not entry:
+            continue
+        person_id, email, name = None, "", entry
+        if "@" in entry:
+            email = entry.lower()
+            row = conn.execute(
+                "SELECT person_id FROM identities WHERE key = %s", (people.email_key(email),)
+            ).fetchone()
+            person_id = row["person_id"] if row else None
+        else:
+            found = [
+                p
+                for p in people.find(conn, entry, 5)
+                if (p["display_name"] or "").lower() == entry.lower()
+                or (p["display_name"] or "").lower().split()[:1] == [entry.lower()]
+            ]
+            if len(found) == 1:
+                person_id, name = found[0]["id"], found[0]["display_name"]
+                key = conn.execute(
+                    "SELECT key FROM identities WHERE person_id = %s AND key LIKE 'email:%%'"
+                    " LIMIT 1",
+                    (person_id,),
+                ).fetchone()
+                email = key["key"].removeprefix("email:") if key else ""
+        if person_id is not None and name == entry and "@" in entry:
+            p = conn.execute(
+                "SELECT display_name FROM people WHERE id = %s", (person_id,)
+            ).fetchone()
+            name = (p["display_name"] if p else None) or entry
+        out.append({"email": email, "name": name, "status": "ACCEPTED", "person_id": person_id})
+    return out
+
+
+def create_local(
+    conn: Conn,
+    title: str,
+    scope: str | None,
+    start: datetime,
+    end: datetime,
+    people_: list[str] | None = None,
+) -> int:
+    """A meeting that is not in any connected calendar (spontaneous calls)."""
+    import uuid
+
+    from kb import scopes
+
+    if not title.strip():
+        raise MeetingError("a meeting needs a title")
+    if scope and scope not in (*scopes.known(conn), "unsorted"):
+        raise MeetingError(f"unknown project {scope!r}")
+    if end < start:
+        raise MeetingError("the meeting ends before it starts")
+    row = conn.execute(
+        "INSERT INTO events (calendar_id, uid, start_at, end_at, title, attendees, my_status,"
+        " scopes) VALUES (%s, %s, %s, %s, %s, %s, 'ACCEPTED', %s) RETURNING id",
+        (
+            local_calendar(conn),
+            f"local-{uuid.uuid4()}",
+            start,
+            end,
+            title.strip()[:200],
+            Jsonb(participants(conn, people_ or [])),
+            [scope] if scope else None,
+        ),
+    ).fetchone()
+    assert row is not None
+    return int(row["id"])
+
+
+def update_local(
+    conn: Conn,
+    event_id: int,
+    title: str | None = None,
+    scope: str | None = None,
+    people_: list[str] | None = None,
+) -> None:
+    from kb import scopes
+
+    row = conn.execute(
+        "SELECT c.href FROM events e JOIN calendars c ON c.id = e.calendar_id WHERE e.id = %s",
+        (event_id,),
+    ).fetchone()
+    if row is None:
+        raise MeetingError(f"no meeting {event_id}")
+    if row["href"] != "local":
+        raise MeetingError("meetings from Google or iCloud are read-only")
+    if title is not None and not title.strip():
+        raise MeetingError("a meeting needs a title")
+    if scope is not None and scope not in (*scopes.known(conn), "unsorted"):
+        raise MeetingError(f"unknown project {scope!r}")
+    conn.execute(
+        "UPDATE events SET title = coalesce(%s, title), scopes = coalesce(%s, scopes),"
+        " attendees = coalesce(%s, attendees), updated_at = now() WHERE id = %s",
+        (
+            title.strip()[:200] if title is not None else None,
+            [scope] if scope is not None else None,
+            Jsonb(participants(conn, people_)) if people_ is not None else None,
+            event_id,
+        ),
+    )

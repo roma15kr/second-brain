@@ -223,7 +223,8 @@ def attention(conn: Conn, start: datetime, end: datetime) -> list[str]:
         r["scope"]: int(r["m"])
         for r in conn.execute(
             "SELECT s AS scope, sum(extract(epoch FROM e.end_at - e.start_at) / 60) AS m"
-            " FROM events e JOIN calendars c ON c.id = e.calendar_id, unnest(c.scopes) s"
+            " FROM events e JOIN calendars c ON c.id = e.calendar_id,"
+            " unnest(coalesce(e.scopes, c.scopes)) s"
             " WHERE c.sync AND NOT e.all_day AND NOT e.cancelled"
             " AND coalesce(e.my_status, '') <> 'DECLINED' AND e.start_at >= %s AND e.start_at < %s"
             " GROUP BY s",

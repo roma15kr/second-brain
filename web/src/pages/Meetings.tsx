@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router";
 import { api } from "../api/client";
 import { ScopeTag } from "../shell/ScopeTag";
 import { AudioTranscript, type Track } from "./AudioPlayer";
+import { EditLocalMeeting, LinkRecording, NewMeeting } from "./MeetingLinking";
 
 export type Meeting = {
   id: number;
@@ -19,6 +20,7 @@ export type Meeting = {
   scopes: string[];
   prep?: Prep | null;
   recordings?: Recording[];
+  local?: boolean;
 };
 
 export type Recording = {
@@ -30,6 +32,7 @@ export type Recording = {
   started_at: string;
   ended_at: string;
   segments: { speaker: string; is_owner: boolean; start: number; end: number; text: string }[];
+  scopes: string[];
   notes: string;
   item_id: number | null;
   result: {
@@ -48,6 +51,7 @@ export function RecordingView({ r, onChanged }: { r: Recording; onChanged: () =>
         {r.kind === "notes" ? "Notes" : `${r.source || "Recording"}`}{" "}
         <span className="muted small">{day.format(new Date(r.started_at))}</span>
       </h3>
+      <LinkRecording r={r} onChanged={onChanged} />
       {r.result ? (
         <>
           <p>{r.result.summary}</p>
@@ -320,6 +324,7 @@ export function Meetings() {
   if (!q.data.meetings.length)
     return (
       <>
+        <NewMeeting />
         <p className="muted">
           No meetings in the next 7 days. <Link to="/connectors/calendars">Connect calendars</Link>
         </p>
@@ -333,6 +338,7 @@ export function Meetings() {
   }
   return (
     <>
+      <NewMeeting />
       {[...byDay].map(([d, ms]) => (
         <section key={d} className="card group">
           <h3>{d}</h3>
@@ -362,6 +368,12 @@ export function MeetingPage() {
   return (
     <article className="card">
       <h2>{m.title}</h2>
+      {m.local && (
+        <EditLocalMeeting
+          m={m}
+          onChanged={() => void queryClient.invalidateQueries({ queryKey: ["meeting", id] })}
+        />
+      )}
       <p>
         {day.format(new Date(m.start))},{" "}
         {m.all_day

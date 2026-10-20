@@ -19,6 +19,7 @@ type AppSettings = {
   ai_budget_usd: number | null;
   reply_drafts_per_day: number;
   working_hours?: { start: string; end: string };
+  calls_provider?: "openai-diarize" | "openai-whisper" | "groq";
 };
 type SettingsData = { app: AppSettings; budget_default_usd: number; month_spend_usd: number };
 type Device = {
@@ -70,6 +71,7 @@ function Schedule({ data }: { data: SettingsData }) {
     drafts: s.reply_drafts_per_day ?? 5,
     work_start: hm(s.working_hours?.start ?? "09:00"),
     work_end: hm(s.working_hours?.end ?? "18:00"),
+    calls_provider: s.calls_provider ?? "openai-diarize",
   });
   const [message, setMessage] = useState<string | null>(null);
   const save = useMutation({
@@ -94,6 +96,7 @@ function Schedule({ data }: { data: SettingsData }) {
             ai_budget_usd: form.budget === "" ? null : Number(form.budget),
             reply_drafts_per_day: Number(form.drafts),
             working_hours: { start: form.work_start, end: form.work_end },
+            calls_provider: form.calls_provider,
           },
         },
       }),
@@ -159,6 +162,14 @@ function Schedule({ data }: { data: SettingsData }) {
         />
         to{" "}
         <input aria-label="Quiet hours end" type="time" className="btn" {...field("quiet_end")} />
+      </label>
+      <label>
+        Cloud transcription of calls (when the Mac app is set to Cloud){" "}
+        <select aria-label="Cloud call provider" className="btn" {...field("calls_provider")}>
+          <option value="openai-diarize">OpenAI with speakers ($0.36/h)</option>
+          <option value="openai-whisper">OpenAI Whisper ($0.36/h)</option>
+          <option value="groq">Groq Whisper turbo ($0.04/h, needs GROQ_API_KEY)</option>
+        </select>
       </label>
       <label>
         Working hours (focus blocks, meeting load){" "}

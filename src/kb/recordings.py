@@ -149,7 +149,8 @@ def match_event(conn: Conn, started: datetime, ended: datetime) -> dict[str, Any
     """The marked calendar event overlapping at least half of the recording."""
     length = max((ended - started).total_seconds(), 1.0)
     rows = conn.execute(
-        "SELECT e.id, e.title, e.attendees, c.scopes, extract(epoch FROM"
+        "SELECT e.id, e.title, e.attendees, coalesce(e.scopes, c.scopes) AS scopes,"
+        " extract(epoch FROM"
         " least(e.end_at, %s) - greatest(e.start_at, %s)) AS overlap"
         " FROM events e JOIN calendars c ON c.id = e.calendar_id"
         " WHERE c.sync AND NOT e.all_day AND NOT e.cancelled AND e.start_at < %s AND e.end_at > %s"
@@ -197,7 +198,8 @@ def store(
     event = None
     if event_id is not None:
         event = conn.execute(
-            "SELECT e.id, e.title, e.attendees, c.scopes FROM events e JOIN calendars c"
+            "SELECT e.id, e.title, e.attendees, coalesce(e.scopes, c.scopes) AS scopes"
+            " FROM events e JOIN calendars c"
             " ON c.id = e.calendar_id WHERE e.id = %s",
             (event_id,),
         ).fetchone()
@@ -276,7 +278,8 @@ def _index(conn: Conn, rid: int) -> None:
         ON CONFLICT (source_id, source_item_key) DO UPDATE SET scopes = EXCLUDED.scopes,
             title = EXCLUDED.title, raw_text = EXCLUDED.raw_text, summary = EXCLUDED.summary,
             participants = EXCLUDED.participants, identity_keys = EXCLUDED.identity_keys,
-            metadata = EXCLUDED.metadata, content_hash = EXCLUDED.content_hash, updated_at = now()
+            locator = EXCLUDED.locator, metadata = EXCLUDED.metadata,
+            content_hash = EXCLUDED.content_hash, updated_at = now()
         RETURNING id
         """,
         (
@@ -462,3 +465,97 @@ def _voice_note(conn: Conn, rid: int, now: datetime) -> None:
         now,
     )
     conn.execute("UPDATE recordings SET processed_at = %s WHERE id = %s", (now, rid))
+
+
+def reprocess(conn: Conn, rid: int) -> None:
+    """After the transcript or the meeting changed: re-index, and process again. What the earlier
+    processing proposed and the owner has not acted on is withdrawn so nothing is duplicated:
+    pending task drafts are discarded and still-open promises from it are dismissed."""
+    rec = conn.execute("SELECT item_id FROM recordings WHERE id = %s", (rid,)).fetchone()
+    assert rec is not None
+    if rec["item_id"]:
+        conn.execute(
+            "UPDATE suggestions SET status = 'discarded', discard_reason = 'recording re-done',"
+            " decided_at = now() WHERE status = 'proposed' AND kind = 'task'"
+            " AND (payload->>'source_item_id')::bigint = %s",
+            (rec["item_id"],),
+        )
+        conn.execute(
+            "UPDATE loops SET status = 'dismissed', closed_at = now() WHERE item_id = %s"
+            " AND kind = 'i_owe' AND status = 'open'",
+            (rec["item_id"],),
+        )
+    conn.execute("UPDATE recordings SET result = NULL, processed_at = NULL WHERE id = %s", (rid,))
+    _index(conn, rid)
+
+
+def link(
+    conn: Conn,
+    rid: int,
+    *,
+    event_id: int | None = None,
+    unlink: bool = False,
+    new_meeting: dict[str, Any] | None = None,
+    scope: str | None = None,
+) -> dict[str, Any]:
+    """Attach a recording to a meeting (existing or new), detach it, or set its project; the
+    recording moves with its transcript, audio and search item and is processed again."""
+    from kb import meetings, scopes
+
+    rec = conn.execute("SELECT * FROM recordings WHERE id = %s", (rid,)).fetchone()
+    if rec is None:
+        raise RecordingError(f"no recording {rid}")
+    if new_meeting is not None:
+        try:
+            event_id = meetings.create_local(
+                conn,
+                str(new_meeting.get("title") or ""),
+                new_meeting.get("scope") or scope,
+                rec["started_at"],
+                rec["ended_at"],
+                list(new_meeting.get("participants") or []),
+            )
+        except meetings.MeetingError as e:
+            raise RecordingError(str(e)) from e
+    if event_id is not None:
+        ev = conn.execute(
+            "SELECT e.id, e.title, coalesce(e.scopes, c.scopes) AS scopes FROM events e"
+            " JOIN calendars c ON c.id = e.calendar_id WHERE e.id = %s",
+            (event_id,),
+        ).fetchone()
+        if ev is None:
+            raise RecordingError(f"no meeting {event_id}")
+        conn.execute(
+            "UPDATE recordings SET event_id = %s, title = %s, scopes = %s WHERE id = %s",
+            (ev["id"], ev["title"] or "Meeting", list(ev["scopes"]) or ["unsorted"], rid),
+        )
+    elif unlink:
+        conn.execute("UPDATE recordings SET event_id = NULL WHERE id = %s", (rid,))
+    if scope is not None and new_meeting is None and event_id is None:
+        if scope not in (*scopes.known(conn), "unsorted"):
+            raise RecordingError(f"unknown project {scope!r}")
+        conn.execute("UPDATE recordings SET scopes = %s WHERE id = %s", ([scope], rid))
+    reprocess(conn, rid)
+    row = conn.execute("SELECT event_id, title, scopes FROM recordings WHERE id = %s", (rid,))
+    out = row.fetchone()
+    assert out is not None
+    return {"event_id": out["event_id"], "title": out["title"], "scopes": list(out["scopes"])}
+
+
+def coverage(conn: Conn, now: datetime, days: int = 7) -> dict[str, int]:
+    """Meetings with other attendees that ended in the last `days`, and how many were recorded
+    (mac-recorder-v1 success metric)."""
+    row = conn.execute(
+        """
+        SELECT count(*) AS meetings,
+               count(*) FILTER (WHERE EXISTS (SELECT 1 FROM recordings r WHERE r.event_id = e.id))
+                   AS recorded
+        FROM events e JOIN calendars c ON c.id = e.calendar_id
+        WHERE c.sync AND NOT e.all_day AND NOT e.cancelled
+          AND coalesce(e.my_status, '') <> 'DECLINED' AND jsonb_array_length(e.attendees) > 1
+          AND e.end_at <= %s AND e.end_at > %s
+        """,
+        (now, now - timedelta(days=days)),
+    ).fetchone()
+    assert row is not None
+    return {"meetings": int(row["meetings"]), "recorded": int(row["recorded"])}

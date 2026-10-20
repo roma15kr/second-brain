@@ -51,6 +51,7 @@ test("status shows usefulness against targets, health, backups and AI spend", as
         briefs: { total: 20, used: 17, share: 0.85, target: 0.8 },
         loops: { total: 10, resolved: 5, share: 0.5, target: 0.7 },
       },
+      recording: { meetings: 20, recorded: 18, transcription_usd: { dictation: 1.2, call: 0 } },
     },
   });
   renderApp();
@@ -58,5 +59,7 @@ test("status shows usefulness against targets, health, backups and AI spend", as
   expect(screen.getByText("50%")).toHaveClass("bad");
   expect(screen.getByText("AUTHENTICATIONFAILED")).toBeInTheDocument();
   expect(screen.getByText("$6.40")).toBeInTheDocument();
+  expect(screen.getByText(/Meetings recorded \(7 days\): 18 of 20 \(90%\)/)).toBeInTheDocument();
+  expect(screen.getByText(/dictation \$1\.20, calls \$0\.00/)).toBeInTheDocument();
   expect(screen.getByText(/delayed/)).toBeInTheDocument();
 });

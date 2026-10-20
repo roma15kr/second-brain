@@ -49,6 +49,11 @@ type StatusData = {
     briefs: { total: number; used: number; share: number | null; target: number };
     loops: { total: number; resolved: number; share: number | null; target: number };
   };
+  recording?: {
+    meetings: number;
+    recorded: number;
+    transcription_usd: { dictation: number; call: number };
+  };
   audio?: {
     bytes: number;
     files: number;
@@ -150,6 +155,17 @@ export function Status() {
             {status.data.assistant.requests_target}) ·{" "}
             {pct(status.data.assistant.approved_from_requests)} of drafts from requests approved
             (target {pct(status.data.assistant.approved_target)})
+          </p>
+        )}
+        {status.data.recording && (
+          <p>
+            Meetings recorded (7 days): {status.data.recording.recorded} of{" "}
+            {status.data.recording.meetings}
+            {status.data.recording.meetings > 0 &&
+              ` (${Math.round((status.data.recording.recorded / status.data.recording.meetings) * 100)}%)`}{" "}
+            · transcription this month: dictation $
+            {status.data.recording.transcription_usd.dictation.toFixed(2)}, calls $
+            {status.data.recording.transcription_usd.call.toFixed(2)}
           </p>
         )}
         {status.data.audio && status.data.audio.files > 0 && (
