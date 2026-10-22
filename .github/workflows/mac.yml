@@ -46,6 +46,14 @@ jobs:
         run: ./install.sh --fetch-speech "$RUNNER_TEMP/speech"
       - name: Build speech-check
         run: swift build --product speech-check
+      - name: In-app model download (the .dmg path)
+        run: |
+          # hide the cached copies so the app really downloads (it reuses verified cached files)
+          C=~/Library/Caches/SecondBrainRecorder/downloads
+          mkdir -p "$RUNNER_TEMP/aside"
+          mv "$C"/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2 "$C"/silero_vad.onnx "$RUNNER_TEMP/aside/"
+          SBR_MODELS_DIR="$RUNNER_TEMP/app-models" "$(swift build --show-bin-path)/speech-check" --install-models
+          test -f "$RUNNER_TEMP/app-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/encoder.int8.onnx"
       - name: Transcribe samples
         run: |
           M="$RUNNER_TEMP/speech/models"

@@ -6,6 +6,15 @@ import Foundation
 import RecorderCore
 import SpeechKit
 
+if CommandLine.arguments.dropFirst().first == "--install-models" {
+    // the app's own model download (into SBR_MODELS_DIR), as the .dmg install uses it
+    let ok = await MainActor.run { () -> ModelInstaller in ModelInstaller() }
+    await ok.install()
+    let (installed, error) = await MainActor.run { (ok.installed, ok.error) }
+    print(installed ? "models installed in \(Models.dir.path)" : "error: \(error ?? "models missing after install")")
+    exit(installed ? 0 : 1)
+}
+
 let files = CommandLine.arguments.dropFirst()
 guard !files.isEmpty else {
     print("usage: speech-check <audio file>…")
