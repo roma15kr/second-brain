@@ -37,6 +37,13 @@ public final class ModelInstaller: ObservableObject {
             let total = Double(SpeechDownloads.model.bytes + SpeechDownloads.vad.bytes)
             var done: Double = 0
             for file in [SpeechDownloads.vad, SpeechDownloads.model] {
+                let present = file.archive
+                    ? FileManager.default.fileExists(atPath: Models.parakeetDir.appendingPathComponent("encoder.int8.onnx").path)
+                    : FileManager.default.fileExists(atPath: Models.vad.path)
+                if present {
+                    done += Double(file.bytes)
+                    continue
+                }
                 let local = try await download(file) { [weak self] got in
                     self?.progress = (done + Double(got)) / total
                 }
@@ -48,10 +55,10 @@ public final class ModelInstaller: ObservableObject {
                     try tar.run()
                     await withCheckedContinuation { c in DispatchQueue.global().async { tar.waitUntilExit(); c.resume() } }
                     guard tar.terminationStatus == 0 else { throw CaptureError(message: "could not unpack the model") }
-                    try? FileManager.default.removeItem(at: local)
+                    try? FileManager.default.removeItem(at: local)  // unpacked: the archive is not needed
                 } else {
                     try? FileManager.default.removeItem(at: Models.vad)
-                    try FileManager.default.moveItem(at: local, to: Models.vad)
+                    try FileManager.default.copyItem(at: local, to: Models.vad)
                 }
             }
         } catch {
@@ -59,31 +66,90 @@ public final class ModelInstaller: ObservableObject {
         }
     }
 
+    /// Downloads with a download task: resumes after a dropped connection (up to 5 attempts),
+    /// waits for the network, keeps a verified file in the cache so it is fetched only once.
     private func download(_ file: SpeechDownloads.File, progress: @escaping @MainActor (Int64) -> Void) async throws -> URL {
-        let (bytes, response) = try await URLSession.shared.bytes(from: file.url)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw CaptureError(message: "the download server answered \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+        let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SecondBrainRecorder/downloads")
+        try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+        let out = cache.appendingPathComponent(file.url.lastPathComponent)
+        if FileManager.default.fileExists(atPath: out.path), (try? DeviceAPI.sha256(of: out)) == file.sha256 {
+            return out
         }
-        let out = FileManager.default.temporaryDirectory.appendingPathComponent(file.url.lastPathComponent)
-        FileManager.default.createFile(atPath: out.path, contents: nil)
-        let handle = try FileHandle(forWritingTo: out)
-        var buffer = Data()
-        var got: Int64 = 0
-        for try await byte in bytes {
-            buffer.append(byte)
-            if buffer.count >= 1 << 20 {
-                try handle.write(contentsOf: buffer)
-                got += Int64(buffer.count)
-                buffer.removeAll(keepingCapacity: true)
-                await progress(got)
-            }
-        }
-        try handle.write(contentsOf: buffer)
-        try handle.close()
+        let fetched = try await Downloader.fetch(file.url) { got in Task { @MainActor in progress(got) } }
+        try? FileManager.default.removeItem(at: out)
+        try FileManager.default.moveItem(at: fetched, to: out)
         guard try DeviceAPI.sha256(of: out) == file.sha256 else {
             try? FileManager.default.removeItem(at: out)
             throw CaptureError(message: "checksum mismatch for \(file.url.lastPathComponent)")
         }
         return out
+    }
+}
+
+/// One large file over URLSession download tasks with resume data between attempts.
+final class Downloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    static let attempts = 5
+
+    private let onProgress: (Int64) -> Void
+    private var continuation: CheckedContinuation<URL, Error>?
+    private var resumeOffset: Int64 = 0
+
+    private init(onProgress: @escaping (Int64) -> Void) { self.onProgress = onProgress }
+
+    static func fetch(_ url: URL, onProgress: @escaping (Int64) -> Void) async throws -> URL {
+        let d = Downloader(onProgress: onProgress)
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 120  // no data for 2 min → the attempt fails and resumes
+        config.timeoutIntervalForResource = 6 * 3600
+        config.waitsForConnectivity = true
+        let session = URLSession(configuration: config, delegate: d, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+        var resumeData: Data?
+        var lastError: Error = CaptureError(message: "the download did not start")
+        for attempt in 1...attempts {
+            do {
+                return try await withCheckedThrowingContinuation { c in
+                    d.continuation = c
+                    let task = resumeData.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: url)
+                    task.resume()
+                }
+            } catch {
+                lastError = error
+                resumeData = (error as NSError).userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+                if attempt < attempts { try await Task.sleep(nanoseconds: UInt64(attempt) * 3_000_000_000) }
+            }
+        }
+        throw lastError
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        onProgress(totalBytesWritten)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didResumeAtOffset fileOffset: Int64,
+                    expectedTotalBytes: Int64) {
+        onProgress(fileOffset)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        // the temporary file disappears when this returns: move it first
+        let keep = FileManager.default.temporaryDirectory.appendingPathComponent("sbr-\(UUID().uuidString)")
+        let status = (downloadTask.response as? HTTPURLResponse)?.statusCode ?? 0
+        do {
+            guard status == 200 else { throw CaptureError(message: "the download server answered \(status)") }
+            try FileManager.default.moveItem(at: location, to: keep)
+            continuation?.resume(returning: keep)
+        } catch {
+            continuation?.resume(throwing: error)
+        }
+        continuation = nil
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let error, let c = continuation else { return }
+        continuation = nil
+        c.resume(throwing: error)
     }
 }
