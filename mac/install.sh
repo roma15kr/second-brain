@@ -130,6 +130,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key><string>$(date +%Y%m%d%H%M)</string>
   <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>LSUIElement</key><true/>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>Records your side of calls and your dictation.</string>
   <key>NSAudioCaptureUsageDescription</key>
@@ -139,6 +140,17 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 plutil -lint "$APP/Contents/Info.plist" >/dev/null || fail "Info.plist is not valid"
+
+# app icon: every size macOS uses, from the 1024 px source
+iconset="$(mktemp -d)/AppIcon.iconset"
+mkdir -p "$iconset"
+for size in 16 32 128 256 512; do
+  sips -z $size $size "$HERE/Resources/AppIcon.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null
+  sips -z $((size * 2)) $((size * 2)) "$HERE/Resources/AppIcon.png" --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$iconset" -o "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$(dirname "$iconset")"
+[ -s "$APP/Contents/Resources/AppIcon.icns" ] || fail "the app icon was not built"
 
 if [ "$DMG" = 1 ]; then
   # runtime only; the model is downloaded by the app (keeps the image small)
