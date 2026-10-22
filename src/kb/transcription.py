@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -31,11 +31,16 @@ def record_cost(
     )
 
 
+def month_range(today: date) -> tuple[date, date]:
+    """The calendar month of `today`: first day, first day of the next month."""
+    first = today.replace(day=1)
+    return first, (first + timedelta(days=32)).replace(day=1)
+
+
 def month_spend_usd(conn: Conn, today: date) -> float:
     row = conn.execute(
-        "SELECT coalesce(sum(usd), 0) AS usd FROM transcription_costs"
-        " WHERE day >= %s AND day <= %s",
-        (today.replace(day=1), today),
+        "SELECT coalesce(sum(usd), 0) AS usd FROM transcription_costs WHERE day >= %s AND day < %s",
+        month_range(today),
     ).fetchone()
     return float(row["usd"]) if row else 0.0
 
@@ -43,8 +48,8 @@ def month_spend_usd(conn: Conn, today: date) -> float:
 def month_by_kind(conn: Conn, today: date) -> dict[str, float]:
     rows = conn.execute(
         "SELECT kind, coalesce(sum(usd), 0) AS usd FROM transcription_costs"
-        " WHERE day >= %s AND day <= %s GROUP BY kind",
-        (today.replace(day=1), today),
+        " WHERE day >= %s AND day < %s GROUP BY kind",
+        month_range(today),
     ).fetchall()
     out = {"dictation": 0.0, "call": 0.0}
     out.update({r["kind"]: round(float(r["usd"]), 4) for r in rows})

@@ -1,6 +1,6 @@
 """Email priority with reasons (assistant-actions; web-os-v1 task 12.3)."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from psycopg.types.json import Jsonb
@@ -99,6 +99,8 @@ def client(conn, pg_url, config):
 
 
 def test_inbox_lists_needs_reply_by_priority(client, conn):
+    # the inbox ages emails against the real clock: these arrived just now
+    NOW = datetime.now(UTC)
     goal(conn, "marketplace launch", "quokka", axis=1)
     brief = conn.execute(
         "INSERT INTO briefs (routine, window_start, window_end, headline, sections, mode)"
