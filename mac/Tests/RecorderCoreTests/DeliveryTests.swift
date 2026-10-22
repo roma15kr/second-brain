@@ -7,6 +7,7 @@ final class FakeServer {
     var registered: [[String: Any]] = []
     var links: [[String: Any]] = []
     var transcribeRequests: [[String: Any]] = []
+    var replaced: [[[String: Any]]] = []
     var tracks: [String: Data] = [:]  // "<rid>/<track>" → bytes received
     var totals: [String: Int] = [:]
     var failNextPutWith409 = false
@@ -33,6 +34,10 @@ final class FakeServer {
             return (200, json(["recording_id": 42]))
         case ("POST", "/api/devices/recordings/42/link"):
             links.append(try JSONSerialization.jsonObject(with: body) as! [String: Any])
+            return (200, json(["ok": true]))
+        case ("PUT", "/api/devices/recordings/42/segments"):
+            let obj = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+            replaced.append(obj["segments"] as! [[String: Any]])
             return (200, json(["ok": true]))
         case ("POST", "/api/devices/recordings/42/transcribe"):
             transcribeRequests.append(try JSONSerialization.jsonObject(with: body) as! [String: Any])
@@ -235,5 +240,47 @@ final class CleanupTests: XCTestCase {
         XCTAssertEqual(store.load(old.id)?.audioRemoved, true)
         XCTAssertTrue(FileManager.default.fileExists(atPath: store.url(recent, "owner.m4a").path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: store.url(pending, "owner.m4a").path))  // never before delivery
+    }
+}
+
+// RetranscribeTests: calls that went to the cloud because the speech model was missing
+extension DeliveryTests {
+    func testCloudFallbackCallIsRetranscribedOnTheMacAndItsTranscriptSent() async throws {
+        let t = self
+        // the call went to the cloud while the model was missing, and was delivered
+        var item = try t.makeItem(cloud: true)
+        item.note = Delivery.modelMissingNote
+        try t.store.save(item)
+        _ = await t.runner.deliver(item.id)
+        let delivered = try XCTUnwrap(t.store.load(item.id))
+        XCTAssertEqual(delivered.status, .delivered)
+
+        var again = try XCTUnwrap(Delivery.retranscribeLocally(delivered))
+        XCTAssertEqual(Delivery.next(again, paired: true), .transcribeOnMac)
+        again.segments = [TranscriptSegment(speaker: "me", isOwner: true, start: 1, end: 2, text: "Привіт")]
+        again.status = .transcribed
+        try t.store.save(again)
+        XCTAssertEqual(Delivery.next(again, paired: true), .sendSegments)
+        let done = await t.runner.deliver(item.id)
+        XCTAssertEqual(done?.status, .delivered)
+        XCTAssertEqual(done?.segmentsSent, true)
+        XCTAssertEqual(t.server.registered.count, 1)  // not registered twice
+        XCTAssertEqual(t.server.replaced.first?.first?["text"] as? String, "Привіт")
+    }
+
+    func testNotPossibleWithoutLocalAudio() {
+        var item = Item(kind: .call, startedAt: Date(), source: "", status: .delivered)
+        item.recordingId = 4
+        item.tracks = [Track(name: "owner", file: "owner.m4a")]
+        item.audioRemoved = true
+        XCTAssertNil(Delivery.retranscribeLocally(item))
+    }
+
+    func testRegisteringWithSegmentsNeedsNoSecondSend() {
+        var item = Item(kind: .call, startedAt: Date(), source: "", status: .uploading)
+        item.recordingId = 4
+        item.segments = []
+        item.tracks = [Track(name: "owner", file: "owner.m4a")]
+        XCTAssertEqual(Delivery.next(item, paired: true), .upload("owner"))  // segmentsSent nil = sent
     }
 }

@@ -194,3 +194,30 @@ test("a spontaneous call gets a new meeting with participants", async () => {
   );
   expect(await screen.findByRole("button", { name: "Edit meeting" })).toBeInTheDocument();
 });
+
+test("a failed cloud transcription is shown on the recording", async () => {
+  window.history.pushState({}, "", "/meetings/3");
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/meetings/3": {
+      ...meeting,
+      recordings: [
+        {
+          ...recording,
+          event_id: 3,
+          result: null,
+          processed: false,
+          transcription: {
+            status: "failed",
+            error: "audio is longer than 1400 seconds",
+            finished_at: "2026-10-22T12:00:00Z",
+          },
+        },
+      ],
+    },
+  });
+  renderApp();
+  expect(
+    await screen.findByText("Cloud transcription failed: audio is longer than 1400 seconds"),
+  ).toBeInTheDocument();
+});

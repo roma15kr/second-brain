@@ -42,7 +42,19 @@ export type Recording = {
   } | null;
   processed: boolean;
   audio?: Track[];
+  transcription?: { status: string; error: string | null; finished_at: string | null } | null;
 };
+
+// The last cloud transcription of a recording (the Mac's "Cloud" mode or "Separate speakers").
+function CloudTranscription({ job }: { job: Recording["transcription"] }) {
+  if (!job || job.status === "done") return null;
+  if (job.status === "failed") {
+    return job.error === "replaced by the Mac transcript" ? null : (
+      <p className="error">Cloud transcription failed: {job.error}</p>
+    );
+  }
+  return <p className="muted">Transcribing in the cloud…</p>;
+}
 
 export function RecordingView({ r, onChanged }: { r: Recording; onChanged: () => void }) {
   return (
@@ -52,6 +64,7 @@ export function RecordingView({ r, onChanged }: { r: Recording; onChanged: () =>
         <span className="muted small">{day.format(new Date(r.started_at))}</span>
       </h3>
       <LinkRecording r={r} onChanged={onChanged} />
+      <CloudTranscription job={r.transcription} />
       {r.result ? (
         <>
           <p>{r.result.summary}</p>

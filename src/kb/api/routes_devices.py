@@ -143,6 +143,7 @@ def _recording(r: dict[str, Any]) -> dict[str, Any]:
         "result": r["result"],
         "processed": r["processed_at"] is not None,
         "audio": r.get("audio", []),
+        "transcription": r.get("transcription"),
     }
 
 
@@ -161,14 +162,33 @@ def recording(conn: Db, rid: int) -> dict[str, Any]:
     row = conn.execute("SELECT * FROM recordings WHERE id = %s", (rid,)).fetchone()
     if row is None:
         raise HTTPException(404, f"no recording {rid}")
-    return _recording({**row, "audio": audio.tracks(conn, rid)})
+    from kb import transcription
+
+    return _recording(
+        {
+            **row,
+            "audio": audio.tracks(conn, rid),
+            "transcription": transcription.latest_job(conn, rid),
+        }
+    )
 
 
 def for_event(conn: Conn, event_id: int) -> list[dict[str, Any]]:
     rows = conn.execute(
         "SELECT * FROM recordings WHERE event_id = %s ORDER BY started_at", (event_id,)
     ).fetchall()
-    return [_recording({**r, "audio": audio.tracks(conn, r["id"])}) for r in rows]
+    from kb import transcription
+
+    return [
+        _recording(
+            {
+                **r,
+                "audio": audio.tracks(conn, r["id"]),
+                "transcription": transcription.latest_job(conn, r["id"]),
+            }
+        )
+        for r in rows
+    ]
 
 
 @router.get("/api/recordings/{rid}/audio/{track}", response_model=None)
@@ -439,6 +459,31 @@ async def device_dictation(
                 return JSONResponse({"detail": str(e)}, status_code=422)
 
     return await run_in_threadpool(work)
+
+
+class SegmentsBody(BaseModel):
+    segments: list[Segment]
+
+
+@router.put("/api/devices/recordings/{rid}/segments")
+def replace_segments(conn: Db, dev: Device, rid: int, body: SegmentsBody) -> dict[str, bool]:
+    """The Mac's transcript for a recording that was registered before it was transcribed (e.g.
+    sent to the cloud while the speech model was missing): replaces the segments and processes the
+    recording again; queued cloud jobs for it are dropped."""
+    from psycopg.types.json import Jsonb
+
+    from kb.redact import redact_text
+
+    _own(conn, dev, rid)
+    segs = [{**s.model_dump(), "text": redact_text(s.text)} for s in body.segments]
+    conn.execute("UPDATE recordings SET segments = %s WHERE id = %s", (Jsonb(segs), rid))
+    conn.execute(
+        "UPDATE transcription_jobs SET status = 'failed', error = 'replaced by the Mac transcript',"
+        " finished_at = now() WHERE recording_id = %s AND status = 'queued'",
+        (rid,),
+    )
+    recordings.reprocess(conn, rid)
+    return {"ok": True}
 
 
 class TranscribeRequest(BaseModel):

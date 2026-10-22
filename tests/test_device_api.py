@@ -149,6 +149,7 @@ def test_cloud_transcription_replaces_segments_and_records_cost(uploaded, conn):
     assert est["provider"] == "openai-diarize" and est["estimated_usd"] == pytest.approx(
         0.36, abs=0.01
     )
+    conn.execute("UPDATE recording_audio SET duration_seconds = 600")  # a 10-minute call
     r = client.post(f"/api/devices/recordings/{rid}/transcribe", json={}, headers=h)
     assert r.status_code == 200
     conn.execute("UPDATE recordings SET processed_at = now(), result = '{}'::jsonb")
@@ -213,12 +214,66 @@ def test_speakers_use_diarize_for_others_track(uploaded, conn):
             ),
         ),
     )
+    conn.execute("UPDATE recording_audio SET duration_seconds = 600")
     client.post(f"/api/devices/recordings/{rid}/transcribe", json={"speakers": True}, headers=h)
     api = FakeApi()
     transcription.run_jobs(conn, START + timedelta(hours=1), api)
     assert api.calls == [("openai-diarize", f"{rid}-others.ogg")]  # "me" is not re-done
     segs = conn.execute("SELECT segments FROM recordings").fetchone()["segments"]
     assert segs[0]["text"] == "local me" and segs[1]["speaker"] == "others A"
+
+
+def test_long_call_uses_whisper_and_refuses_speaker_separation(uploaded, conn):
+    client, h, rid = uploaded
+    conn.execute("UPDATE recording_audio SET duration_seconds = 6480")  # 1 h 48 min
+    r = client.post(f"/api/devices/recordings/{rid}/transcribe", json={"speakers": True}, headers=h)
+    assert r.status_code == 400 and "up to 23 minutes" in r.json()["detail"]
+    assert (
+        client.post(f"/api/devices/recordings/{rid}/transcribe", json={}, headers=h).status_code
+        == 200
+    )
+    api = FakeApi()
+    transcription.run_jobs(conn, START + timedelta(hours=1), api)
+    assert {name for name, _ in api.calls} == {
+        "openai-whisper"
+    }  # the diarize model stops at ~23 min
+
+
+def test_failed_cloud_job_is_shown_on_the_recording(uploaded, owner, conn):
+    client, h, rid = uploaded
+    client.post(f"/api/devices/recordings/{rid}/transcribe", json={}, headers=h)
+
+    class Broken:
+        def segments(self, provider, path):
+            raise RuntimeError("audio duration 6480 seconds is longer than 1400 seconds")
+
+    transcription.run_jobs(conn, START + timedelta(hours=1), Broken())
+    job = owner.get(f"/api/recordings/{rid}").json()["transcription"]
+    assert job["status"] == "failed" and "1400 seconds" in job["error"]
+
+
+def test_mac_transcript_replaces_segments_of_a_registered_recording(uploaded, app, owner, conn):
+    client, h, rid = uploaded
+    client.post(f"/api/devices/recordings/{rid}/transcribe", json={}, headers=h)
+    conn.execute("UPDATE recordings SET processed_at = now(), result = '{}'::jsonb")
+    segs = [
+        {"speaker": "me", "is_owner": True, "start": 1, "end": 2, "text": "Привіт"},
+        {"speaker": "others", "is_owner": False, "start": 3, "end": 5, "text": "Добрий день"},
+    ]
+    r = client.put(f"/api/devices/recordings/{rid}/segments", json={"segments": segs}, headers=h)
+    assert r.status_code == 200
+    rec = conn.execute("SELECT segments, processed_at FROM recordings").fetchone()
+    assert [s["text"] for s in rec["segments"]] == ["Привіт", "Добрий день"]
+    assert rec["processed_at"] is None  # processed again
+    job = conn.execute("SELECT status, error FROM transcription_jobs").fetchone()
+    assert job["status"] == "failed" and job["error"] == "replaced by the Mac transcript"
+    other, token = paired(app, owner)
+    r = other.put(
+        f"/api/devices/recordings/{rid}/segments",
+        json={"segments": []},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 404  # only the device's own recordings
 
 
 def test_transcribe_refuses_other_devices_and_missing_audio(app, owner, uploaded, conn):

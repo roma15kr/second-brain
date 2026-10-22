@@ -423,8 +423,8 @@ def month_spend_usd(conn: Conn, today: date | None = None) -> float:
     day = today or datetime.now(UTC).date()
     rows = conn.execute(
         "SELECT model, sum(input_tokens) AS i, sum(output_tokens) AS o FROM llm_usage"
-        " WHERE day >= %s AND day <= %s GROUP BY model",
-        (day.replace(day=1), day),
+        " WHERE day >= %s AND day < %s GROUP BY model",
+        transcription.month_range(day),
     ).fetchall()
     models = sum(cost_usd(r["model"], Usage(int(r["i"]), int(r["o"]))) for r in rows)
     return models + transcription.month_spend_usd(conn, day)

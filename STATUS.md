@@ -143,6 +143,10 @@ _Last updated: 2026-10-20 by Claude_
   mounts `kb-audio` read-only); a new service that needs them must mount them too.
 - `/api/devices/*` bypasses the session middleware on purpose (device bearer tokens, upload only); the one read is
   `GET /api/devices/meetings` (titles/times ±12 h); never add another read endpoint under that prefix.
+- OpenAI's diarize model takes ~1,400 s per request: longer call tracks use whisper-1 (25 MB limit); speaker
+  separation is refused for calls over 23 min. Cloud job failures show on the recording page.
+- Tests with a fixed `NOW` must not compare against code that uses the real clock (they broke two days later);
+  monthly spend now counts the whole calendar month.
 - Mac app code cannot be compiled here: push and read the `Mac recorder` workflow (macos-15). sherpa-onnx's VAD must
   get one 512-sample window per call (bigger blocks merge into one speech decision). The `.dmg` must be built with
   `--arch arm64 --arch x86_64` (runners are Apple Silicon, the owner's Mac is Intel).

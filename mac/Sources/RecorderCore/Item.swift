@@ -40,6 +40,7 @@ public struct Item: Codable, Equatable, Sendable, Identifiable {
     public var cloudRequested: Bool?  // the server was asked to transcribe (Cloud mode / speakers)
     public var speakers: Bool?  // "Separate speakers" requested for this recording
     public var audioRemoved: Bool?  // local audio deleted 7 days after delivery
+    public var segmentsSent: Bool?  // false: the Mac's transcript still has to replace the server's
 
     public init(
         id: UUID = UUID(), kind: Kind, startedAt: Date, source: String, meeting: MeetingChoice = .automatic,

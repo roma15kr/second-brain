@@ -5,6 +5,7 @@ public enum DeliveryStep: Equatable, Sendable {
     case transcribeOnMac
     case register
     case link
+    case sendSegments
     case upload(String)
     case requestCloud
     case done
@@ -13,6 +14,26 @@ public enum DeliveryStep: Equatable, Sendable {
 
 public enum Delivery {
     public static let keepAudio: TimeInterval = 7 * 24 * 3600
+    /// The note on calls that went to the server only because the speech model was missing.
+    public static let modelMissingNote = "Transcribed on the server (the Mac's speech model is not installed)"
+    public static let waitingForModel = "Waiting for the speech model (Settings → Download the speech model)"
+
+    /// Sends an already delivered recording back through transcription on this Mac; its transcript
+    /// then replaces the server's. nil when the local audio is gone or it was never registered.
+    public static func retranscribeLocally(_ item: Item) -> Item? {
+        guard item.recordingId != nil, item.audioRemoved != true, !item.tracks.isEmpty,
+              item.status == .delivered || item.status == .failed || item.status == .waiting
+        else { return nil }
+        var i = item
+        i.cloud = false
+        i.cloudRequested = nil
+        i.segments = nil
+        i.segmentsSent = false
+        i.status = .recorded
+        i.reason = nil
+        i.note = "Transcribing on this Mac"
+        return i
+    }
 
     /// nil when there is nothing to do (still recording, failed, or finished).
     public static func next(_ item: Item, paired: Bool) -> DeliveryStep? {
@@ -25,6 +46,7 @@ public enum Delivery {
         if !paired { return .wait("Not paired — open Settings") }
         if item.recordingId == nil { return .register }
         if item.pendingLink != nil { return .link }
+        if !item.cloud && item.segments != nil && item.segmentsSent == false { return .sendSegments }
         if let t = item.tracks.first(where: { !$0.uploaded }) { return .upload(t.name) }
         if item.cloud && item.cloudRequested != true { return .requestCloud }
         return .done
@@ -84,6 +106,7 @@ public final class DeliveryRunner: @unchecked Sendable {
                     item.status = .registering
                     try store.save(item)
                     item.recordingId = try await api.register(item)
+                    if item.segments != nil { item.segmentsSent = true }
                     item.pendingLink = item.pendingLink ?? Delivery.initialLink(item)
                     item.status = .uploading
                 case .link:
@@ -91,6 +114,10 @@ public final class DeliveryRunner: @unchecked Sendable {
                     if let m = item.pendingLink?.meeting { item.meeting = m }
                     if let s = item.pendingLink?.scope { item.scope = s }
                     item.pendingLink = nil
+                case .sendSegments:
+                    try await api.replaceSegments(item.recordingId!, item.segments ?? [])
+                    item.segmentsSent = true
+                    item.note = nil
                 case let .upload(name):
                     item.status = .uploading
                     try store.save(item)

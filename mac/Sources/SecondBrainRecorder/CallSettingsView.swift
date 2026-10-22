@@ -18,12 +18,17 @@ struct CallSettingsView: View {
             }
             if engine == "mac" {
                 if !state.models.installed {
-                    Text("The speech model (0.5 GB) is not downloaded yet. Until then calls are transcribed in the cloud.")
+                    Text("The speech model (0.5 GB) is not downloaded yet. Recorded calls wait for it and are transcribed here once it is in place.")
                         .font(.caption).foregroundStyle(.orange)
                     if let p = state.models.progress {
                         ProgressView(value: p) { Text("Downloading the speech model…") }
                     } else {
-                        Button("Download the speech model") { Task { await state.models.install() } }
+                        Button("Download the speech model") {
+                            Task {
+                                await state.models.install()
+                                state.processQueue()
+                            }
+                        }
                     }
                     if let e = state.models.error { Text(e).font(.caption).foregroundStyle(.red) }
                 }
