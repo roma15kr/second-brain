@@ -63,6 +63,12 @@ final class Pipeline {
 
     private func pass() async {
         let store = state.itemStore
+        if transcriber.available {
+            // calls sent to the cloud only because the model was missing: transcribe them here now
+            for item in store.all() where item.cloud && item.note == Delivery.modelMissingNote {
+                if let again = Delivery.retranscribeLocally(item) { try? store.save(again) }
+            }
+        }
         for item in store.all() {
             guard let step = Delivery.next(item, paired: state.isPaired) else { continue }
             switch step {
@@ -86,11 +92,9 @@ final class Pipeline {
     private func transcribe(_ item: Item) async {
         let store = state.itemStore
         guard transcriber.available else {
-            // no speech runtime or model on this Mac: the server's provider transcribes instead
-            _ = try? store.update(item.id) {
-                $0.cloud = true
-                $0.note = "Transcribed on the server (the Mac's speech model is not installed)"
-            }
+            // the owner chose "On this Mac": wait for the model (downloaded at launch or from
+            // Settings) instead of the cloud, which cannot take long calls in one piece
+            _ = try? store.update(item.id) { $0.reason = Delivery.waitingForModel }
             return
         }
         _ = try? store.update(item.id) {
@@ -126,6 +130,14 @@ final class Pipeline {
         if result?.status == .waiting, result?.reason == Delivery.describe(APIError.unauthorized).1 {
             state.unpaired()  // revoked in the web OS: keep recordings, show "not paired"
         }
+    }
+
+    /// "Transcribe on this Mac": the Mac's transcript replaces the server's.
+    func transcribeHere(_ item: Item) {
+        guard let again = Delivery.retranscribeLocally(item) else { return }
+        try? state.itemStore.save(again)
+        state.reloadItems()
+        run()
     }
 
     /// "Separate speakers…": shows the estimate, then asks the server (OpenAI diarize).

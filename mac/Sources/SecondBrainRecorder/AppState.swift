@@ -59,7 +59,10 @@ final class AppState: ObservableObject {
         Task { await recoverInterrupted() }
         if let dir = watchedFolder { watch(dir) }
         if CallSettings.engine == "mac" && !models.installed {
-            Task { await models.install() }  // first launch after installing from the .dmg
+            Task {
+                await models.install()  // first launch after installing from the .dmg
+                processQueue()  // calls waiting for the model
+            }
         }
     }
 

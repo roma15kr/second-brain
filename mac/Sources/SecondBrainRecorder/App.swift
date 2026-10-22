@@ -126,6 +126,9 @@ struct RecentItems: View {
                         Menu("Set project") { ProjectChoices { state.relink(item.id, meeting: nil, scope: $0) } }
                     }
                     if let s = item.transcribeSeconds { Text("Transcribed on this Mac in \(SecondBrainRecorderApp.clock(s))") }
+                    if item.cloud && item.audioRemoved != true && item.recordingId != nil && state.models.installed {
+                        Button("Transcribe on this Mac") { state.pipeline.transcribeHere(item) }
+                    }
                     if item.recordingId != nil && item.tracks.allSatisfy(\.uploaded) && item.speakers != true {
                         Button("Separate speakers…") { Task { await state.pipeline.separateSpeakers(item) } }
                     }

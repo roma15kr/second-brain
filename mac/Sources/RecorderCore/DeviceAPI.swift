@@ -103,6 +103,17 @@ public struct DeviceAPI: Sendable {
             body: LinkBody(meeting: request.meeting, scope: request.scope))
     }
 
+    /// The Mac's transcript for a recording registered before it was transcribed.
+    public func replaceSegments(_ recordingId: Int, _ segments: [TranscriptSegment]) async throws {
+        struct Body: Encodable { let segments: [Segment] }
+        struct Answer: Decodable {}
+        let _: Answer = try await client.json(
+            "PUT", "api/devices/recordings/\(recordingId)/segments",
+            body: Body(segments: segments.map {
+                Segment(speaker: $0.speaker, isOwner: $0.isOwner, start: $0.start, end: $0.end, text: $0.text)
+            }))
+    }
+
     public func meetings() async throws -> [MeetingSummary] {
         struct List: Decodable { let meetings: [MeetingSummary] }
         let list: List = try await client.json("GET", "api/devices/meetings")

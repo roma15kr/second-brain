@@ -58,6 +58,9 @@ def month_by_kind(conn: Conn, today: date) -> dict[str, float]:
 # and Groq Whisper large-v3-turbo (OpenAI-compatible API; only when GROQ_API_KEY is set).
 
 
+# gpt-4o-transcribe-diarize accepts about 1,400 s per request (OpenAI community reports, 2026-10);
+# longer tracks go to whisper-1, whose only limit is the 25 MB file size.
+DIARIZE_MAX_SECONDS = 1400
 MAX_BYTES = 25 * 1024 * 1024  # the providers' upload limit (~100 min at the Mac's 32 kbps)
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
@@ -130,10 +133,37 @@ def estimate_usd(provider: str, seconds: float) -> float:
     return round(seconds / 60 * PROVIDERS[provider].usd_per_minute, 4)
 
 
+def _for_length(provider: Provider, track: dict[str, Any]) -> Provider:
+    """A track too long for the diarize model is transcribed by Whisper instead."""
+    if (
+        provider.name == "openai-diarize"
+        and float(track["duration_seconds"] or 0) > DIARIZE_MAX_SECONDS
+    ):
+        return PROVIDERS["openai-whisper"]
+    return provider
+
+
+def latest_job(conn: Conn, rid: int) -> dict[str, Any] | None:
+    """The last cloud transcription of a recording, for the recording page."""
+    row = conn.execute(
+        "SELECT status, error, finished_at FROM transcription_jobs WHERE recording_id = %s"
+        " ORDER BY created_at DESC, id DESC LIMIT 1",
+        (rid,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "status": row["status"],
+        "error": row["error"],
+        "finished_at": row["finished_at"].isoformat() if row["finished_at"] else None,
+    }
+
+
 def request(conn: Conn, recording: dict[str, Any], speakers: bool) -> int:
     """Queue cloud transcription of a recording whose tracks are fully uploaded."""
     tracks = conn.execute(
-        "SELECT track, total_bytes, complete FROM recording_audio WHERE recording_id = %s"
+        "SELECT track, total_bytes, duration_seconds, complete FROM recording_audio"
+        " WHERE recording_id = %s"
         " AND deleted_at IS NULL",
         (recording["id"],),
     ).fetchall()
@@ -143,6 +173,11 @@ def request(conn: Conn, recording: dict[str, Any], speakers: bool) -> int:
     if any(int(t["total_bytes"]) > MAX_BYTES for t in ready):
         raise TranscriptionError(
             "a track is over 25 MB (about 100 minutes); transcribe it on the Mac"
+        )
+    others = [t for t in ready if t["track"] in ("others", "mixed")]
+    if speakers and any(float(t["duration_seconds"] or 0) > DIARIZE_MAX_SECONDS for t in others):
+        raise TranscriptionError(
+            "speaker separation works for calls up to 23 minutes; this one is longer"
         )
     row = conn.execute(
         "INSERT INTO transcription_jobs (recording_id, speakers) VALUES (%s, %s) RETURNING id",
@@ -215,7 +250,7 @@ def _transcribe_recording(
             raise TranscriptionError("there is no others track to separate")
         plan["others" if "others" in tracks else "mixed"] = PROVIDERS["openai-diarize"]
     else:
-        plan = {t: PROVIDERS[provider_name] for t in tracks}
+        plan = {t: _for_length(PROVIDERS[provider_name], tracks[t]) for t in tracks}
     keep = [s for s in rec["segments"] if speakers and s.get("is_owner")]
     new: list[dict[str, Any]] = []
     usd = 0.0
