@@ -83,6 +83,8 @@ def index_email(conn: Conn, config: Config, raw_id: int, raw: dict[str, Any]) ->
             "folder": payload.get("folder"),
             "labels": payload.get("gm_labels") or [],
             "gm_thrid": payload.get("gm_thrid"),
+            "to": parsed.to,
+            "bulk": parsed.bulk,
         },
     )
     keys = [people.email_key(a) for a in parsed.participants]

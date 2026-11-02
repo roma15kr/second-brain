@@ -24,6 +24,8 @@ class ParsedEmail:
     in_reply_to: str | None = None
     references: list[str] = field(default_factory=list)
     names: dict[str, str] = field(default_factory=dict)  # address -> display name
+    to: list[str] = field(default_factory=list)  # direct recipients (not Cc)
+    bulk: bool = False  # mailing list, newsletter or automatic message
 
     @property
     def participants(self) -> list[str]:
@@ -97,6 +99,13 @@ def parse(raw: bytes) -> ParsedEmail:
             date = None
     senders = _addresses([str(msg["From"] or "")])
     recipients = _addresses([str(msg[h]) for h in ("To", "Cc") if msg[h]])
+    to = _addresses([str(msg["To"])]) if msg["To"] else []
+    precedence = str(msg["Precedence"] or "").lower()
+    bulk = (
+        bool(msg["List-Unsubscribe"] or msg["List-Id"])
+        or precedence in ("bulk", "list", "junk")
+        or str(msg["Auto-Submitted"] or "no").lower() != "no"
+    )
     refs = str(msg["References"] or "").split()
     names = {
         addr.lower(): name.strip()
@@ -114,4 +123,6 @@ def parse(raw: bytes) -> ParsedEmail:
         in_reply_to=str(msg["In-Reply-To"]).strip() if msg["In-Reply-To"] else None,
         references=refs,
         names=names,
+        to=to,
+        bulk=bulk,
     )
