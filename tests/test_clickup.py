@@ -911,3 +911,83 @@ def test_team_mention_notifies(conn, fake, watched):
     assert clickup.headline_text("team_mentioned", "Олена", "DTC", "Bogdan Stetsenko") == (
         "ClickUp: Олена mentioned Bogdan Stetsenko"
     )
+
+
+def test_dailyplanning_only_team_mentions_reach_assistant(conn, fake, watched):
+    from kb.routines import factpack
+
+    bogdan, warehouse = (
+        {"id": 12, "username": "Bogdan Stecenko", "email": "b@x"},
+        {
+            "id": 30,
+            "username": "Khrystyna Vladyka",
+            "email": "k@x",
+        },
+    )
+
+    def msg(mid, text, user):
+        return {"id": mid, "content": text, "date": now_ms(), "user_id": user}
+
+    messages = {
+        "DP": [
+            msg("w1", "@Nikita Today: shipment plan", "30"),
+            msg("b1", "@Owner Today: Macy's orders checked", "12"),
+            msg("w2", "@Kate please check the Walmart forecast", "30"),
+        ]
+    }
+    channel = {"id": "DP", "name": "dailyplanning", "type": "CHANNEL", "visibility": "PUBLIC"}
+    original = fake.handler
+
+    def v3(request):
+        p = request.url.path
+        if p.endswith("/chat/channels"):
+            return httpx.Response(200, json={"data": [channel], "next_cursor": ""})
+        if p.endswith("/messages"):
+            return httpx.Response(200, json={"data": messages["DP"], "next_cursor": ""})
+        if p == "/api/v2/team":
+            users = [
+                OWNER,
+                bogdan,
+                warehouse,
+                {"id": 14, "username": "Kate Oleksyuk", "email": "o@x"},
+            ]
+            team = {"id": "T1", "name": "Quokka", "members": [{"user": u} for u in users]}
+            return httpx.Response(200, json={"teams": [team]})
+        return original(request)
+
+    fake.handler = v3
+    clickup.ensure_identity(
+        conn, fake.client(), watched, datetime.now(UTC) - timedelta(hours=1), refresh_group=True
+    )
+    assert clickup.sync_chat(conn, fake.client(), watched, datetime.now(UTC)) == 3
+    item = conn.execute("SELECT * FROM items WHERE title LIKE '#dailyplanning%'").fetchone()
+    assert "shipment plan" in item["raw_text"]  # everything stays searchable
+    assistant = item["metadata"]["assistant_text"]
+    assert "Macy's orders" in assistant and "Walmart forecast" in assistant
+    assert "shipment plan" not in assistant
+    assert sorted(notes(conn)) == [
+        ("followed_chat", "Khrystyna Vladyka"),  # the post that mentions Kate
+        ("mentioned", "Bogdan Stecenko"),  # his report for the owner
+    ]  # the other department's report is not noted
+    now = datetime.now(UTC)
+    pack = factpack.build(conn, "morning", (now - timedelta(hours=2), now + timedelta(hours=1)))
+    day = next(
+        f for group in pack.by_scope.values() for f in group if f.title.startswith("#dailyplanning")
+    )
+    assert "shipment plan" not in day.summary and "Macy's orders" in day.summary
+
+
+def test_dailyplanning_day_without_team_posts_is_left_out_of_briefs(conn):
+    from psycopg.types.json import Jsonb
+
+    from kb.routines import factpack
+
+    now = datetime.now(UTC)
+    conn.execute(
+        "INSERT INTO items (source_id, source_item_key, kind, scopes, title, raw_text,"
+        " last_activity_at, metadata) VALUES ('clickup-1', 'chat:DP:d', 'clickup_chat',"
+        " '{quokka}', '#dailyplanning · d', 'Khrystyna: @Nikita shipment', %s, %s)",
+        (now, Jsonb({"mentions_only": True, "assistant_text": ""})),
+    )
+    pack = factpack.build(conn, "morning", (now - timedelta(hours=1), now + timedelta(hours=1)))
+    assert "#dailyplanning" not in repr(pack)

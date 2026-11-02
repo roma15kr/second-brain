@@ -83,12 +83,19 @@ def build(conn: Conn, routine: RoutineName, window: tuple[datetime, datetime]) -
     rows = conn.execute(
         """
         SELECT id, kind, scopes, coalesce(title, '') AS title,
-               coalesce(summary, question, left(raw_text, 300)) AS summary, outcome, locator,
+               CASE WHEN coalesce(metadata->>'mentions_only', '') = 'true'
+                    THEN left(metadata->>'assistant_text', 600)
+                    ELSE coalesce(summary, question, left(raw_text, 300)) END AS summary,
+               CASE WHEN coalesce(metadata->>'mentions_only', '') = 'true' THEN NULL
+                    ELSE outcome END AS outcome,
+               locator,
                last_activity_at, participants
         FROM items
         WHERE NOT hidden
           AND kind IN ('email_thread', 'tg_conversation', 'clickup_task', 'clickup_chat',
                        'meeting')
+          AND NOT (coalesce(metadata->>'mentions_only', '') = 'true'
+                   AND coalesce(metadata->>'assistant_text', '') = '')
           AND last_activity_at > %s AND last_activity_at <= %s
         ORDER BY last_activity_at DESC
         """,

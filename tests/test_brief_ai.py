@@ -5,8 +5,9 @@ from kb.distill import Usage, month_spend_usd, record_usage
 from kb.routines import KYIV, briefs, factpack
 from tests.test_routines_brief import add_item
 
-NOW = datetime(2026, 10, 20, 8, 0, tzinfo=KYIV)
-EVENING = datetime(2026, 10, 19, 19, 0, tzinfo=KYIV)
+# today, so spend recorded at the real date falls in the same month
+NOW = datetime.now(KYIV).replace(hour=8, minute=0, second=0, microsecond=0)
+EVENING = (NOW - timedelta(days=1)).replace(hour=19)
 
 
 class FakeLlm:

@@ -6,7 +6,8 @@ from kb.distill import Usage, record_usage
 from kb.routines import KYIV, triage
 from tests.test_brief_ai import FakeLlm
 
-NOW = datetime(2026, 10, 20, 11, 0, tzinfo=KYIV)
+# today, so spend recorded at the real date falls in the same month
+NOW = datetime.now(KYIV).replace(hour=11, minute=0, second=0, microsecond=0)
 
 
 def mail(conn, key, author, subject, body, at, summary=None):
