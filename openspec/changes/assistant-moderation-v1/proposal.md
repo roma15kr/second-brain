@@ -21,7 +21,7 @@ read in full; the team is taken from a ClickUp group that may not match the owne
 
 - **Mail:** for emails that really need the owner's answer (needs-reply, from a person, not
   newsletters/notifications/CC-only), a reply draft is written and **saved straight into that
-  mailbox's Gmail/IMAP Drafts in the thread** — never sent. First run covers the last 3 days. The
+  mailbox's Gmail/IMAP Drafts in the thread** — never sent. Only new mail (owner, 2026-11-02: no backfill). The
   owner edits or deletes it in Gmail; a draft the owner deleted is not recreated.
 - **Meetings:** each processed meeting yields a short summary (≤ 5 lines) and **proposals**: new
   ClickUp tasks (title, assignee from the team, due date) and **comments on existing ClickUp tasks**

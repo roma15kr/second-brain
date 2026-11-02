@@ -6,7 +6,8 @@
   writes the draft as today, and saves it with the existing Save-to-Drafts executor (IMAP APPEND,
   `In-Reply-To`/`References`) instead of waiting in the approval queue. One draft per thread
   (`suggestions` row with status `saved`, mailbox UID of the draft). If the draft UID is gone on the
-  next cycle (owner deleted or sent it) the thread is done until a new message arrives. Backfill: 3 days.
+  next cycle (owner deleted or sent it) the thread is done until a new message arrives. No backfill:
+  only messages after `drafts_since` (set when the change is deployed).
   The daily cap (Settings) still applies (default 10).
 - **D2 Meeting proposals.** Meeting processing returns `tasks[]` and `comments[]` (comment:
   existing ClickUp task found by search over the meeting's scope, text). Both become suggestions of

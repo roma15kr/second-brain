@@ -8,7 +8,7 @@ texts are short; only what concerns the owner and the owner's team reaches the o
 ## ADDED Requirements
 
 ### Requirement: Reply drafts are saved to the mailbox
-For each email thread that needs the owner's reply (the last message is from a person to the owner, asks or expects an answer, and is not a newsletter, notification or CC-only), the system SHALL write a reply draft in the thread's language and the owner's tone and save it to that mailbox's Drafts in the same thread, without sending it. The first run SHALL cover the last 3 days; a thread SHALL get at most one draft, and a draft the owner deleted SHALL not be recreated.
+For each email thread that needs the owner's reply (the last message is from a person to the owner, asks or expects an answer, and is not a newsletter, notification or CC-only), the system SHALL write a reply draft in the thread's language and the owner's tone and save it to that mailbox's Drafts in the same thread, without sending it. Only mail that arrives after the feature is switched on SHALL be considered; a thread SHALL get at most one draft, and a draft the owner deleted SHALL not be recreated.
 
 #### Scenario: Dealer asks about prices
 - **WHEN** a dealer writes "Can you confirm the October prices?" to the owner's quokka mailbox
