@@ -58,6 +58,13 @@ class AppSettings(BaseModel):
     working_hours: WorkingHours = WorkingHours()  # focus blocks and meeting load
     # cloud transcription of calls (when the Mac app is set to "Cloud" or speakers are asked for)
     calls_provider: Literal["openai-diarize", "openai-whisper", "groq"] = "openai-diarize"
+    # the owner's team (assistant-moderation-v1): mentions, assignments, meeting task assignees
+    team: list[str] = Field(
+        default_factory=lambda: [
+            "Anastasiya Tarasova", "Kate Oleksyuk", "Bogdan Stetsenko", "Galyna Tkachenko",
+        ],
+        max_length=30,
+    )  # fmt: skip
 
 
 class SettingsError(ValueError):

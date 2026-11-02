@@ -559,7 +559,7 @@ def clickup_updates(conn: Db, days: int = 3) -> dict[str, Any]:
 
     rows = conn.execute(
         """
-        SELECT n.kind, n.actor, n.created_at, n.event_at, n.pushed, n.item_id, i.title,
+        SELECT n.kind, n.actor, n.subject, n.created_at, n.event_at, n.pushed, n.item_id, i.title,
                i.locator, i.kind AS item_kind, a.settings
         FROM clickup_notifications n LEFT JOIN items i ON i.id = n.item_id
         JOIN connector_accounts a ON a.id = n.account_id
@@ -573,10 +573,11 @@ def clickup_updates(conn: Db, days: int = 3) -> dict[str, Any]:
             {
                 "kind": r["kind"],
                 "direct": r["kind"] not in clickup.FOLLOWED,
-                "text": clickup.HEADLINES[r["kind"]]
-                .format(
-                    actor=r["actor"] or "Someone",
-                    group=(r["settings"] or {}).get("group_name") or clickup.DEFAULT_GROUP,
+                "text": clickup.headline_text(
+                    r["kind"],
+                    r["actor"],
+                    (r["settings"] or {}).get("group_name") or clickup.DEFAULT_GROUP,
+                    r["subject"],
                 )
                 .removeprefix("ClickUp: ")
                 .removeprefix("ClickUp chat: "),

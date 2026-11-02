@@ -768,6 +768,8 @@ def test_migration_marks_the_adducate_workspace_quokka(conn):
         r["list_id"]: r["scopes"] for r in conn.execute("SELECT list_id, scopes FROM clickup_lists")
     }
     assert marks == {"A": ["quokka"], "B": ["personal"]}
+    # 0039 also re-created the notification kinds; later migrations widened them again
+    conn.execute(next(s for name, s in dbmod.migration_files() if name.startswith("0045")))
     assert conn.execute("SELECT scopes FROM items").fetchone()["scopes"] == ["quokka"]
 
 
@@ -875,3 +877,37 @@ def test_comment_copied_to_clickup_is_not_posted(conn, fake, account):
         conn, sid, datetime.now(UTC), {"mode": "copy"}, clickup_client=fake.client
     )
     assert ref == "copied" and not any(m == "POST" for m, _, _ in fake.requests)
+
+
+BOGDAN = {"id": 12, "username": "Bogdan Stecenko", "email": "b.stecenko@adducates.com"}
+KATE = {"id": 14, "username": "Kate Oleksyuk", "email": "kate@adducates.com"}
+
+
+def test_team_mention_notifies(conn, fake, watched):
+    from psycopg.types.json import Jsonb
+
+    conn.execute(
+        "UPDATE connector_accounts SET settings = settings || %s",
+        (Jsonb({"members": {"12": BOGDAN, "14": KATE, "7": OLENA}}),),
+    )
+    watched.settings = conn.execute("SELECT settings FROM connector_accounts").fetchone()[
+        "settings"
+    ]
+    fake.tasks["L1"] = [{**task("t", now_ms()), "assignees": [KATE]}]
+    fake.comments["t"] = [
+        {
+            **comment("c5", now_ms(), "@Bogdan Stecenko check the listing"),
+            "comment": [{"type": "tag", "user": BOGDAN}, {"text": " check the listing"}],
+        }
+    ]
+    clickup.sync_account(conn, fake.client(), watched)
+    rows = conn.execute(
+        "SELECT kind, actor, subject FROM clickup_notifications ORDER BY key"
+    ).fetchall()
+    assert [(r["kind"], r["subject"]) for r in rows] == [
+        ("team_mentioned", "Bogdan Stetsenko"),
+        ("team_assigned", "Kate Oleksyuk"),
+    ]
+    assert clickup.headline_text("team_mentioned", "Олена", "DTC", "Bogdan Stetsenko") == (
+        "ClickUp: Олена mentioned Bogdan Stetsenko"
+    )

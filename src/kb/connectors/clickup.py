@@ -805,18 +805,24 @@ def detect_for_owner(
     since = datetime.fromisoformat(s["notify_since"]) if s.get("notify_since") else None
     if not owner or since is None:
         return 0
-    events: list[tuple[str, str, str, datetime | None]] = []
+    from kb import team
+
+    crew = team.clickup_members(conn, s.get("members") or {})  # ClickUp id → team member
+    events: list[tuple[str, str, str, datetime | None, str | None]] = []
     updated = _ms(task.get("date_updated"))
     followed = owner in _ids(task.get("watchers"))
     created = _ms(task.get("date_created"))
     creator = str((task.get("creator") or {}).get("id"))
     if followed and created and created > since and creator != owner:
-        events.append((f"task:{task['id']}:new", "followed_new_task", "", created))
+        events.append((f"task:{task['id']}:new", "followed_new_task", "", created, None))
     if updated and updated > since:
         if owner in _ids(task.get("assignees")):
-            events.append((f"task:{task['id']}:assigned:{owner}", "assigned", "", updated))
+            events.append((f"task:{task['id']}:assigned:{owner}", "assigned", "", updated, None))
         if group and group in _ids(task.get("group_assignees")):
-            events.append((f"task:{task['id']}:group:{group}", "group_assigned", "", updated))
+            events.append((f"task:{task['id']}:group:{group}", "group_assigned", "", updated, None))
+        for uid in sorted(_ids(task.get("assignees")) & set(crew)):
+            key = f"task:{task['id']}:team:{uid}"
+            events.append((key, "team_assigned", "", updated, crew[uid]))
     flat = [r for top in comments for r in [top, *(top.get("replies") or [])]]
     for c in flat:
         when = _ms(c.get("date"))
@@ -826,7 +832,7 @@ def detect_for_owner(
         actor = author.get("username") or ""
         cid = c.get("id")
         if str((c.get("assignee") or {}).get("id")) == owner:
-            events.append((f"comment:{cid}:assigned", "comment_assigned", actor, when))
+            events.append((f"comment:{cid}:assigned", "comment_assigned", actor, when, None))
         parts = c.get("comment") or []
         mentions_owner = any(
             p.get("type") == "tag" and str((p.get("user") or {}).get("id")) == owner for p in parts
@@ -837,18 +843,23 @@ def detect_for_owner(
         mentions_group = mentions_group or f"@{group_name}" in (c.get("comment_text") or "").lower()
         if group and str((c.get("group_assignee") or {}).get("id")) == group:
             mentions_group = True
+        tagged = {str((p.get("user") or {}).get("id")) for p in parts if p.get("type") == "tag"}
+        crew_tagged = sorted((tagged & set(crew)) - {str(author.get("id"))})
         if mentions_owner:
-            events.append((f"comment:{cid}:mentioned", "mentioned", actor, when))
+            events.append((f"comment:{cid}:mentioned", "mentioned", actor, when, None))
         if mentions_group:
-            events.append((f"comment:{cid}:group", "group_mentioned", actor, when))
-        if followed and not (mentions_owner or mentions_group):
-            events.append((f"comment:{cid}:followed", "followed_comment", actor, when))
+            events.append((f"comment:{cid}:group", "group_mentioned", actor, when, None))
+        for uid in crew_tagged:
+            events.append((f"comment:{cid}:team:{uid}", "team_mentioned", actor, when, crew[uid]))
+        if followed and not (mentions_owner or mentions_group or crew_tagged):
+            events.append((f"comment:{cid}:followed", "followed_comment", actor, when, None))
     n = 0
-    for key, kind, actor, when in events:
+    for key, kind, actor, when, subject in events:
         row = conn.execute(
-            "INSERT INTO clickup_notifications (key, account_id, item_id, kind, actor, event_at)"
-            " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (key) DO NOTHING RETURNING key",
-            (key, account.id, item_id, kind, actor, when),
+            "INSERT INTO clickup_notifications (key, account_id, item_id, kind, actor, event_at,"
+            " subject) VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (key) DO NOTHING"
+            " RETURNING key",
+            (key, account.id, item_id, kind, actor, when, subject),
         ).fetchone()
         n += 1 if row else 0
     return n
@@ -869,7 +880,15 @@ HEADLINES = {
     "group_mentioned": "ClickUp: {actor} mentioned {group}",
     "comment_assigned": "ClickUp: {actor} assigned you a comment",
     "chat_direct": "ClickUp: {actor} wrote to you",
+    "team_assigned": "ClickUp: a task was assigned to {subject}",
+    "team_mentioned": "ClickUp: {actor} mentioned {subject}",
 }
+
+
+def headline_text(kind: str, actor: str | None, group: str, subject: str | None) -> str:
+    return HEADLINES[kind].format(
+        actor=actor or "Someone", group=group, subject=subject or "your team"
+    )
 
 
 def push_pending(conn: Conn, now: datetime) -> int:
@@ -895,9 +914,9 @@ def push_pending(conn: Conn, now: datetime) -> int:
     sent = 0
     for r in [r for r in pending if r["kind"] not in FOLLOWED][:20]:
         group = (r["settings"] or {}).get("group_name") or DEFAULT_GROUP
-        headline = HEADLINES[r["kind"]].format(actor=r["actor"] or "Someone", group=group)
+        text = headline_text(r["kind"], r["actor"], group, r.get("subject"))
         url = f"/c/{r['item_id']}" if r["item_id"] else "/clickup"
-        n = push.send(conn, "clickup", headline, url, now)
+        n = push.send(conn, "clickup", text, url, now)
         conn.execute(
             "UPDATE clickup_notifications SET handled_at = %s, pushed = %s WHERE key = %s",
             (now, n > 0, r["key"]),
