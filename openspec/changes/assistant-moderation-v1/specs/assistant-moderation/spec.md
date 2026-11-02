@@ -8,7 +8,7 @@ texts are short; only what concerns the owner and the owner's team reaches the o
 ## ADDED Requirements
 
 ### Requirement: Reply drafts are saved to the mailbox
-For each email thread that needs the owner's reply (the last message is from a person to the owner, asks or expects an answer, and is not a newsletter, notification or CC-only), the system SHALL write a reply draft in the thread's language and the owner's tone and save it to that mailbox's Drafts in the same thread, without sending it. Only mail that arrives after the feature is switched on SHALL be considered; a thread SHALL get at most one draft, and a draft the owner deleted SHALL not be recreated.
+For each new email thread that needs the owner's reply, the system SHALL write a reply draft in the thread's language and the owner's tone and save it to that mailbox's Drafts in the same thread, without sending it. Only mail that arrives after the feature is switched on SHALL be considered.
 
 #### Scenario: Dealer asks about prices
 - **WHEN** a dealer writes "Can you confirm the October prices?" to the owner's quokka mailbox
@@ -21,6 +21,13 @@ For each email thread that needs the owner's reply (the last message is from a p
 #### Scenario: Owner deleted the draft
 - **WHEN** the owner deletes a proposed draft in Gmail
 - **THEN** the system does not create another draft for that thread unless a new message arrives
+
+### Requirement: Only replies that are needed get a draft
+A thread SHALL get a draft only when its last message is from a person to the owner and asks or expects an answer; newsletters, notifications and CC-only threads SHALL get none. A thread SHALL get at most one draft, and a draft the owner deleted SHALL not be recreated until a new message arrives.
+
+#### Scenario: Bulk mail
+- **WHEN** a marketplace notification arrives
+- **THEN** no draft is created
 
 ### Requirement: Meeting proposals are moderated in one list
 For each processed meeting the system SHALL produce a summary of at most 5 lines and proposals: new ClickUp tasks (title, assignee from the owner's team or the owner, due date when stated) and comments on existing ClickUp tasks that the meeting discussed. The owner SHALL see all open proposals in one Moderate list, select any of them and create the selected ones in one action; unselected ones SHALL be discarded when the owner confirms, and nothing SHALL be created in ClickUp without that action.
