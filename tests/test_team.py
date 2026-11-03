@@ -27,3 +27,15 @@ def test_mentions_of_owner_or_team(conn):
     assert team.mentions(conn, "@Kate please check", ["Roman Zhukovsky"])
     assert not team.mentions(conn, "@Nikita @Olha\nToday: shipment", ["Roman Zhukovsky"])
     assert not team.mentions(conn, "Bogdan was on the call", ["Roman Zhukovsky"])  # no @
+
+
+def test_saving_other_settings_keeps_the_team(conn, pg_url, config):
+    from tests.test_email_drafts import web_client
+
+    client = web_client(conn, pg_url, config)
+    h = {"X-KB-Request": "1"}
+    r = client.put("/api/settings", json={"app": {"team": ["Kate Oleksyuk"]}}, headers=h)
+    assert r.json()["app"]["team"] == ["Kate Oleksyuk"]
+    client.put("/api/settings", json={"app": {"reply_drafts_per_day": 3}}, headers=h)
+    assert settings_store.load(conn).team == ["Kate Oleksyuk"]
+    assert settings_store.load(conn).reply_drafts_per_day == 3

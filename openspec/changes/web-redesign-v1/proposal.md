@@ -11,7 +11,7 @@ first screen without scrolling on phone and laptop; owner approves the look.
 
 ## What Changes
 - **Light, modern look:** white/very light grey surfaces, one accent colour (blue from the logo),
-  generous spacing, rounded cards, system font, clear type scale; dark mode only if the device asks.
+  generous spacing, rounded cards, system font, clear type scale; light even when the device is in dark mode (dark only if chosen in Settings).
 - **Simple navigation:** 5 places — **Today**, **Moderate** (drafts, tasks, comments), **Meetings**,
   **Search** (also the assistant), **Settings**; the other pages move under them (Library, People,
   Loops under Search/Today; Status under Settings). Bottom tab bar on phone, sidebar on laptop.

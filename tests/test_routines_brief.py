@@ -94,7 +94,12 @@ def test_api_today_returns_latest_brief(conn, pg_url):
     app = build_app(None, connect=lambda: db.connect(pg_url), rp=auth.RelyingParty("https://os.x"))
     client = TestClient(app, base_url="https://os.x")
     client.cookies.set(auth.SESSION_COOKIE, auth.create_session(conn, "t", datetime.now(UTC)))
-    assert client.get("/api/today").json() == {"brief": None, "meetings": []}
+    assert client.get("/api/today").json() == {
+        "brief": None,
+        "meetings": [],
+        "moderate": 0,
+        "mentions": [],
+    }
     briefs.run_morning(conn, NOW)
     assert client.get("/api/today").json()["brief"]["routine"] == "morning"
 
@@ -125,3 +130,29 @@ def test_brief_is_short(conn):
 
 def test_quiet_morning_one_line(conn):
     test_quiet_night_brief(conn)
+
+
+def test_today_counts_proposals_and_lists_team_mentions(conn, pg_url):
+    from psycopg.types.json import Jsonb
+
+    from kb.assistant import suggestions
+
+    app = build_app(None, connect=lambda: db.connect(pg_url), rp=auth.RelyingParty("https://os.x"))
+    client = TestClient(app, base_url="https://os.x")
+    client.cookies.set(auth.SESSION_COOKIE, auth.create_session(conn, "t", datetime.now(UTC)))
+    suggestions.propose(conn, "nudge", {"body": "x", "channel": "tg"}, reason="r")
+    suggestions.propose(conn, "reply_email", {"body": "", "ai_pending": True}, reason="r")
+    aid = conn.execute(
+        "INSERT INTO connector_accounts (kind, label, settings, secret) VALUES"
+        " ('clickup', 'Q', %s, '') RETURNING id",
+        (Jsonb({"group_name": "DTC"}),),
+    ).fetchone()["id"]
+    conn.execute(
+        "INSERT INTO clickup_notifications (key, account_id, kind, actor, subject) VALUES"
+        " ('a', %s, 'team_mentioned', 'Olena', 'Kate Oleksyuk'),"
+        " ('b', %s, 'followed_comment', 'Max', NULL)",
+        (aid, aid),
+    )
+    data = client.get("/api/today").json()
+    assert data["moderate"] == 1  # a draft still being written does not count
+    assert [m["text"] for m in data["mentions"]] == ["Olena mentioned Kate Oleksyuk"]

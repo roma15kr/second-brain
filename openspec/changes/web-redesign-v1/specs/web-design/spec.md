@@ -7,11 +7,11 @@ How the web OS looks and is navigated: simple, light and readable on phone and l
 ## ADDED Requirements
 
 ### Requirement: Light, modern look
-The web OS SHALL use a light theme by default (light surfaces, one accent colour, rounded cards, generous spacing, readable type at 16 px base) and SHALL switch to a dark variant only when the device asks for dark mode.
+The web OS SHALL use a light theme (light surfaces, one accent colour, rounded cards, generous spacing, readable type at 16 px base) even when the device is in dark mode; a dark variant SHALL be used only when the owner chooses it in Settings.
 
-#### Scenario: Phone in light mode
-- **WHEN** the owner opens the web OS on an iPhone in light mode
-- **THEN** pages are light with dark text and blue accents
+#### Scenario: Phone in dark mode
+- **WHEN** the owner opens the web OS on an iPhone set to dark mode
+- **THEN** pages are still light with dark text and blue accents
 
 ### Requirement: Five places
 The main navigation SHALL have five entries — Today, Moderate, Meetings, Search, Settings — as a bottom tab bar on phones and a sidebar on wider screens; every other page SHALL be reachable from one of them in one tap.
