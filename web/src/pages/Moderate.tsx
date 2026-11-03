@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { api } from "../api/client";
-import type { Suggestion } from "./Assistant";
+import { ApprovalQueue, type Suggestion } from "./Assistant";
 
 type Group = { key: string; title: string; items: Suggestion[] };
 
@@ -119,6 +119,45 @@ function GroupCard({ group, onDone }: { group: Group; onDone: () => void }) {
 
 // Moderate (assistant-moderation-v1): everything the assistant prepared, ticked in one place.
 export function Moderate() {
+  const [params, setParams] = useSearchParams();
+  const editing = params.get("view") === "edit";
+  const toggle = (
+    <div className="segmented" role="tablist" aria-label="View">
+      <button
+        role="tab"
+        aria-selected={!editing}
+        className={!editing ? "on" : ""}
+        onClick={() => setParams({})}
+      >
+        Quick
+      </button>
+      <button
+        role="tab"
+        aria-selected={editing}
+        className={editing ? "on" : ""}
+        onClick={() => setParams({ view: "edit" })}
+      >
+        Edit before creating
+      </button>
+    </div>
+  );
+  if (editing) {
+    return (
+      <>
+        {toggle}
+        <ApprovalQueue />
+      </>
+    );
+  }
+  return (
+    <>
+      {toggle}
+      <QuickModerate />
+    </>
+  );
+}
+
+function QuickModerate() {
   const queryClient = useQueryClient();
   const list = useQuery({
     queryKey: ["suggestions", "proposed"],

@@ -23,7 +23,7 @@ const reply = {
 };
 
 test("a reply is written, saved to Drafts and listed as saved", async () => {
-  window.history.pushState({}, "", "/assistant");
+  window.history.pushState({}, "", "/moderate?view=edit");
   let approved: unknown = null;
   const calls = mockApi({
     "GET /api/auth/me": me,
@@ -51,7 +51,7 @@ test("a reply is written, saved to Drafts and listed as saved", async () => {
 });
 
 test("Send waits 10 seconds and can be undone", async () => {
-  window.history.pushState({}, "", "/assistant");
+  window.history.pushState({}, "", "/moderate?view=edit");
   let undone = false;
   const calls = mockApi({
     "GET /api/auth/me": me,
@@ -77,7 +77,7 @@ test("Send waits 10 seconds and can be undone", async () => {
 });
 
 test("a Telegram nudge is copied and its chat opened", async () => {
-  window.history.pushState({}, "", "/assistant");
+  window.history.pushState({}, "", "/moderate?view=edit");
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   const open = vi.spyOn(window, "open").mockReturnValue(null);
@@ -106,7 +106,7 @@ test("a Telegram nudge is copied and its chat opened", async () => {
 });
 
 test("a ClickUp comment draft is posted on approval", async () => {
-  window.history.pushState({}, "", "/assistant");
+  window.history.pushState({}, "", "/moderate?view=edit");
   let posted: unknown = null;
   mockApi({
     "GET /api/auth/me": me,
@@ -141,7 +141,7 @@ test("a ClickUp comment draft is posted on approval", async () => {
 });
 
 test("a ClickUp comment can be copied and finished in ClickUp instead of posted", async () => {
-  window.history.pushState({}, "", "/assistant");
+  window.history.pushState({}, "", "/moderate?view=edit");
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   const open = vi.spyOn(window, "open").mockReturnValue(null);
@@ -180,4 +180,31 @@ test("a ClickUp comment can be copied and finished in ClickUp instead of posted"
     expect(approved).toEqual({ payload: { body: "@Bogdan, please check", mode: "copy" } }),
   );
   open.mockRestore();
+});
+
+test("the assistant screen: type and ask, or tap the mic", async () => {
+  window.history.pushState({}, "", "/assistant");
+  const calls = mockApi({
+    "GET /api/auth/me": { signed_in: true, has_passkeys: true, needs_passkey: false },
+    "GET /api/assistant/threads": {
+      threads: [
+        { id: 5, title: "Rozetka delivery", requests: 2, updated_at: "2026-11-02T10:00:00Z" },
+      ],
+    },
+    "GET /api/dictations": { dictations: [] },
+    "POST /api/assistant/requests": { id: 9, thread_id: 7 },
+  });
+  renderApp();
+  const box = await screen.findByLabelText("Ask the assistant");
+  expect(screen.getByRole("button", { name: "Dictate" })).toHaveClass("mic-btn");
+  expect(screen.getByRole("button", { name: "Ask" })).toBeDisabled();
+  expect(await screen.findByRole("link", { name: "Rozetka delivery" })).toHaveAttribute(
+    "href",
+    "/assistant/t/5",
+  );
+  await userEvent.type(box, "What did we agree with Rozetka?");
+  await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+  await waitFor(() => expect(window.location.pathname).toBe("/assistant/t/7"));
+  const post = calls.find((c) => c.path === "/api/assistant/requests");
+  expect(JSON.parse(String(post?.init?.body))).toEqual({ text: "What did we agree with Rozetka?" });
 });

@@ -21,7 +21,7 @@ const dictation = (forms = {}) => ({
   created_at: "2026-10-20T08:00:00Z",
 });
 
-test("a dictation can be read verbatim, structured, saved and sent as a request", async () => {
+test("a dictation opens in the assistant: verbatim, structured, saved and asked", async () => {
   window.history.pushState({}, "", "/dictate/41");
   let rendered = false;
   let saved: unknown = null;
@@ -51,7 +51,7 @@ test("a dictation can be read verbatim, structured, saved and sent as a request"
   expect(await screen.findByDisplayValue(/## Actions/)).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Save to Library" }));
   await waitFor(() => expect(saved).toMatchObject({ form: "structured" }));
-  await userEvent.click(screen.getByRole("button", { name: "As a request" }));
+  await userEvent.click(screen.getByRole("button", { name: "Ask the assistant" }));
   await waitFor(() => expect(window.location.pathname).toBe("/assistant/t/9"));
   const ask = calls.find((c) => c.path === "/api/assistant/requests");
   expect(JSON.parse(String(ask?.init?.body)).text).toContain("## Actions");

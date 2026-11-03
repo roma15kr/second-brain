@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router";
 import { NeedsPasskey } from "./auth/NeedsPasskey";
 import { CalendarConnector } from "./connectors/CalendarConnector";
 import { ClickUpConnector } from "./connectors/ClickUpConnector";
@@ -11,7 +11,6 @@ import { Security } from "./auth/Security";
 import { SignIn } from "./auth/SignIn";
 import { useMe } from "./auth/useMe";
 import { Assistant } from "./pages/Assistant";
-import { Dictation } from "./assistant/Dictation";
 import { Thread } from "./assistant/Thread";
 import { BriefPage } from "./pages/BriefPage";
 import { Briefs } from "./pages/Briefs";
@@ -32,7 +31,13 @@ import { Status } from "./pages/Status";
 import { Today } from "./pages/Today";
 import { Week } from "./pages/Week";
 import { Notifications } from "./push/Notifications";
-import { Shell } from "./shell/Shell";
+import { Menu, Shell } from "./shell/Shell";
+
+// old dictation links open the assistant with that dictation
+function DictationRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/assistant?d=${id}`} replace />;
+}
 
 function Routed({ needsPasskey }: { needsPasskey: boolean }) {
   return (
@@ -49,6 +54,7 @@ function Routed({ needsPasskey }: { needsPasskey: boolean }) {
           }
         />
         <Route path="/moderate" element={<Moderate />} />
+        <Route path="/menu" element={<Menu />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/loops" element={<Loops />} />
         <Route path="/briefs" element={<Briefs />} />
@@ -64,8 +70,8 @@ function Routed({ needsPasskey }: { needsPasskey: boolean }) {
         <Route path="/clickup" element={<ClickUpUpdates />} />
         <Route path="/assistant" element={<Assistant />} />
         <Route path="/assistant/t/:id" element={<Thread />} />
-        <Route path="/dictate" element={<Dictation />} />
-        <Route path="/dictate/:id" element={<Dictation />} />
+        <Route path="/dictate" element={<Navigate to="/assistant" replace />} />
+        <Route path="/dictate/:id" element={<DictationRedirect />} />
         <Route path="/library" element={<Library goals={<Goals />} />} />
         <Route path="/library/:id" element={<LibraryDoc />} />
         <Route path="/connectors" element={<Connectors />} />

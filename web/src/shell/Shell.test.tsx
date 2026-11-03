@@ -19,39 +19,68 @@ const brief = (id: number, opened: boolean) => ({
   useful: null,
 });
 
-test("five places in the sidebar and the tab bar; the current one is marked", async () => {
+test("the sidebar lists every section in groups; the tab bar centres the assistant", async () => {
   mockApi({
     "GET /api/auth/me": me,
-    "GET /api/today": { brief: null },
+    "GET /api/today": { brief: null, moderate: 3 },
     "GET /api/briefs": { briefs: [] },
   });
   renderApp();
   const side = await screen.findByRole("navigation", { name: "Main" });
-  const tabs = screen.getByRole("navigation", { name: "Tabs" });
-  for (const nav of [side, tabs]) {
-    expect([...nav.querySelectorAll("a")].map((a) => a.textContent)).toEqual([
-      "Today",
-      "Moderate",
-      "Meetings",
-      "Search",
-      "Settings",
-    ]);
+  expect([...side.querySelectorAll(".nav-title")].map((t) => t.textContent)).toEqual([
+    "Work",
+    "Knowledge",
+    "Reports",
+    "System",
+  ]);
+  for (const label of [
+    "Inbox",
+    "Loops",
+    "Library",
+    "People",
+    "Briefs",
+    "Week",
+    "ClickUp",
+    "Connectors",
+    "Status",
+    "Settings",
+  ]) {
+    expect(side).toHaveTextContent(label);
   }
+  expect(screen.getByRole("link", { name: /Ask or dictate/ })).toHaveAttribute(
+    "href",
+    "/assistant",
+  );
+  const tabs = screen.getByRole("navigation", { name: "Tabs" });
+  await waitFor(() => expect(tabs.querySelector(".count")).toHaveTextContent("3"));
+  expect([...tabs.querySelectorAll("a")].map((a) => a.textContent)).toEqual([
+    "Today",
+    "Moderate3",
+    "Assistant",
+    "Meetings",
+    "Menu",
+  ]);
   expect(side.querySelector("a.active")).toHaveTextContent("Today");
-  expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Today");
 });
 
-test("pages under a place mark that place", async () => {
-  window.history.pushState({}, "", "/library");
-  mockApi({
-    "GET /api/auth/me": me,
-    "GET /api/library": { documents: [] },
-    "GET /api/goals": { goals: [] },
-  });
+test("Menu lists every section on the phone", async () => {
+  window.history.pushState({}, "", "/menu");
+  mockApi({ "GET /api/auth/me": me, "GET /api/today": { brief: null } });
+  renderApp();
+  expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Menu");
+  const main = screen.getByRole("main");
+  for (const label of ["Library", "People", "Connectors", "Status", "Week"]) {
+    expect(main.querySelector(`a[href]`)).not.toBeNull();
+    expect(main).toHaveTextContent(label);
+  }
+});
+
+test("a page under a section marks it", async () => {
+  window.history.pushState({}, "", "/recordings/4");
+  mockApi({ "GET /api/auth/me": me, "GET /api/today": { brief: null } });
   renderApp();
   const side = await screen.findByRole("navigation", { name: "Main" });
-  expect(side.querySelector("a.active")).toHaveTextContent("Search");
-  expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Library");
+  expect(side.querySelector("a.active")).toHaveTextContent("Meetings");
 });
 
 test("⌘K palette jumps to a person", async () => {

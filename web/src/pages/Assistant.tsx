@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { AskBox } from "../assistant/Ask";
+import { DictationResult } from "../assistant/Dictation";
 import { api } from "../api/client";
 import { kyivTime } from "../briefs/BriefView";
 import { ScopeTag } from "../shell/ScopeTag";
@@ -251,7 +252,9 @@ function Recent({ s, onChanged }: { s: Suggestion; onChanged: () => void }) {
 }
 
 // Assistant: the approval queue (assistant-actions spec). Nothing leaves without a tap here.
-export function Assistant() {
+// The detailed approval queue (edit, then approve or send), shown in Moderate → "Edit before
+// creating".
+export function ApprovalQueue() {
   const queryClient = useQueryClient();
   const pending = useQuery({
     queryKey: ["suggestions", "proposed"],
@@ -268,30 +271,10 @@ export function Assistant() {
         : false,
   });
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["suggestions"] });
-  const threads = useQuery({
-    queryKey: ["assistant-threads"],
-    queryFn: () =>
-      api<{ threads: { id: number; title: string; requests: number; updated_at: string }[] }>(
-        "/api/assistant/threads",
-      ),
-  });
   if (pending.isPending) return <p className="muted">Loading…</p>;
   if (pending.isError) return <p className="error">{pending.error.message}</p>;
   return (
     <>
-      <section className="card">
-        <AskBox />
-        {threads.data && threads.data.threads.length > 0 && (
-          <ul className="list">
-            {threads.data.threads.slice(0, 5).map((t) => (
-              <li key={t.id}>
-                <Link to={`/assistant/t/${t.id}`}>{t.title}</Link>
-                <span className="muted"> · {kyivTime.format(new Date(t.updated_at))}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
       <section className="card group">
         <h3>Waiting for you</h3>
         <ul className="list">
@@ -312,6 +295,89 @@ export function Assistant() {
           </ul>
         </section>
       )}
+    </>
+  );
+}
+
+type Thread = { id: number; title: string; requests: number; updated_at: string };
+type DictationRow = {
+  id: number;
+  first_line: string;
+  status: string;
+  created_at: string;
+  seconds: number;
+};
+
+// Assistant (web-redesign-v1): ask by typing or speaking; a recording becomes text to ask with,
+// copy, clean, structure or save — assistant and dictation in one place.
+export function Assistant() {
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const dictation = params.get("d") ? Number(params.get("d")) : null;
+  const [tab, setTab] = useState<"chats" | "dictations">("chats");
+  const threads = useQuery({
+    queryKey: ["assistant-threads"],
+    queryFn: () => api<{ threads: Thread[] }>("/api/assistant/threads"),
+  });
+  const dictations = useQuery({
+    queryKey: ["dictations"],
+    queryFn: () => api<{ dictations: DictationRow[] }>("/api/dictations"),
+  });
+  return (
+    <>
+      <section className="card composer-card">
+        <AskBox big onSpoken={(id) => void navigate(`/assistant?d=${id}`)} />
+      </section>
+      {dictation !== null && (
+        <section className="card">
+          <DictationResult key={dictation} id={dictation} />
+        </section>
+      )}
+      <section className="card">
+        <div className="segmented" role="tablist" aria-label="Recent">
+          <button
+            role="tab"
+            aria-selected={tab === "chats"}
+            className={tab === "chats" ? "on" : ""}
+            onClick={() => setTab("chats")}
+          >
+            Conversations
+          </button>
+          <button
+            role="tab"
+            aria-selected={tab === "dictations"}
+            className={tab === "dictations" ? "on" : ""}
+            onClick={() => setTab("dictations")}
+          >
+            Dictations
+          </button>
+        </div>
+        <ul className="list compact">
+          {tab === "chats" &&
+            (threads.data?.threads ?? []).slice(0, 10).map((t) => (
+              <li key={t.id}>
+                <Link to={`/assistant/t/${t.id}`} className="line">
+                  {t.title}
+                </Link>
+                <span className="sub">{kyivTime.format(new Date(t.updated_at))}</span>
+              </li>
+            ))}
+          {tab === "dictations" &&
+            (dictations.data?.dictations ?? []).slice(0, 10).map((d) => (
+              <li key={d.id}>
+                <Link to={`/assistant?d=${d.id}`} className="line">
+                  {d.first_line || `(${d.status})`}
+                </Link>
+                <span className="sub">
+                  {kyivTime.format(new Date(d.created_at))} · {Math.round(d.seconds)} s
+                </span>
+              </li>
+            ))}
+        </ul>
+      </section>
+      <p className="muted small">
+        Drafts and proposals to approve are in <Link to="/moderate">Moderate</Link>.
+      </p>
     </>
   );
 }

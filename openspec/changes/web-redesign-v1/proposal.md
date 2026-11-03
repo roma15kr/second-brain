@@ -28,3 +28,9 @@ None in `openspec/specs/`.
 ## Impact
 `web/src/styles.css` (rewritten as tokens + components), `shell/` (navigation), `pages/Today.tsx`,
 page layouts; tests updated for new navigation labels.
+
+## Update 2026-11-03 (owner)
+"Combine assistant with dictation — this function is almost the main one in the app; you hide info
+in the search menu — optimize UI/UX, make it mobile friendly; dictation or AI assistant must be the
+main in the menu." → assistant+dictation is one screen and the centre/first navigation action;
+every section is visible in the sidebar (groups) and in the phone Menu; phone comfort rules.
