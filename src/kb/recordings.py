@@ -304,11 +304,16 @@ def _index(conn: Conn, rid: int) -> None:
 
 # --- processing -------------------------------------------------------------------------------
 
-SYSTEM = """From a meeting transcript or notes, write: a short summary (3-5 sentences); the
-decisions made; and the action items, each with the person responsible (`owner`, as named in the
-text; "me" when it is the owner — the speaker marked OWNER, or "I" in the owner's notes), whether it
-is the owner (`is_me`), and `due` in the words used (e.g. "Friday") or null. Write in the main
-language of the meeting. Use only what was said."""
+SYSTEM = """From a meeting transcript or notes, write:
+- `summary`: at most 5 short lines, only what matters (no introductions, no "we discussed");
+- `decisions` made;
+- `actions`: new action items, each with the person responsible (`owner`, as named in the text —
+  prefer the full name from TEAM when it is one of them; "me" when it is the owner — the speaker
+  marked OWNER, or "I" in the owner's notes), whether it is the owner (`is_me`), and `due` in the
+  words used (e.g. "Friday") or null;
+- `comments`: updates for EXISTING ClickUp tasks the meeting talked about (`task`: the task's name
+  as said, `text`: the comment to add — a short update or decision for that task).
+Write in the main language of the meeting. Use only what was said."""
 
 SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -329,10 +334,75 @@ SCHEMA: dict[str, Any] = {
                 "additionalProperties": False,
             },
         },
+        "comments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"task": {"type": "string"}, "text": {"type": "string"}},
+                "required": ["task", "text"],
+                "additionalProperties": False,
+            },
+        },
     },
-    "required": ["summary", "decisions", "actions"],
+    "required": ["summary", "decisions", "actions", "comments"],
     "additionalProperties": False,
 }
+
+SUMMARY_LINES = 5
+
+
+def short(text: str, lines: int = SUMMARY_LINES) -> str:
+    """At most `lines` non-empty lines (texts are short: assistant-moderation-v1)."""
+    kept = [ln.rstrip() for ln in (text or "").splitlines() if ln.strip()]
+    return "\n".join(kept[:lines])
+
+
+def find_task(conn: Conn, name: str, scopes: list[str]) -> dict[str, Any] | None:
+    """The existing ClickUp task a meeting talked about, by its name (same project first)."""
+    words = re.findall(r"\w{3,}", name.lower())
+    if not words:
+        return None
+    query = " | ".join(words)
+    row = conn.execute(
+        "SELECT id, title, source_item_key, locator, metadata->>'list_id' AS list_id,"
+        " metadata->>'list' AS list FROM items WHERE kind = 'clickup_task' AND NOT hidden"
+        " AND to_tsvector('simple', coalesce(title, '')) @@ to_tsquery('simple', %s)"
+        " ORDER BY (scopes && %s) DESC,"
+        " ts_rank(to_tsvector('simple', coalesce(title, '')), to_tsquery('simple', %s)) DESC,"
+        " last_activity_at DESC NULLS LAST LIMIT 1",
+        (query, scopes, query),
+    ).fetchone()
+    if row is None:
+        return None
+    hits = sum(w in (row["title"] or "").lower() for w in words)
+    return dict(row) if hits >= max(1, (len(words) + 1) // 2) else None
+
+
+def _list_for(conn: Conn, scopes: list[str]) -> tuple[str, str] | None:
+    """The default list for drafts, else a synced list of the meeting's project."""
+    from kb.assistant import actions
+
+    target = actions.resolve_list(conn, None)
+    if target is not None:
+        return target
+    row = conn.execute(
+        "SELECT list_id, list_name FROM clickup_lists WHERE sync AND scopes && %s"
+        " ORDER BY list_name LIMIT 1",
+        (scopes,),
+    ).fetchone()
+    return (str(row["list_id"]), str(row["list_name"])) if row else None
+
+
+def _team_member(conn: Conn, said: str) -> str:
+    """The team member's full name for a name as said in the meeting ("Настя" stays as said)."""
+    from kb import team
+
+    for name in team.names(conn):
+        first = name.split()[0].lower()
+        if team.same_person(name, said) or said.strip().lower() == first:
+            return name
+    return said
+
 
 WEEKDAYS = {
     # uk, ru, en → Monday = 0
@@ -372,10 +442,20 @@ def process(conn: Conn, config: Any, llm: Any, rid: int, now: datetime) -> dict[
         ],
         rec["notes"],
     )
+    from kb import team
+
     model = config.llm.briefs_model()
+    crew = ", ".join(team.names(conn))
     data, usage = llm.structured(
-        model, SYSTEM, f"TITLE: {rec['title']}\n{text}"[:60_000], SCHEMA, "meeting", "low"
+        model,
+        SYSTEM,
+        f"TITLE: {rec['title']}\nTEAM: {crew}\n{text}"[:60_000],
+        SCHEMA,
+        "meeting",
+        "low",
     )
+    data["summary"] = short(data.get("summary") or "")
+    scopes = list(rec["scopes"])
     distill.record_usage(conn, "assistant", model, "meeting_notes", usage)
     day = rec["started_at"].astimezone(KYIV)
     for a in data.get("actions", []):
@@ -394,8 +474,9 @@ def process(conn: Conn, config: Any, llm: Any, rid: int, now: datetime) -> dict[
             )
             a["loop_id"] = lid
         else:
-            who = actions.resolve_assignee(conn, a.get("owner") or "")
-            target = actions.resolve_list(conn, None)
+            said = _team_member(conn, a.get("owner") or "")
+            who = actions.resolve_assignee(conn, said)
+            target = _list_for(conn, scopes)
             if target is None:
                 continue  # no ClickUp list for drafts: the action stays in the summary only
             a["suggestion_id"] = suggestions.propose(
@@ -407,7 +488,7 @@ def process(conn: Conn, config: Any, llm: Any, rid: int, now: datetime) -> dict[
                     "name": a["text"],
                     "description": f"From the meeting “{rec['title']}”",
                     "assignee_emails": [who[1]] if who else [],
-                    "assignee_name": who[0] if who else (a.get("owner") or ""),
+                    "assignee_name": who[0] if who else said,
                     "due_date": due,
                     "source_item_id": rec["item_id"],
                 },
@@ -416,6 +497,28 @@ def process(conn: Conn, config: Any, llm: Any, rid: int, now: datetime) -> dict[
                 scopes=list(rec["scopes"]),
                 item_id=rec["item_id"],
             )
+    for c in data.get("comments", []):
+        task = find_task(conn, c.get("task") or "", scopes)
+        if task is None or not (c.get("text") or "").strip():
+            continue  # not an existing task: nothing to comment on
+        c["suggestion_id"] = suggestions.propose(
+            conn,
+            "clickup_comment",
+            {
+                "item_id": task["id"],
+                "task_id": task["source_item_key"],
+                "link": task["locator"],
+                "task_title": task["title"],
+                "body": c["text"].strip(),
+                "assignee_id": None,
+                "assignee_name": "",
+                "source_item_id": rec["item_id"],
+            },
+            reason=f"From the meeting “{rec['title']}”",
+            refs=[f"item:{rec['item_id']}"] if rec["item_id"] else [],
+            scopes=scopes,
+            item_id=rec["item_id"],
+        )
     conn.execute(
         "UPDATE recordings SET result = %s, processed_at = %s WHERE id = %s",
         (Jsonb(data), now, rid),

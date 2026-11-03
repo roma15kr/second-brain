@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
@@ -79,3 +80,30 @@ def discard(
     except suggestions.SuggestionError as e:
         raise HTTPException(404 if str(e).startswith("no suggestion") else 400, str(e)) from e
     return {"ok": True}
+
+
+@router.post("/api/suggestions/moderate")
+def moderate(
+    request: Request,
+    conn: Db,
+    create: Annotated[list[int], Body(embed=True)],
+    discard: Annotated[list[int], Body(embed=True)],
+) -> dict[str, Any]:
+    """The Moderate list (assistant-moderation-v1): creates the selected proposals and discards
+    the rest in one action; one failing proposal does not stop the others."""
+    factory = request.app.state.clickup_factory(conn)
+    now = datetime.now(UTC)
+    created: list[int] = []
+    failed: dict[int, str] = {}
+    for sid in create:
+        try:
+            suggestions.approve(conn, sid, now, None, factory)
+            created.append(sid)
+        except Exception as e:  # recorded on the row; reported back
+            failed[sid] = str(e)[:200]
+    for sid in discard:
+        if sid in create:
+            continue
+        with contextlib.suppress(suggestions.SuggestionError):  # already decided
+            suggestions.discard(conn, sid, "not chosen when moderating", now)
+    return {"created": created, "failed": failed}
