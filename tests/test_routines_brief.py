@@ -73,12 +73,13 @@ def test_data_only_brief_lists_scopes_with_source_links(conn):
     assert brief is not None
     assert brief["id"] == brief_id and brief["mode"] == "data"
     assert brief["headline"] == "Morning brief: 2 conversations across 2 scopes"
-    quokka = next(s for s in brief["sections"] if s["title"] == "quokka")
-    assert quokka["text"] == "1 email thread"
-    item = quokka["items"][0]
+    # all activity is one folded line, each conversation keeping its scope and link
+    activity = next(s for s in brief["sections"] if s["title"] == "All activity")
+    assert activity["collapsed"] is True and activity["text"] == "2 conversations"
+    by_scope = {i["scope"]: i for i in activity["items"]}
+    item = by_scope["quokka"]
     assert item["title"] == "Listing price" and item["link"].startswith("https://mail.google.com")
-    rdim = next(s for s in brief["sections"] if s["title"] == "rdim")
-    assert rdim["items"][0]["link"] is None  # only openable https links are offered
+    assert by_scope["rdim"]["link"] is None  # only openable https links are offered
 
 
 def test_quiet_night_brief(conn):
@@ -86,7 +87,7 @@ def test_quiet_night_brief(conn):
     brief = briefs.latest(conn, ["morning"])
     assert brief is not None
     assert brief["headline"] == "Morning brief: nothing new"
-    assert [x["title"] for x in brief["sections"]] == ["Coming up", "Quiet"]
+    assert [x["title"] for x in brief["sections"]] == ["Nothing needs you"]  # one line
 
 
 def test_api_today_returns_latest_brief(conn, pg_url):
@@ -106,3 +107,21 @@ def test_kb_routines_run_morning_command(conn, pg_url, monkeypatch, capsys):
     cli.main(["routines", "run", "morning"])
     assert "Morning brief" in capsys.readouterr().out
     assert briefs.latest(conn, ["morning"]) is not None
+
+
+def test_brief_is_short(conn):
+    from kb.routines.briefs import BRIEF_LINES, Section, shorten
+
+    many = [Section("Reply to", "", [{"ref": f"loop:{n}"} for n in range(12)], kind="group")]
+    long = shorten(
+        [Section("Quokka", "a\nb\nc", kind="ai"), *many, Section("x", "", [{}], kind="data")]
+    )
+    lines = sum(len(s.items) or len(s.text.splitlines()) for s in long if not s.collapsed)
+    assert lines == BRIEF_LINES
+    reply = next(s for s in long if s.title == "Reply to")
+    assert reply.more == 12 - (BRIEF_LINES - 3)
+    assert long[-1].title == "All activity" and long[-1].collapsed
+
+
+def test_quiet_morning_one_line(conn):
+    test_quiet_night_brief(conn)

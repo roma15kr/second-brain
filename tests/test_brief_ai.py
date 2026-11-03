@@ -130,12 +130,13 @@ def test_evening_wrap_covers_today_since_morning(conn):
     assert factpack.evening_window(datetime(2026, 10, 20, 19, 0, tzinfo=KYIV))[0] == morning
 
 
-def test_morning_lists_coming_up_routines(conn):
+def test_morning_brief_leaves_out_what_is_not_an_action(conn):
+    # assistant-moderation-v1: the routine schedule is not something the owner has to act on
     briefs.run_morning(conn, NOW, None, Config())
     brief = briefs.latest(conn, ["morning"])
     assert brief is not None
-    up = next(s for s in brief["sections"] if s["title"] == "Coming up")
-    assert up["text"] == "Mail revision 11:00, 14:00, 17:00 · Evening wrap 19:00"
+    assert "Coming up" not in [s["title"] for s in brief["sections"]]
+    assert briefs.coming_up(conn, NOW) is not None  # still available to the Today screen
 
 
 def test_scheduler_runs_morning_and_evening():
