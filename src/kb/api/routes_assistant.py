@@ -107,3 +107,32 @@ def moderate(
         with contextlib.suppress(suggestions.SuggestionError):  # already decided
             suggestions.discard(conn, sid, "not chosen when moderating", now)
     return {"created": created, "failed": failed}
+
+
+@router.post("/api/suggestions/{sid}/revise")
+def revise(
+    request: Request, conn: Db, sid: int, instruction: Annotated[str, Body(embed=True)]
+) -> dict[str, Any]:
+    """The owner's instruction (typed or dictated) for the AI to change a proposal."""
+    from kb.assistant import revise as revising
+
+    state = request.app.state
+    try:
+        s = revising.revise(
+            conn, state.config, state.dictation_llm, sid, instruction, datetime.now(UTC)
+        )
+    except suggestions.SuggestionError as e:
+        raise HTTPException(404 if str(e).startswith("no suggestion") else 400, str(e)) from e
+    return {"suggestion": suggestions.one(conn, s["id"])}
+
+
+@router.patch("/api/suggestions/{sid}")
+def edit(conn: Db, sid: int, fields: Annotated[dict[str, Any], Body(embed=True)]) -> dict[str, Any]:
+    """The owner's own wording for a proposal (title, text, assignee, due date)."""
+    from kb.assistant import revise as revising
+
+    try:
+        s = revising.edit(conn, sid, fields, datetime.now(UTC))
+    except suggestions.SuggestionError as e:
+        raise HTTPException(404 if str(e).startswith("no suggestion") else 400, str(e)) from e
+    return {"suggestion": suggestions.one(conn, s["id"])}

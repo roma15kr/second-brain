@@ -10,5 +10,9 @@
 ## 2. Web
 - [x] 2.1 Moderate page (grouped proposals, select, create selected, discard rest) and Settings → My team; verify `Moderate.test.tsx`, `Settings.test.tsx` team case
 
+## 2b. Changing proposals (owner 2026-11-03: "not only approve — comments for AI modification or my custom text/voice edit")
+- [x] 2.2 Server: `POST /api/suggestions/{id}/revise {instruction}` (AI rewrites the editable fields: task title/description/assignee/due, comment or message text; assignee resolved to the team; revision history kept) and `PATCH /api/suggestions/{id}` (owner's own fields); verify `test_revise_task_by_instruction`, `test_owner_edit_used_on_create`
+- [x] 2.3 Web: per proposal "Change with AI" (type or dictate an instruction) and "Edit" (fields, dictation into the text); verify `Moderate.test.tsx` revise and edit cases
+
 ## 3. Acceptance
 - [ ] 3.1 Owner: a week of drafts in Gmail and meeting proposals moderated; share keep-rate from Status

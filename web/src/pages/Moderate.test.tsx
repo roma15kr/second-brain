@@ -70,3 +70,44 @@ test("nothing to moderate", async () => {
   renderApp();
   expect(await screen.findByText("Nothing to moderate")).toBeInTheDocument();
 });
+
+test("a proposal is changed by an instruction to the AI before it is created", async () => {
+  window.history.pushState({}, "", "/moderate");
+  const calls = mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/suggestions": { suggestions },
+    "POST /api/suggestions/1/revise": { suggestion: suggestions[0] },
+  });
+  renderApp();
+  const buttons = await screen.findAllByRole("button", { name: "Change with AI" });
+  await userEvent.click(buttons[0]);
+  expect(screen.getByRole("button", { name: "Dictate" })).toBeInTheDocument(); // or say it
+  await userEvent.type(screen.getByLabelText("What to change in 1"), "assign to Kate, due Monday");
+  await userEvent.click(screen.getByRole("button", { name: "Apply" }));
+  await waitFor(() => expect(calls.some((c) => c.path === "/api/suggestions/1/revise")).toBe(true));
+  const post = calls.find((c) => c.path === "/api/suggestions/1/revise");
+  expect(JSON.parse(String(post?.init?.body))).toEqual({
+    instruction: "assign to Kate, due Monday",
+  });
+  expect(calls.some((c) => c.path === "/api/suggestions/moderate")).toBe(false); // nothing created
+});
+
+test("the owner edits a comment in their own words", async () => {
+  window.history.pushState({}, "", "/moderate");
+  const calls = mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/suggestions": { suggestions },
+    "PATCH /api/suggestions/2": { suggestion: suggestions[1] },
+  });
+  renderApp();
+  const edits = await screen.findAllByRole("button", { name: "Edit" });
+  await userEvent.click(edits[1]);
+  const text = screen.getByLabelText("Text");
+  expect(text).toHaveValue("New buy box approved");
+  await userEvent.clear(text);
+  await userEvent.type(text, "Approved, go ahead");
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
+  const patch = calls.find((c) => c.method === "PATCH");
+  expect(JSON.parse(String(patch?.init?.body))).toEqual({ fields: { body: "Approved, go ahead" } });
+});
