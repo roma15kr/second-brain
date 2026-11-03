@@ -8,7 +8,7 @@
 - [x] 1.5 Short briefs (≤ 8 lines, one line when nothing) and summaries (≤ 5 lines); verify `test_brief_is_short`, `test_quiet_morning_one_line`
 
 ## 2. Web
-- [ ] 2.1 Moderate page (grouped proposals, select, create selected, discard rest) and Settings → My team; verify `Moderate.test.tsx`, `Settings.test.tsx` team case
+- [x] 2.1 Moderate page (grouped proposals, select, create selected, discard rest) and Settings → My team; verify `Moderate.test.tsx`, `Settings.test.tsx` team case
 
 ## 3. Acceptance
 - [ ] 3.1 Owner: a week of drafts in Gmail and meeting proposals moderated; share keep-rate from Status

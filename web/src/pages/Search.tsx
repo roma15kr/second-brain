@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api } from "../api/client";
 import { kyivTime } from "../briefs/BriefView";
+import { PAGES } from "../shell/apps";
 
 type Ctx = {
   author: string;
@@ -66,50 +67,53 @@ export function Search() {
           Search
         </button>
       </form>
-      <div className="row filters">
-        <select
-          aria-label="Scope"
-          className="btn"
-          value={params.get("scope") ?? ""}
-          onChange={(e) => set("scope", e.target.value)}
-        >
-          <option value="">All scopes</option>
-          {SCOPES.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-        <select
-          aria-label="Source"
-          className="btn"
-          value={params.get("kind") ?? ""}
-          onChange={(e) => set("kind", e.target.value)}
-        >
-          <option value="">Mail and chats</option>
-          <option value="mail">Mail</option>
-          <option value="chats">Telegram</option>
-        </select>
-        <input
-          aria-label="Person"
-          className="btn"
-          placeholder="Person…"
-          defaultValue={params.get("person") ?? ""}
-          onBlur={(e) => set("person", e.target.value.trim())}
-        />
-        <input
-          aria-label="From"
-          type="date"
-          className="btn"
-          value={params.get("from") ?? ""}
-          onChange={(e) => set("from", e.target.value)}
-        />
-        <input
-          aria-label="To"
-          type="date"
-          className="btn"
-          value={params.get("to") ?? ""}
-          onChange={(e) => set("to", e.target.value)}
-        />
-      </div>
+      {!q && <PageTiles />}
+      {q && (
+        <div className="row filters">
+          <select
+            aria-label="Scope"
+            className="btn"
+            value={params.get("scope") ?? ""}
+            onChange={(e) => set("scope", e.target.value)}
+          >
+            <option value="">All scopes</option>
+            {SCOPES.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+          <select
+            aria-label="Source"
+            className="btn"
+            value={params.get("kind") ?? ""}
+            onChange={(e) => set("kind", e.target.value)}
+          >
+            <option value="">Mail and chats</option>
+            <option value="mail">Mail</option>
+            <option value="chats">Telegram</option>
+          </select>
+          <input
+            aria-label="Person"
+            className="btn"
+            placeholder="Person…"
+            defaultValue={params.get("person") ?? ""}
+            onBlur={(e) => set("person", e.target.value.trim())}
+          />
+          <input
+            aria-label="From"
+            type="date"
+            className="btn"
+            value={params.get("from") ?? ""}
+            onChange={(e) => set("from", e.target.value)}
+          />
+          <input
+            aria-label="To"
+            type="date"
+            className="btn"
+            value={params.get("to") ?? ""}
+            onChange={(e) => set("to", e.target.value)}
+          />
+        </div>
+      )}
       {search.isFetching && <p className="muted">Searching…</p>}
       {search.isError && <p className="error">{search.error.message}</p>}
       {search.data && search.data.briefs.length > 0 && (
@@ -165,5 +169,23 @@ export function Search() {
         </ul>
       )}
     </>
+  );
+}
+
+// The rest of the app, one tap from Search (web-redesign-v1).
+export function PageTiles({ only }: { only?: string[] }) {
+  const pages = only ? PAGES.filter((p) => only.includes(p.path)) : PAGES;
+  return (
+    <nav className="tiles" aria-label="Pages">
+      {pages.map((p) => (
+        <Link key={p.path} to={p.path} className="tile">
+          <span className="tile-icon" aria-hidden>
+            {p.icon}
+          </span>
+          <strong>{p.label}</strong>
+          <span className="sub">{p.hint}</span>
+        </Link>
+      ))}
+    </nav>
   );
 }

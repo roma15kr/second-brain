@@ -32,15 +32,29 @@ function Item({ item }: { item: BriefItem }) {
       )}
       <span className="muted"> · {kyivTime.format(new Date(item.last_activity_at))}</span>
       {item.reason ? (
-        <div>{item.reason}</div>
+        <span className="sub">{item.reason}</span>
       ) : (
-        item.summary && <div className="muted">{item.summary}</div>
+        item.summary && <span className="sub">{item.summary}</span>
       )}
     </li>
   );
 }
 
 function SectionView({ section: s }: { section: BriefSection }) {
+  if (s.collapsed) {
+    return (
+      <details className="activity">
+        <summary>
+          {s.title} <span className="muted">{s.text}</span>
+        </summary>
+        <ul className="list compact">
+          {s.items.map((item) => (
+            <Item key={item.ref} item={item} />
+          ))}
+        </ul>
+      </details>
+    );
+  }
   if (s.kind === "note") {
     return (
       <p className="note">
@@ -60,11 +74,12 @@ function SectionView({ section: s }: { section: BriefSection }) {
     <section className={`section-${s.kind ?? "data"}`}>
       {heading}
       {s.kind === "ai" && <p>{s.text}</p>}
-      <ul className="list">
+      <ul className="list compact">
         {s.items.map((item) => (
           <Item key={item.ref} item={item} />
         ))}
       </ul>
+      {s.more ? <p className="muted small">+{s.more} more</p> : null}
     </section>
   );
 }

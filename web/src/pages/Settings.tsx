@@ -2,6 +2,8 @@ import { useProjects } from "../shell/useProjects";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../api/client";
+import { getTheme, setTheme, type Theme } from "../shell/theme";
+import { PageTiles } from "./Search";
 import { RecorderDevices } from "./RecorderDevices";
 import { Notifications } from "../push/Notifications";
 
@@ -20,6 +22,7 @@ type AppSettings = {
   reply_drafts_per_day: number;
   working_hours?: { start: string; end: string };
   calls_provider?: "openai-diarize" | "openai-whisper" | "groq";
+  team?: string[];
 };
 type SettingsData = { app: AppSettings; budget_default_usd: number; month_spend_usd: number };
 type Device = {
@@ -467,6 +470,73 @@ function UnsortedReview() {
 
 // Settings (web-dashboard spec): routines, quiet hours, push per device, identities, AI budget,
 // scope rules and unsorted review. Passkeys and recovery codes are in the Security section.
+// My team (assistant-moderation-v1): mentions, assignments and meeting task assignees.
+function Team({ team }: { team: string[] }) {
+  const queryClient = useQueryClient();
+  const [text, setText] = useState(team.join("\n"));
+  const [message, setMessage] = useState<string | null>(null);
+  const save = useMutation({
+    mutationFn: () =>
+      api("/api/settings", {
+        method: "PUT",
+        body: {
+          app: {
+            team: text
+              .split(/[\n,]/)
+              .map((x) => x.trim())
+              .filter(Boolean),
+          },
+        },
+      }),
+    onSuccess: () => {
+      setMessage("Saved.");
+      return queryClient.invalidateQueries({ queryKey: ["settings"] });
+    },
+    onError: (e) => setMessage(e.message),
+  });
+  return (
+    <div className="settings-form">
+      <label>
+        Names, one per line
+        <textarea
+          aria-label="My team"
+          rows={5}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+      </label>
+      <div className="actions">
+        <button className="btn primary" onClick={() => save.mutate()} disabled={save.isPending}>
+          Save team
+        </button>
+        {message && <span className="muted">{message}</span>}
+      </div>
+    </div>
+  );
+}
+
+function Appearance() {
+  const [theme, set] = useState<Theme>(getTheme());
+  return (
+    <div className="segmented" role="radiogroup" aria-label="Theme">
+      {(["light", "dark"] as Theme[]).map((t) => (
+        <button
+          key={t}
+          role="radio"
+          aria-checked={theme === t}
+          className={theme === t ? "on" : ""}
+          onClick={() => {
+            setTheme(t);
+            set(t);
+          }}
+        >
+          {t === "light" ? "Light" : "Dark"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Settings({ security }: { security?: ReactNode }) {
   const settings = useQuery({
     queryKey: ["settings"],
@@ -474,6 +544,17 @@ export function Settings({ security }: { security?: ReactNode }) {
   });
   return (
     <>
+      <PageTiles only={["/connectors", "/status"]} />
+      <Section title="My team">
+        {settings.data ? (
+          <Team team={settings.data.app.team ?? []} />
+        ) : (
+          <p className="muted">Loading…</p>
+        )}
+      </Section>
+      <Section title="Appearance">
+        <Appearance />
+      </Section>
       <Section title="Routines and AI budget">
         {settings.data ? <Schedule data={settings.data} /> : <p className="muted">Loading…</p>}
       </Section>

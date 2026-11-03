@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api/client";
+import { ICONS } from "./icons";
 
 type Row = { id: number; title: string; headline: string; created_at: string; opened: boolean };
 
@@ -17,11 +18,12 @@ export function Bell() {
   return (
     <div className="bell">
       <button
-        className="btn"
+        className="icon-btn"
         aria-label={`Notifications (${unread.length} unread)`}
         onClick={() => setOpen(!open)}
       >
-        🔔 {unread.length > 0 && <span className="badge">{unread.length}</span>}
+        {ICONS.bell}
+        {unread.length > 0 && <span className="badge">{unread.length}</span>}
       </button>
       {open && (
         <div className="bell-panel card" role="menu">

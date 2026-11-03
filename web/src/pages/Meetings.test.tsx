@@ -37,8 +37,25 @@ test("Today lists today's meetings in Kyiv time with a join link", async () => {
     "href",
     "/meetings/3",
   );
-  expect(screen.getByText("15:00–15:30")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Join" })).toHaveAttribute("href", meeting.link);
+  expect(screen.getByText(/15:00–15:30/)).toBeInTheDocument();
+  // this meeting (20 October) is over: dimmed, without a join link
+  expect(screen.queryByRole("link", { name: "Join" })).not.toBeInTheDocument();
+});
+
+test("a meeting still to come offers the join link on Today", async () => {
+  const later = new Date(Date.now() + 3_600_000);
+  const soon = {
+    ...meeting,
+    start: later.toISOString(),
+    end: new Date(later.getTime() + 1_800_000).toISOString(),
+  };
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/today": { brief: null, meetings: [soon] },
+    "GET /api/briefs": { briefs: [] },
+  });
+  renderApp();
+  expect(await screen.findByRole("link", { name: "Join" })).toHaveAttribute("href", meeting.link);
 });
 
 test("the meeting page links attendees to People", async () => {
