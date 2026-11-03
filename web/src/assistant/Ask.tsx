@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../api/client";
+import { ICONS } from "../shell/icons";
 import { Recorder } from "./Recorder";
 
 export type Created = { id: number; thread_id: number };
@@ -30,10 +31,15 @@ export async function transcript(id: number, tries = 80): Promise<string> {
 export function AskBox({
   threadId,
   onAsked,
+  onSpoken: spoken,
+  big = false,
   placeholder = "Ask, draft, find… e.g. “what did we agree with Rozetka about delivery?”",
 }: {
   threadId?: number;
   onAsked?: (c: Created) => void;
+  // big composer: a recording opens as a dictation (ask, copy, clean, structure, save)
+  onSpoken?: (dictationId: number) => void;
+  big?: boolean;
   placeholder?: string;
 }) {
   const navigate = useNavigate();
@@ -41,6 +47,7 @@ export function AskBox({
   const [transcribing, setTranscribing] = useState(false);
   // a voice request: the transcript goes into the field so the owner can check it first
   const onSpoken = (id: number) => {
+    if (spoken) return spoken(id);
     setTranscribing(true);
     void transcript(id)
       .then((t) => setText((old) => (old ? `${old} ${t}` : t)))
@@ -58,6 +65,34 @@ export function AskBox({
     e.preventDefault();
     if (text.trim()) send.mutate();
   };
+  if (big) {
+    return (
+      <form className="composer" onSubmit={submit}>
+        <textarea
+          aria-label="Ask the assistant"
+          rows={3}
+          value={text}
+          placeholder="Type a question or a task — or tap the mic and speak"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) submit(e);
+          }}
+        />
+        <div className="composer-bar">
+          <Recorder big onUploaded={onSpoken} />
+          <button
+            className="btn primary send"
+            type="submit"
+            disabled={send.isPending || !text.trim()}
+            aria-label="Ask"
+          >
+            Ask {ICONS.send}
+          </button>
+        </div>
+        {send.isError && <div className="error">{send.error.message}</div>}
+      </form>
+    );
+  }
   return (
     <form className="row ask" onSubmit={submit}>
       <textarea

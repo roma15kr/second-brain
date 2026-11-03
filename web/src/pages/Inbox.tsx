@@ -104,42 +104,49 @@ function Row({ item, onChanged }: { item: InboxItem; onChanged: () => void }) {
         <button className="btn" onClick={() => post(`${base}/done`)}>
           Done
         </button>
-        <button className="btn" onClick={() => post(`${base}/snooze`, { until: at(1) })}>
-          Snooze to tomorrow
-        </button>
-        <button className="btn" onClick={() => post(`${base}/snooze`, { until: at(0, true) })}>
-          Snooze to Monday
-        </button>
-        <select
-          aria-label="Change scope"
-          className="btn"
-          value=""
-          onChange={(e) => e.target.value && post(`${base}/scope`, { scope: e.target.value })}
-        >
-          <option value="">Scope…</option>
-          {SCOPES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        {item.sender && (
-          <>
-            <button
-              className="btn"
-              onClick={() => post("/api/senders/pref", { address: item.sender, pref: "noise" })}
-            >
-              Sender is noise
-            </button>
-            <button
-              className="btn"
-              onClick={() => post("/api/senders/pref", { address: item.sender, pref: "important" })}
-            >
-              Sender is important
-            </button>
-          </>
-        )}
       </div>
+      <details className="more-actions">
+        <summary>More</summary>
+        <div className="row actions">
+          <button className="btn" onClick={() => post(`${base}/snooze`, { until: at(1) })}>
+            Snooze to tomorrow
+          </button>
+          <button className="btn" onClick={() => post(`${base}/snooze`, { until: at(0, true) })}>
+            Snooze to Monday
+          </button>
+          <select
+            aria-label="Change scope"
+            className="btn"
+            value=""
+            onChange={(e) => e.target.value && post(`${base}/scope`, { scope: e.target.value })}
+          >
+            <option value="">Scope…</option>
+            {SCOPES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          {item.sender && (
+            <>
+              <button
+                className="btn"
+                onClick={() => post("/api/senders/pref", { address: item.sender, pref: "noise" })}
+              >
+                Sender is noise
+              </button>
+              <button
+                className="btn"
+                onClick={() =>
+                  post("/api/senders/pref", { address: item.sender, pref: "important" })
+                }
+              >
+                Sender is important
+              </button>
+            </>
+          )}
+        </div>
+      </details>
       {message && (
         <div role="status" className="muted">
           {message}

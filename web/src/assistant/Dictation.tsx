@@ -125,7 +125,7 @@ function Result({ d }: { d: DictationData }) {
           disabled={!text}
           onClick={() => void ask(text).then((c) => navigate(`/assistant/t/${c.thread_id}`))}
         >
-          As a request
+          Ask the assistant
         </button>
       </div>
       {d.saved_doc_id && <Link to={`/library/${d.saved_doc_id}`}>Open the note</Link>}
@@ -137,7 +137,7 @@ function Result({ d }: { d: DictationData }) {
   );
 }
 
-function Current({ id }: { id: number }) {
+export function DictationResult({ id }: { id: number }) {
   const d = useDictation(id);
   if (d.isPending) return <p className="muted">Uploading…</p>;
   if (d.isError) return <p className="error">{d.error.message}</p>;
@@ -160,7 +160,7 @@ export function Dictation() {
     <>
       <section className="card">
         <Recorder onUploaded={(id) => void navigate(`/dictate/${id}`)} />
-        {current !== null && <Current key={current} id={current} />}
+        {current !== null && <DictationResult key={current} id={current} />}
       </section>
       {history.data && history.data.dictations.length > 0 && (
         <section className="card">

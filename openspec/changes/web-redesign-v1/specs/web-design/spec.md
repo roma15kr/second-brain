@@ -13,12 +13,30 @@ The web OS SHALL use a light theme (light surfaces, one accent colour, rounded c
 - **WHEN** the owner opens the web OS on an iPhone set to dark mode
 - **THEN** pages are still light with dark text and blue accents
 
-### Requirement: Five places
-The main navigation SHALL have five entries — Today, Moderate, Meetings, Search, Settings — as a bottom tab bar on phones and a sidebar on wider screens; every other page SHALL be reachable from one of them in one tap.
+### Requirement: The assistant is the main action
+The assistant and dictation SHALL be one screen: the owner types or speaks; a spoken recording becomes text that can be sent as a request, copied, cleaned, structured or saved to the Library. It SHALL be one tap away everywhere: the centre button of the phone tab bar and the first button of the sidebar.
 
-#### Scenario: Finding Library
-- **WHEN** the owner wants the Library
-- **THEN** it opens from Search in one tap
+#### Scenario: Dictate a request on the phone
+- **WHEN** the owner taps the centre button, taps the mic and says a question
+- **THEN** the text appears and one tap sends it to the assistant
+
+#### Scenario: Dictate a note
+- **WHEN** the owner dictates a note and taps "Structured"
+- **THEN** the structured text is shown with Copy and Save to Library
+
+### Requirement: Every section is visible
+On wide screens the sidebar SHALL list every section in groups (Work, Knowledge, Reports, System); on phones the tab bar SHALL show Today, Moderate, the assistant, Meetings and Menu, and Menu SHALL list every section; no section SHALL be reachable only through search.
+
+#### Scenario: Finding Library on the phone
+- **WHEN** the owner wants the Library on the phone
+- **THEN** it opens from Menu in one tap
+
+### Requirement: Comfortable on a phone
+Tap targets SHALL be at least 44 px high, pages SHALL not scroll sideways at 360 px width, and rows with many actions SHALL show the main actions with the rest under "More".
+
+#### Scenario: Inbox row on the phone
+- **WHEN** the owner opens an email row in the Inbox on a phone
+- **THEN** "Draft reply" and "Done" are shown and the other actions are under "More"
 
 ### Requirement: Today shows actions first
 The Today screen SHALL show, above the fold on a phone, the number of items to moderate, the next meetings, and new mentions of the owner and the team, each opening its detail in one tap.

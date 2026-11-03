@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { flush, pendingStore, type Pending } from "./pending";
 import { clock, useRecorder } from "./useRecorder";
+import { ICONS } from "../shell/icons";
 
 // Microphone controls: record → upload (retried until the server has it) → dictation id.
 export function Recorder({
   onUploaded,
   compact = false,
+  big = false,
 }: {
   onUploaded: (dictationId: number) => void;
   compact?: boolean;
+  big?: boolean; // the assistant's round mic button
 }) {
   const [waiting, setWaiting] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -55,6 +58,15 @@ export function Recorder({
             Stop
           </button>
         </>
+      ) : big ? (
+        <button
+          type="button"
+          className="mic-btn"
+          aria-label="Dictate"
+          onClick={() => void r.start()}
+        >
+          {ICONS.mic}
+        </button>
       ) : (
         <button
           type="button"

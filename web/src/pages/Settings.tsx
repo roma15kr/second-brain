@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { api } from "../api/client";
 import { getTheme, setTheme, type Theme } from "../shell/theme";
-import { PageTiles } from "./Search";
 import { RecorderDevices } from "./RecorderDevices";
 import { Notifications } from "../push/Notifications";
 
@@ -544,7 +543,6 @@ export function Settings({ security }: { security?: ReactNode }) {
   });
   return (
     <>
-      <PageTiles only={["/connectors", "/status"]} />
       <Section title="My team">
         {settings.data ? (
           <Team team={settings.data.app.team ?? []} />

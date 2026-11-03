@@ -5,7 +5,6 @@ import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { api } from "../api/client";
 import { kyivTime } from "../briefs/BriefView";
-import { PAGES } from "../shell/apps";
 
 type Ctx = {
   author: string;
@@ -67,7 +66,6 @@ export function Search() {
           Search
         </button>
       </form>
-      {!q && <PageTiles />}
       {q && (
         <div className="row filters">
           <select
@@ -169,23 +167,5 @@ export function Search() {
         </ul>
       )}
     </>
-  );
-}
-
-// The rest of the app, one tap from Search (web-redesign-v1).
-export function PageTiles({ only }: { only?: string[] }) {
-  const pages = only ? PAGES.filter((p) => only.includes(p.path)) : PAGES;
-  return (
-    <nav className="tiles" aria-label="Pages">
-      {pages.map((p) => (
-        <Link key={p.path} to={p.path} className="tile">
-          <span className="tile-icon" aria-hidden>
-            {p.icon}
-          </span>
-          <strong>{p.label}</strong>
-          <span className="sub">{p.hint}</span>
-        </Link>
-      ))}
-    </nav>
   );
 }
