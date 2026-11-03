@@ -300,23 +300,43 @@ function GroupCard({ group, onDone }: { group: Group; onDone: () => void }) {
         {message && <span className="error small">{message}</span>}
       </div>
       {merging && mergeable.length >= 2 && (
-        <div className="change-panel">
-          <textarea
-            aria-label="How to merge"
-            rows={2}
-            placeholder="Optional: e.g. one SEO task for Kate, due Friday"
-            value={how}
-            onChange={(e) => setHow(e.target.value)}
-          />
-          <div className="row">
-            <VoiceInto onText={(t) => setHow((old) => (old ? `${old} ${t}` : t))} />
-            <button
-              className="btn primary"
-              disabled={merge.isPending}
-              onClick={() => merge.mutate()}
-            >
-              {merge.isPending ? "Merging…" : `Merge ${mergeable.length} into one`}
-            </button>
+        <div className="sheet-backdrop" onClick={() => setMerging(false)}>
+          <div
+            className="sheet card"
+            role="dialog"
+            aria-label="Merge proposals"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="card-title">Merge {mergeable.length} tasks into one</h3>
+            <ul className="list compact">
+              {group.items
+                .filter((s) => mergeable.includes(s.id))
+                .map((s) => (
+                  <li key={s.id}>
+                    <span className="sub">{describe(s).title}</span>
+                  </li>
+                ))}
+            </ul>
+            <textarea
+              aria-label="How to merge"
+              placeholder="How to combine them (optional), e.g. one SEO task for Kate, due Friday"
+              value={how}
+              onChange={(e) => setHow(e.target.value)}
+            />
+            <div className="row">
+              <VoiceInto onText={(t) => setHow((old) => (old ? `${old} ${t}` : t))} />
+              <button className="btn" onClick={() => setMerging(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn primary"
+                disabled={merge.isPending}
+                onClick={() => merge.mutate()}
+              >
+                {merge.isPending ? "Merging…" : `Merge ${mergeable.length} into one`}
+              </button>
+            </div>
+            {message && <p className="error small">{message}</p>}
           </div>
         </div>
       )}
