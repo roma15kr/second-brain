@@ -385,7 +385,67 @@ def draft_clickup_comment(run: Run, item_id: int, body: str, assign_to: str | No
     return result
 
 
+def _config(run: Run) -> Any:
+    from kb.config import Config
+
+    return run.config or Config()
+
+
+def _structured_llm(run: Run) -> Any:
+    from kb.routines import briefs
+
+    return briefs.default_llm(_config(run))
+
+
+def _brief(s: dict[str, Any]) -> dict[str, Any]:
+    p = s["payload"]
+    out: dict[str, Any] = {"proposal_id": s["id"], "kind": s["kind"], "from": s["reason"]}
+    if s["kind"] in ("task", "delegate"):
+        out |= {"task": p.get("name"), "assignee": p.get("assignee_name"), "due": p.get("due_date")}
+        if p.get("description"):
+            out["description"] = str(p["description"])[:400]
+    else:
+        out["text"] = str(p.get("body") or "")[:400]
+        if p.get("task_title"):
+            out["on_task"] = p["task_title"]
+    return out
+
+
+def proposals(run: Run, source: str | None) -> Any:
+    """Proposals waiting in Moderate (tasks and comments from meetings, message drafts)."""
+    run.step("proposals", "looked at the proposals waiting for you")
+    rows = [
+        s
+        for s in suggestions.listing(run.conn)
+        if not s["payload"].get("ai_pending")
+        and (not source or source.lower() in (s["reason"] or "").lower())
+    ]
+    return [_brief(s) for s in rows[:40]]
+
+
+def merge_proposals(run: Run, ids: list[int], instruction: str | None) -> Any:
+    from kb.assistant import revise
+
+    s = revise.merge(
+        run.conn, _config(run), _structured_llm(run), ids, instruction or "", _now(run)
+    )
+    run.step("merge_proposals", f"merged {len(ids)} proposals into one")
+    run.record({"type": "suggestion", "id": s["id"], "kind": "task"})
+    return {"merged_into": _brief(s), "status": "waiting for the owner's approval in Moderate"}
+
+
+def revise_proposal(run: Run, id: int, instruction: str) -> Any:
+    from kb.assistant import revise
+
+    s = revise.revise(run.conn, _config(run), _structured_llm(run), id, instruction, _now(run))
+    run.step("revise_proposal", "changed a proposal as you asked")
+    return {"proposal": _brief(s), "status": "waiting for the owner's approval in Moderate"}
+
+
 HANDLERS: dict[str, Callable[..., Any]] = {
+    "proposals": proposals,
+    "merge_proposals": merge_proposals,
+    "revise_proposal": revise_proposal,
     "draft_clickup_comment": draft_clickup_comment,
     "activity": activity,
     "report": report,

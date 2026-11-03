@@ -51,6 +51,17 @@ For every proposal in the Moderate list the owner SHALL be able to (a) give an i
 - **WHEN** the owner replaces the text of a proposed ClickUp comment with their own words
 - **THEN** exactly that text is posted when the owner creates it
 
+### Requirement: Task proposals can be merged
+The owner SHALL be able to select two or more task proposals and merge them into one proposal, optionally saying how (typed or dictated); the merged task SHALL keep every concrete point of the originals, replace them, and wait for approval. The assistant SHALL see the proposals waiting in Moderate and SHALL be able to list, merge and change them on request.
+
+#### Scenario: One SEO task from three
+- **WHEN** the owner selects the first three task proposals from "Weekly Kate" and merges them
+- **THEN** one task proposal with all three points replaces them in Moderate
+
+#### Scenario: Asked in the assistant
+- **WHEN** the owner asks the assistant "make one task from the first three proposals of Weekly Kate"
+- **THEN** the assistant finds those proposals and prepares the merged task for approval
+
 ### Requirement: The owner's team
 The owner SHALL set "My team" in Settings (default: Anastasiya Tarasova, Kate Oleksyuk, Bogdan Stetsenko, Galyna Tkachenko); the team SHALL be used for mentions and assignments that notify the owner, for delegation suggestions and for meeting task assignees, matched to ClickUp members and People by name or email.
 

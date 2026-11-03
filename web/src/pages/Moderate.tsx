@@ -230,6 +230,24 @@ function GroupCard({ group, onDone }: { group: Group; onDone: () => void }) {
     },
     onError: (e) => setMessage(e.message),
   });
+  // ticked task proposals can be merged into one
+  const mergeable = group.items.filter((s) => picked.has(s.id) && isTask(s)).map((s) => s.id);
+  const [merging, setMerging] = useState(false);
+  const [how, setHow] = useState("");
+  const merge = useMutation({
+    mutationFn: () =>
+      api("/api/suggestions/merge", {
+        method: "POST",
+        body: { ids: mergeable, instruction: how },
+      }),
+    onSuccess: () => {
+      setMerging(false);
+      setHow("");
+      setPicked(new Set());
+      onDone();
+    },
+    onError: (e) => setMessage(e.message),
+  });
   const toggle = (id: number) =>
     setPicked((old) => {
       const next = new Set(old);
@@ -273,8 +291,34 @@ function GroupCard({ group, onDone }: { group: Group; onDone: () => void }) {
         <button className="btn" disabled={send.isPending} onClick={() => send.mutate([])}>
           Discard all
         </button>
+        {mergeable.length >= 2 && (
+          <button className="btn" onClick={() => setMerging(!merging)}>
+            Merge ({mergeable.length})
+          </button>
+        )}
         {message && <span className="error small">{message}</span>}
       </div>
+      {merging && mergeable.length >= 2 && (
+        <div className="change-panel">
+          <textarea
+            aria-label="How to merge"
+            rows={2}
+            placeholder="Optional: e.g. one SEO task for Kate, due Friday"
+            value={how}
+            onChange={(e) => setHow(e.target.value)}
+          />
+          <div className="row">
+            <VoiceInto onText={(t) => setHow((old) => (old ? `${old} ${t}` : t))} />
+            <button
+              className="btn primary"
+              disabled={merge.isPending}
+              onClick={() => merge.mutate()}
+            >
+              {merge.isPending ? "Merging…" : `Merge ${mergeable.length} into one`}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -136,3 +136,23 @@ def edit(conn: Db, sid: int, fields: Annotated[dict[str, Any], Body(embed=True)]
     except suggestions.SuggestionError as e:
         raise HTTPException(404 if str(e).startswith("no suggestion") else 400, str(e)) from e
     return {"suggestion": suggestions.one(conn, s["id"])}
+
+
+@router.post("/api/suggestions/merge")
+def merge(
+    request: Request,
+    conn: Db,
+    ids: Annotated[list[int], Body(embed=True)],
+    instruction: Annotated[str, Body(embed=True)] = "",
+) -> dict[str, Any]:
+    """Several task proposals combined into one (optionally as the owner says)."""
+    from kb.assistant import revise as revising
+
+    state = request.app.state
+    try:
+        s = revising.merge(
+            conn, state.config, state.dictation_llm, ids, instruction, datetime.now(UTC)
+        )
+    except suggestions.SuggestionError as e:
+        raise HTTPException(404 if str(e).startswith("no suggestion") else 400, str(e)) from e
+    return {"suggestion": suggestions.one(conn, s["id"])}

@@ -133,3 +133,72 @@ def revise(
         {"instruction": instruction, "at": now.isoformat()},
     ]
     return _save(conn, sid, payload)
+
+
+MERGE_SYSTEM = """Combine the owner's proposed ClickUp tasks into ONE task, following the
+INSTRUCTION when there is one.
+- `name`: one short title covering all of them.
+- `description`: every concrete point of all the tasks, as a short list; nothing invented.
+- `assignee`: as the instruction says, else the person most of the tasks are for (full name from
+  TEAM when it is one of them).
+- `due`: as the instruction says, else the earliest due date of the tasks ("" when none has one).
+Keep the language of the tasks."""
+
+
+def merge(
+    conn: Conn,
+    config: Config,
+    llm: StructuredLlm | None,
+    ids: list[int],
+    instruction: str,
+    now: datetime,
+) -> dict[str, Any]:
+    """Several task proposals → one new proposal (the originals are discarded as merged). The
+    merged task waits for the owner's approval like any proposal."""
+    from kb import team
+
+    rows = [_open(conn, sid) for sid in dict.fromkeys(ids)]
+    if len(rows) < 2:
+        raise suggestions.SuggestionError("choose at least two proposals to merge")
+    if any(r["kind"] not in ("task", "delegate") for r in rows):
+        raise suggestions.SuggestionError("only task proposals can be merged")
+    if llm is None:
+        raise suggestions.SuggestionError("the AI is not configured")
+    if distill.month_spend_usd(conn, now.date()) >= settings_store.budget_usd(conn, config):
+        raise suggestions.SuggestionError("this month's AI budget is used up")
+    tasks = [{f: r["payload"].get(f) or "" for f in TASK_FIELDS} for r in rows]
+    text = (
+        f"TEAM: {', '.join(team.names(conn))}\nTODAY: {now.date().isoformat()}\n"
+        f"TASKS: {json.dumps(tasks, ensure_ascii=False)}\nINSTRUCTION: {instruction.strip() or '-'}"
+    )
+    model = config.llm.model()
+    data, usage = llm.structured(model, MERGE_SYSTEM, text, _schema(TASK_FIELDS), "merge", "low")
+    distill.record_usage(conn, "assistant", model, "merge_proposals", usage)
+    first = rows[0]
+    base = {k: v for k, v in first["payload"].items() if k not in ("revisions", "merged_from")}
+    payload = _apply(
+        conn,
+        {"kind": "task", "payload": base},
+        {
+            "name": data.get("name"),
+            "description": data.get("description"),
+            "assignee_name": data.get("assignee"),
+            "due_date": data.get("due"),
+        },
+        now,
+    )
+    payload["merged_from"] = [r["id"] for r in rows]
+    if instruction.strip():
+        payload["revisions"] = [{"instruction": instruction.strip(), "at": now.isoformat()}]
+    sid = suggestions.propose(
+        conn,
+        "task",
+        payload,
+        reason=first["reason"] or "Merged proposals",
+        refs=sorted({ref for r in rows for ref in r["refs"]}),
+        scopes=sorted({sc for r in rows for sc in r["scopes"]}),
+        item_id=first["item_id"],
+    )
+    for r in rows:
+        suggestions.discard(conn, r["id"], f"merged into proposal {sid}", now)
+    return suggestions.get(conn, sid)

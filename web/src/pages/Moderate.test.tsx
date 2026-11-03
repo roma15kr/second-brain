@@ -111,3 +111,25 @@ test("the owner edits a comment in their own words", async () => {
   const patch = calls.find((c) => c.method === "PATCH");
   expect(JSON.parse(String(patch?.init?.body))).toEqual({ fields: { body: "Approved, go ahead" } });
 });
+
+test("two ticked task proposals are merged into one, as the owner says", async () => {
+  window.history.pushState({}, "", "/moderate");
+  const calls = mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/suggestions": { suggestions },
+    "POST /api/suggestions/merge": { suggestion: suggestions[0] },
+  });
+  renderApp();
+  await userEvent.click(await screen.findByLabelText("Task: Update the bundle page"));
+  expect(screen.queryByRole("button", { name: /Merge/ })).not.toBeInTheDocument(); // one task
+  await userEvent.click(screen.getByLabelText("Task: Order samples"));
+  await userEvent.click(screen.getByRole("button", { name: "Merge (2)" }));
+  await userEvent.type(screen.getByLabelText("How to merge"), "one task for Kate");
+  await userEvent.click(screen.getByRole("button", { name: "Merge 2 into one" }));
+  await waitFor(() => expect(calls.some((c) => c.path === "/api/suggestions/merge")).toBe(true));
+  const post = calls.find((c) => c.path === "/api/suggestions/merge");
+  expect(JSON.parse(String(post?.init?.body))).toEqual({
+    ids: [1, 3],
+    instruction: "one task for Kate",
+  });
+});
