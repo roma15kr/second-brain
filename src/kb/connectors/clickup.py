@@ -805,18 +805,24 @@ def detect_for_owner(
     since = datetime.fromisoformat(s["notify_since"]) if s.get("notify_since") else None
     if not owner or since is None:
         return 0
-    events: list[tuple[str, str, str, datetime | None]] = []
+    from kb import team
+
+    crew = team.clickup_members(conn, s.get("members") or {})  # ClickUp id → team member
+    events: list[tuple[str, str, str, datetime | None, str | None]] = []
     updated = _ms(task.get("date_updated"))
     followed = owner in _ids(task.get("watchers"))
     created = _ms(task.get("date_created"))
     creator = str((task.get("creator") or {}).get("id"))
     if followed and created and created > since and creator != owner:
-        events.append((f"task:{task['id']}:new", "followed_new_task", "", created))
+        events.append((f"task:{task['id']}:new", "followed_new_task", "", created, None))
     if updated and updated > since:
         if owner in _ids(task.get("assignees")):
-            events.append((f"task:{task['id']}:assigned:{owner}", "assigned", "", updated))
+            events.append((f"task:{task['id']}:assigned:{owner}", "assigned", "", updated, None))
         if group and group in _ids(task.get("group_assignees")):
-            events.append((f"task:{task['id']}:group:{group}", "group_assigned", "", updated))
+            events.append((f"task:{task['id']}:group:{group}", "group_assigned", "", updated, None))
+        for uid in sorted(_ids(task.get("assignees")) & set(crew)):
+            key = f"task:{task['id']}:team:{uid}"
+            events.append((key, "team_assigned", "", updated, crew[uid]))
     flat = [r for top in comments for r in [top, *(top.get("replies") or [])]]
     for c in flat:
         when = _ms(c.get("date"))
@@ -826,7 +832,7 @@ def detect_for_owner(
         actor = author.get("username") or ""
         cid = c.get("id")
         if str((c.get("assignee") or {}).get("id")) == owner:
-            events.append((f"comment:{cid}:assigned", "comment_assigned", actor, when))
+            events.append((f"comment:{cid}:assigned", "comment_assigned", actor, when, None))
         parts = c.get("comment") or []
         mentions_owner = any(
             p.get("type") == "tag" and str((p.get("user") or {}).get("id")) == owner for p in parts
@@ -837,18 +843,23 @@ def detect_for_owner(
         mentions_group = mentions_group or f"@{group_name}" in (c.get("comment_text") or "").lower()
         if group and str((c.get("group_assignee") or {}).get("id")) == group:
             mentions_group = True
+        tagged = {str((p.get("user") or {}).get("id")) for p in parts if p.get("type") == "tag"}
+        crew_tagged = sorted((tagged & set(crew)) - {str(author.get("id"))})
         if mentions_owner:
-            events.append((f"comment:{cid}:mentioned", "mentioned", actor, when))
+            events.append((f"comment:{cid}:mentioned", "mentioned", actor, when, None))
         if mentions_group:
-            events.append((f"comment:{cid}:group", "group_mentioned", actor, when))
-        if followed and not (mentions_owner or mentions_group):
-            events.append((f"comment:{cid}:followed", "followed_comment", actor, when))
+            events.append((f"comment:{cid}:group", "group_mentioned", actor, when, None))
+        for uid in crew_tagged:
+            events.append((f"comment:{cid}:team:{uid}", "team_mentioned", actor, when, crew[uid]))
+        if followed and not (mentions_owner or mentions_group or crew_tagged):
+            events.append((f"comment:{cid}:followed", "followed_comment", actor, when, None))
     n = 0
-    for key, kind, actor, when in events:
+    for key, kind, actor, when, subject in events:
         row = conn.execute(
-            "INSERT INTO clickup_notifications (key, account_id, item_id, kind, actor, event_at)"
-            " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (key) DO NOTHING RETURNING key",
-            (key, account.id, item_id, kind, actor, when),
+            "INSERT INTO clickup_notifications (key, account_id, item_id, kind, actor, event_at,"
+            " subject) VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (key) DO NOTHING"
+            " RETURNING key",
+            (key, account.id, item_id, kind, actor, when, subject),
         ).fetchone()
         n += 1 if row else 0
     return n
@@ -869,7 +880,15 @@ HEADLINES = {
     "group_mentioned": "ClickUp: {actor} mentioned {group}",
     "comment_assigned": "ClickUp: {actor} assigned you a comment",
     "chat_direct": "ClickUp: {actor} wrote to you",
+    "team_assigned": "ClickUp: a task was assigned to {subject}",
+    "team_mentioned": "ClickUp: {actor} mentioned {subject}",
 }
+
+
+def headline_text(kind: str, actor: str | None, group: str, subject: str | None) -> str:
+    return HEADLINES[kind].format(
+        actor=actor or "Someone", group=group, subject=subject or "your team"
+    )
 
 
 def push_pending(conn: Conn, now: datetime) -> int:
@@ -895,9 +914,9 @@ def push_pending(conn: Conn, now: datetime) -> int:
     sent = 0
     for r in [r for r in pending if r["kind"] not in FOLLOWED][:20]:
         group = (r["settings"] or {}).get("group_name") or DEFAULT_GROUP
-        headline = HEADLINES[r["kind"]].format(actor=r["actor"] or "Someone", group=group)
+        text = headline_text(r["kind"], r["actor"], group, r.get("subject"))
         url = f"/c/{r['item_id']}" if r["item_id"] else "/clickup"
-        n = push.send(conn, "clickup", headline, url, now)
+        n = push.send(conn, "clickup", text, url, now)
         conn.execute(
             "UPDATE clickup_notifications SET handled_at = %s, pushed = %s WHERE key = %s",
             (now, n > 0, r["key"]),
@@ -985,6 +1004,29 @@ def my_channels(
     return out
 
 
+# Channels where everyone posts (daily reports): only what concerns the owner or the team reaches
+# briefs and notifications (assistant-moderation-v1); everything stays searchable.
+MENTIONS_ONLY_CHANNELS = ("dailyplanning",)
+
+
+def mentions_only(ch: dict[str, Any]) -> bool:
+    name = (ch.get("name") or "").lower().lstrip("#").replace("-", "").replace("_", "")
+    return ch.get("type") not in ("DM", "GROUP_DM") and name in MENTIONS_ONLY_CHANNELS
+
+
+def _concerns_owner(
+    conn: Conn, m: dict[str, Any], owner: str, owner_name: str, crew: dict[str, str]
+) -> bool:
+    from kb import team
+
+    author = str(m.get("user_id") or "")
+    return (
+        author == owner
+        or author in crew
+        or team.mentions(conn, str(m.get("content") or ""), [owner_name] if owner_name else [])
+    )
+
+
 def _chat_kind(ch: dict[str, Any], text: str, owner_name: str, group_name: str) -> str:
     if ch.get("type") in ("DM", "GROUP_DM"):
         return "chat_direct"
@@ -1008,6 +1050,9 @@ def sync_chat(conn: Conn, client: ClickUpClient, account: Account, now: datetime
     owner = str(s.get("owner_user_id") or "")
     owner_name = (members.get(owner) or {}).get("username") or ""
     group_name = s.get("group_name") or DEFAULT_GROUP
+    from kb import team
+
+    crew = team.clickup_members(conn, members)
     since_notify = datetime.fromisoformat(s["notify_since"]) if s.get("notify_since") else now
     scopes = chat_scopes(conn, account.id)
     listed = get_state(conn, sid, "chat:listed") or {}
@@ -1039,12 +1084,17 @@ def sync_chat(conn: Conn, client: ClickUpClient, account: Account, now: datetime
             days.add(when.date().isoformat())
             since_ms = max(since_ms, int(m.get("date") or 0))
             stored += 1
-        item_ids = {d: _index_chat_day(conn, sid, ch, d, members, scopes) for d in sorted(days)}
+        concerns = (owner, owner_name, crew)
+        item_ids = {
+            d: _index_chat_day(conn, sid, ch, d, members, scopes, concerns) for d in sorted(days)
+        }
         for m in messages:
             when = _ms(m.get("date"))
             author = str(m.get("user_id") or "")
             if when is None or when <= since_notify or author == owner:
                 continue
+            if mentions_only(ch) and not _concerns_owner(conn, m, *concerns):
+                continue  # another department's daily report
             kind = _chat_kind(ch, str(m.get("content") or ""), owner_name, group_name)
             conn.execute(
                 "INSERT INTO clickup_notifications (key, account_id, item_id, kind, actor,"
@@ -1070,6 +1120,7 @@ def _index_chat_day(
     day: str,
     members: dict[str, dict[str, Any]],
     scopes: list[str],
+    concerns: tuple[str, str, dict[str, str]] = ("", "", {}),
 ) -> int:
     rows = conn.execute(
         "SELECT payload FROM raw_records WHERE source_id = %s AND kind = 'clickup_chat_message'"
@@ -1080,7 +1131,7 @@ def _index_chat_day(
     ).fetchall()
     msgs = sorted((r["payload"]["message"] for r in rows), key=lambda m: int(m.get("date") or 0))
     seen: set[str] = set()
-    lines, keys, people_ = [], [], []
+    lines, keys, people_, relevant = [], [], [], []
     for m in msgs:
         if m["id"] in seen:
             continue
@@ -1088,6 +1139,8 @@ def _index_chat_day(
         user = members.get(str(m.get("user_id"))) or {}
         who = user.get("username") or "?"
         lines.append(f"{who}: {m.get('content') or ''}")
+        if mentions_only(channel) and _concerns_owner(conn, m, *concerns):
+            relevant.append(lines[-1])
         if user.get("email"):
             keys.append(people.email_key(user["email"]))
             people_.append(who)
@@ -1106,7 +1159,7 @@ def _index_chat_day(
         ON CONFLICT (source_id, source_item_key) DO UPDATE SET raw_text = EXCLUDED.raw_text,
             participants = EXCLUDED.participants, last_activity_at = EXCLUDED.last_activity_at,
             identity_keys = EXCLUDED.identity_keys, content_hash = EXCLUDED.content_hash,
-            updated_at = now()
+            metadata = EXCLUDED.metadata, updated_at = now()
         RETURNING id
         """,
         (
@@ -1119,7 +1172,18 @@ def _index_chat_day(
             _ms(msgs[0].get("date")) if msgs else None,
             last,
             sorted(set(keys)),
-            Jsonb({"channel_id": str(channel["id"]), "channel": channel.get("name"), "day": day}),
+            Jsonb(
+                {
+                    "channel_id": str(channel["id"]),
+                    "channel": channel.get("name"),
+                    "day": day,
+                    **(
+                        {"mentions_only": True, "assistant_text": redact_text("\n".join(relevant))}
+                        if mentions_only(channel)
+                        else {}
+                    ),
+                }
+            ),
             distill.content_hash(title, text),
         ),
     ).fetchone()

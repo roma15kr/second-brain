@@ -91,3 +91,26 @@ test("recorder apps offer the Mac app download", async () => {
     "https://github.com/roma15kr/second-brain/releases/download/mac-latest/Second-Brain-Recorder.dmg",
   );
 });
+
+test("my team is saved on its own", async () => {
+  window.history.pushState({}, "", "/settings");
+  const calls = mockApi({
+    ...routes,
+    "GET /api/settings": {
+      app: { ...app, team: ["Anastasiya Tarasova", "Kate Oleksyuk"] },
+      budget_default_usd: 30,
+      month_spend_usd: 4.2,
+    },
+    "PUT /api/settings": { app },
+  });
+  renderApp();
+  const box = await screen.findByLabelText("My team");
+  expect(box).toHaveValue("Anastasiya Tarasova\nKate Oleksyuk");
+  await userEvent.type(box, "\nBogdan Stetsenko");
+  await userEvent.click(screen.getByRole("button", { name: "Save team" }));
+  await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+  const body = JSON.parse(String(calls.find((c) => c.method === "PUT")?.init?.body));
+  expect(body).toEqual({
+    app: { team: ["Anastasiya Tarasova", "Kate Oleksyuk", "Bogdan Stetsenko"] },
+  });
+});

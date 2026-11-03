@@ -3,13 +3,18 @@
 For the top needs-reply emails of the day (owner's cap, default 5) and for every "Draft reply"
 the owner taps, the briefs model writes a reply in the thread's language and the owner's tone
 (learned from the owner's earlier replies to the same person, else in the same project), using
-knowledge-base context. It may cite only the items it was given; other refs are dropped. Drafts
-wait in the approval queue (suggestions); nothing is saved or sent here.
+knowledge-base context. It may cite only the items it was given; other refs are dropped.
+
+assistant-moderation-v1: automatic drafts are written only for new mail that really needs the
+owner's answer (a person wrote to the owner directly; not bulk, not CC-only) and are saved straight
+to that mailbox's Drafts in the thread — the owner moderates them in Gmail; nothing is sent.
+A thread gets one draft until a newer message arrives (a deleted draft is not recreated).
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
@@ -183,28 +188,64 @@ def drafted_today(conn: Conn, now: datetime) -> int:
     return int(row["n"]) if row else 0
 
 
+NO_REPLY = re.compile(r"(?i)^(no-?reply|do-?not-?reply|notifications?|mailer-daemon|postmaster)\b")
+
+
+def drafts_since(conn: Conn, now: datetime) -> datetime:
+    """Automatic drafts consider only mail that arrived after the feature was switched on."""
+    value = loops.get_setting(conn, "reply_drafts_since", None)
+    if value is None:
+        loops.set_setting(conn, "reply_drafts_since", now.isoformat())
+        return now
+    return datetime.fromisoformat(value)
+
+
+def needs_answer(conn: Conn, config: Config, item_id: int) -> bool:
+    """The last message is from a person, to the owner directly, and not bulk mail."""
+    from kb.assistant import mail
+
+    try:
+        head = mail.thread_headers(conn, item_id)
+    except mail.MailError:
+        return False
+    from email.utils import parseaddr
+
+    owner = loops.owner_emails(conn, config)
+    author = parseaddr(head["last_author"] or "")[1].lower()
+    if not author or author in owner or NO_REPLY.match(author.split("@")[0]):
+        return False
+    meta = head.get("metadata") or {}
+    if meta.get("bulk"):
+        return False
+    to = [a.lower() for a in meta.get("to") or []]
+    return not to or any(a in owner for a in to)  # older mail has no To list: trust triage
+
+
 def candidates(conn: Conn, config: Config, now: datetime, limit: int) -> list[dict[str, Any]]:
-    """Open needs-reply emails without a reply suggestion (and not discarded since the loop
-    opened), highest priority first."""
+    """Open needs-reply emails that arrived after automatic drafts were switched on and have no
+    draft newer than their last message, highest priority first."""
     from kb.assistant import priority
 
+    since = drafts_since(conn, now)
     rows = [
         dict(r)
         for r in conn.execute(
             """
-            SELECT l.item_id, l.opened_at FROM loops l JOIN items i ON i.id = l.item_id
+            SELECT l.item_id, l.opened_at, i.last_activity_at FROM loops l
+            JOIN items i ON i.id = l.item_id
             WHERE l.kind = 'needs_reply' AND l.status = 'open' AND i.kind = 'email_thread'
+              AND i.last_activity_at > %s
               AND NOT EXISTS (SELECT 1 FROM suggestions s WHERE s.kind = 'reply_email'
-                              AND s.item_id = l.item_id
-                              AND s.status IN ('proposed', 'approved', 'applying', 'applied'))
-              AND NOT EXISTS (SELECT 1 FROM suggestions s WHERE s.kind = 'reply_email'
-                              AND s.item_id = l.item_id AND s.status = 'discarded'
-                              AND s.decided_at > l.opened_at)
+                              AND s.item_id = l.item_id AND s.status <> 'failed'
+                              AND coalesce((s.payload->>'for_activity')::timestamptz,
+                                           s.created_at) >= i.last_activity_at)
             ORDER BY l.opened_at
             LIMIT 50
-            """
+            """,
+            (since,),
         ).fetchall()
     ]
+    rows = [r for r in rows if needs_answer(conn, config, r["item_id"])]
     ids = [r["item_id"] for r in rows]
     prio = priority.assess(conn, ids, loops.owner_emails(conn, config), now)
     by_id = {r["item_id"]: r | {"reason": prio[r["item_id"]].reason} for r in rows}
@@ -242,14 +283,28 @@ def cycle(
                     "auto": True,
                     "ai_pending": True,
                     "drafted_on": loops.kyiv_today(now).isoformat(),
+                    # the message this draft answers: a newer one gets a new draft
+                    "for_activity": c["last_activity_at"].isoformat(),
                 },
                 reason=f"Needs your reply · {c['reason']}" if c["reason"] else "Needs your reply",
                 refs=[f"item:{c['item_id']}"],
                 item_id=c["item_id"],
                 scopes=_scopes(conn, c["item_id"]),
             )
-            done += _fill(conn, config, llm, sid, c["item_id"], now, searcher)
+            if _fill(conn, config, llm, sid, c["item_id"], now, searcher):
+                done += 1
+                _save_to_drafts(conn, sid, now)
     return done
+
+
+def _save_to_drafts(conn: Conn, sid: int, now: datetime) -> None:
+    """An automatic draft goes straight to the mailbox's Drafts (apply_mail saves it next)."""
+    conn.execute(
+        "UPDATE suggestions SET status = 'approved', decided_at = %s,"
+        ' payload = payload || \'{"action": "draft", "auto_saved": true}\''
+        " WHERE id = %s AND status = 'proposed' AND coalesce(payload->>'body', '') <> ''",
+        (now, sid),
+    )
 
 
 def _scopes(conn: Conn, item_id: int) -> list[str]:

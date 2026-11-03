@@ -19,20 +19,39 @@ const brief = (id: number, opened: boolean) => ({
   useful: null,
 });
 
-test("dock lists the apps and marks the current one; phones get a More button", async () => {
+test("five places in the sidebar and the tab bar; the current one is marked", async () => {
   mockApi({
     "GET /api/auth/me": me,
     "GET /api/today": { brief: null },
     "GET /api/briefs": { briefs: [] },
   });
   renderApp();
-  const dock = await screen.findByRole("navigation", { name: "Apps" });
-  for (const label of ["Today", "Inbox", "Loops", "Briefs", "Week"]) {
-    expect(dock).toHaveTextContent(label);
+  const side = await screen.findByRole("navigation", { name: "Main" });
+  const tabs = screen.getByRole("navigation", { name: "Tabs" });
+  for (const nav of [side, tabs]) {
+    expect([...nav.querySelectorAll("a")].map((a) => a.textContent)).toEqual([
+      "Today",
+      "Moderate",
+      "Meetings",
+      "Search",
+      "Settings",
+    ]);
   }
-  expect(screen.getByRole("link", { name: /Today/ })).toHaveClass("active");
-  expect(screen.getByRole("button", { name: /More/ })).toHaveClass("phone-only");
-  expect(screen.getByRole("link", { name: /Week/ })).toHaveClass("desktop-only");
+  expect(side.querySelector("a.active")).toHaveTextContent("Today");
+  expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Today");
+});
+
+test("pages under a place mark that place", async () => {
+  window.history.pushState({}, "", "/library");
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/library": { documents: [] },
+    "GET /api/goals": { goals: [] },
+  });
+  renderApp();
+  const side = await screen.findByRole("navigation", { name: "Main" });
+  expect(side.querySelector("a.active")).toHaveTextContent("Search");
+  expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Library");
 });
 
 test("⌘K palette jumps to a person", async () => {
@@ -46,7 +65,7 @@ test("⌘K palette jumps to a person", async () => {
     "GET /api/search?q=%D0%92%D1%8F%D1%87%D0%B5%D1%81%D0%BB%D0%B0%D0%B2&limit=5": { results: [] },
   });
   renderApp();
-  await screen.findByRole("navigation", { name: "Apps" });
+  await screen.findByRole("navigation", { name: "Main" });
   await userEvent.keyboard("{Meta>}k{/Meta}");
   const input = await screen.findByLabelText("Search or jump to");
   await userEvent.type(input, "Вячеслав");

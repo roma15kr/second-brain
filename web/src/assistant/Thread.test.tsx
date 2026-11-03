@@ -55,7 +55,7 @@ test("a palette request opens its thread, shows steps, then the cited answer", a
     },
   });
   renderApp();
-  await screen.findByRole("navigation", { name: "Apps" });
+  await screen.findByRole("navigation", { name: "Main" });
   await userEvent.keyboard("{Meta>}k{/Meta}");
   await userEvent.type(await screen.findByLabelText("Search or jump to"), "Rozetka delivery?");
   await userEvent.click(await screen.findByRole("option", { name: /Ask the assistant/ }));

@@ -132,6 +132,11 @@ def resolve_assignee(conn: Conn, who: str) -> tuple[str, str] | None:
         n = name.lower()
         if who == email or (n and (who in n or n in who)):
             return name, email
+    from kb import team
+
+    for email, name in seen.items():  # spelling variants: Anastasiya / Anastasia
+        if team.same_person(who, name, email):
+            return name, email
     return None
 
 

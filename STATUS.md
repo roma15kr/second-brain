@@ -10,6 +10,9 @@ _Last updated: 2026-10-20 by Claude_
   Web OS https://os.zhukovsky.biz (passkeys) · MCP https://kb.zhukovsky.biz/mcp (token + lockout) · Cloudflare-proxied.
 
 ## Owner acceptance checklist (test on phone and laptop, then give feedback)
+0. New (2026-11-03): light design with 5 tabs; Moderate tab (tick meeting tasks/comments → Create selected);
+   needed replies to new mail appear in Gmail Drafts (never sent); Settings → My team; #dailyplanning only shows
+   posts by/about you and the team; briefs ≤ 8 lines.
 1. ClickUp: a push arrives when you or DTC are assigned/mentioned (11.3); followed activity is grouped.
 2. Inbox → Draft reply → Save to Drafts appears unsent in the Gmail thread (12.1); Send → lands in the thread (12.2).
 3. Assistant: one question with sources, an email draft, a task draft, a reminder, a report (assistant 1.3, 5.2).
@@ -39,6 +42,13 @@ _Last updated: 2026-10-20 by Claude_
 8. Library: upload the constitution and 2026 plans, confirm goals (goal links in priority and the weekly audit
    need confirmed goals).
 9. v1 10.3: 30 evaluation questions → `kb eval`.
+
+## Done recently (2026-11-03)
+- `assistant-moderation-v1`: My team (default DTC four; spelling-tolerant matching), #dailyplanning mentions-only,
+  reply drafts saved straight to Gmail Drafts for new mail that needs an answer (not bulk/CC-only; one per message),
+  meeting proposals (≤5-line summary, team tasks, comments on existing ClickUp tasks), Moderate API, short briefs.
+- `web-redesign-v1`: light theme (dark only by choice), 5 places (Today, Moderate, Meetings, Search, Settings),
+  Today = to-moderate count + meetings + team mentions + short brief; compact lists.
 
 ## Done recently (2026-10-20)
 - `mac-recorder-v1` (PR #43 server; Mac app on branch `change/mac-recorder-v1`): Swift package `mac/` — menu-bar app

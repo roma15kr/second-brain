@@ -77,21 +77,22 @@ pack of their own email threads and Telegram chats. Rules:
 - Use only facts from the pack. Never invent people, numbers, dates or decisions.
 - Every section must cite the conversations or loops it is about in `refs`, exactly as written in
   the pack (e.g. "item:123", "loop:45"). A section without refs will be discarded.
-- Be concrete and brief: 1-3 sentences per section, names and amounts where the pack has them.
+- The owner has little time: each section is ONE short line (at most ~20 words), names and
+  amounts where the pack has them. Only what needs the owner's action, decision or attention.
 - Skip small talk, newsletters and notifications unless they need the owner.
 - Group by project/area (scope) when useful; scopes: personal, digisoft, quokka, rdim, unsorted."""
 
 PROMPTS = {
     "morning": _COMMON
     + """
-This is the MORNING brief covering activity since last evening. Write 2-6 sections: what happened
-per scope, anything that needs the owner's reply or decision first. If the pack lists this week's
+This is the MORNING brief covering activity since last evening. Write 0-3 sections: what needs the
+owner's reply or decision first; none when nothing does. If the pack lists this week's
 priorities, add one section on what moved on them (cite the related items). In `focus`, pick at
 most 3 conversations the owner should handle first today, each with a one-line reason.""",
     "evening": _COMMON
     + """
-This is the EVENING wrap of today. Write 2-6 sections: decisions and outcomes reached today,
-open questions still waiting for the owner, and what carries over to tomorrow. In `focus`, pick at
+This is the EVENING wrap of today. Write 0-3 sections: decisions reached today and what still
+waits for the owner tomorrow; none when nothing does. In `focus`, pick at
 most 3 conversations to start with tomorrow, each with a one-line reason.""",
 }
 
@@ -102,6 +103,8 @@ class Section:
     text: str
     items: list[dict[str, Any]] = field(default_factory=list)
     kind: str = "data"  # ai | focus | data | note
+    more: int = 0  # items left out to keep the brief short
+    collapsed: bool = False  # shown folded (all activity)
 
     @property
     def refs(self) -> list[str]:
@@ -114,7 +117,44 @@ class Section:
             "refs": self.refs,
             "items": self.items,
             "kind": self.kind,
+            "more": self.more,
+            "collapsed": self.collapsed,
         }
+
+
+BRIEF_LINES = 8  # assistant-moderation-v1: the owner reads briefs at a glance
+NOT_ACTIONS = ("Coming up",)
+
+
+def shorten(sections: list[Section]) -> list[Section]:
+    """At most BRIEF_LINES lines of what needs the owner, then all activity folded into one line;
+    one line when nothing needs the owner."""
+    out: list[Section] = []
+    budget = BRIEF_LINES
+    for sec in sections:
+        if sec.kind == "data" or sec.title in NOT_ACTIONS:
+            continue
+        if budget <= 0:
+            break
+        if sec.items:
+            keep = sec.items[:budget]
+            more = len(sec.items) - len(keep)
+            out.append(Section(sec.title, sec.text, keep, sec.kind, more=more))
+            budget -= len(keep)
+        else:
+            text = sec.text.splitlines()[: max(1, budget)]
+            out.append(Section(sec.title, "\n".join(text), [], sec.kind))
+            budget -= len(text) or 1
+    if not out:
+        out.append(Section("Nothing needs you", "", kind="note"))
+    activity = [
+        i | {"scope": sec.title} for sec in sections if sec.kind == "data" for i in sec.items
+    ]
+    if activity:
+        out.append(
+            Section("All activity", f"{len(activity)} conversations", activity, collapsed=True)
+        )
+    return out
 
 
 # --- data-only rendering --------------------------------------------------------------------
@@ -477,7 +517,7 @@ def write_brief(
     if pack.routine == "morning" and (upcoming := coming_up(conn, now)):
         sections.append(upcoming)
     sections.extend(data_only(pack))
-    return store(conn, pack, sections, mode, cost)
+    return store(conn, pack, shorten(sections), mode, cost)
 
 
 def to_dict(row: dict[str, Any]) -> dict[str, Any]:

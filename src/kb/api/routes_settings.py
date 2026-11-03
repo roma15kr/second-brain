@@ -63,7 +63,9 @@ def put_settings(conn: Db, app: Annotated[dict[str, Any], Body(embed=True)]) -> 
     from kb import settings_store
 
     try:
-        saved = settings_store.save(conn, app)
+        # a page saves only its own fields (e.g. the team); the rest is kept as stored
+        current = settings_store.load(conn).model_dump(mode="json")
+        saved = settings_store.save(conn, {**current, **app})
     except settings_store.SettingsError as e:
         raise HTTPException(400, str(e)) from e
     return {"app": saved.model_dump(mode="json")}

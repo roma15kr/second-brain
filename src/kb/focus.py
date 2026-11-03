@@ -305,6 +305,7 @@ def decisions(conn: Conn, start: datetime, end: datetime) -> dict[str, list[dict
         "SELECT id, title, outcome, scopes, participants, last_activity_at, locator FROM items"
         " WHERE NOT hidden AND outcome IS NOT NULL AND outcome <> ''"
         " AND kind IN ('email_thread', 'tg_conversation', 'clickup_task', 'clickup_chat')"
+        " AND coalesce(metadata->>'mentions_only', '') <> 'true'"  # daily reports of others
         " AND last_activity_at >= %s AND last_activity_at < %s ORDER BY last_activity_at",
         (start, end),
     ).fetchall():

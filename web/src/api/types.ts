@@ -20,6 +20,8 @@ export type BriefSection = {
   refs: string[];
   items: BriefItem[];
   kind?: "ai" | "focus" | "data" | "note" | "group";
+  more?: number; // items left out to keep the brief short
+  collapsed?: boolean; // all activity, shown folded
 };
 
 export type Brief = {

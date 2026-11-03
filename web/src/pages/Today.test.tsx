@@ -111,3 +111,30 @@ test("AI brief shows focus reasons, AI text and notes", async () => {
   expect(screen.getByText("A dealer needs a price today.")).toBeInTheDocument();
   expect(screen.getByText("Coming up:")).toBeInTheDocument();
 });
+
+test("today shows what to moderate, meetings and team mentions first", async () => {
+  mockApi({
+    "GET /api/auth/me": me,
+    "GET /api/today": {
+      brief: null,
+      meetings: [],
+      moderate: 5,
+      mentions: [
+        {
+          text: "Olena mentioned Kate Oleksyuk",
+          title: "Bundles",
+          item_id: 9,
+          at: "2026-11-02T10:00:00Z",
+        },
+      ],
+    },
+  });
+  renderApp();
+  const moderate = await screen.findByRole("link", { name: /5\s*to moderate/ });
+  expect(moderate).toHaveAttribute("href", "/moderate");
+  expect(screen.getByRole("link", { name: "Olena mentioned Kate Oleksyuk" })).toHaveAttribute(
+    "href",
+    "/c/9",
+  );
+  expect(screen.getByText("No more meetings today.")).toBeInTheDocument();
+});

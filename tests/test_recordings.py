@@ -231,3 +231,62 @@ def test_notes_to_loops_and_task_drafts(conn, config):
         .startswith("Prices agreed")
     )
     assert recordings.process_due(conn, config, llm, START + timedelta(hours=2)) == 0  # once
+
+
+def test_meeting_proposes_tasks_and_comments(conn, config):
+    from tests.test_assistant_requests import clickup_list
+
+    clickup_list(conn, "L1", "DTC", default=True)
+    conn.execute(
+        "INSERT INTO items (source_id, source_item_key, kind, title, scopes, locator, metadata)"
+        " VALUES ('clickup-1', 'tb', 'clickup_task', 'Bundles redesign', '{quokka}',"
+        " 'https://app.clickup.com/t/tb', %s)",
+        (Jsonb({"assignees": ["Anastasia Tarasova"], "assignee_emails": ["a.t@adducates.com"]}),),
+    )
+    recordings.store(conn, "call", START, START + timedelta(minutes=30), upload_body()["segments"])
+    llm = FakeLlm(
+        {
+            "summary": "\n".join(f"line {n}" for n in range(8)),
+            "decisions": [],
+            "actions": [
+                {
+                    "text": "Update the bundle page",
+                    "owner": "Anastasiya",
+                    "is_me": False,
+                    "due": "Friday",
+                }
+            ],
+            "comments": [
+                {"task": "bundles redesign", "text": "New buy box approved"},
+                {"task": "Something nobody created", "text": "ignored"},
+            ],
+        }
+    )
+    recordings.process_due(conn, config, llm, START + timedelta(hours=1))
+    assert "TEAM: Anastasiya Tarasova, Kate Oleksyuk" in llm.calls[0]["text"]
+    props = {s["kind"]: s for s in suggestions.listing(conn)}
+    assert set(props) == {"task", "clickup_comment"}
+    task = props["task"]["payload"]
+    assert task["assignee_name"] == "Anastasia Tarasova" and task["due_date"] == "2026-10-23"
+    comment = props["clickup_comment"]["payload"]
+    assert comment["task_id"] == "tb" and comment["body"] == "New buy box approved"
+    result = conn.execute("SELECT result FROM recordings").fetchone()["result"]
+    assert result["summary"].count("\n") == 4  # five lines at most
+
+
+def test_create_selected_only(conn, pg_url, config):
+    from tests.test_email_drafts import web_client
+
+    ids = [
+        suggestions.propose(conn, "nudge", {"body": f"n{n}", "channel": "tg"}, reason="r")
+        for n in range(4)
+    ]
+    client = web_client(conn, pg_url, config)
+    r = client.post(
+        "/api/suggestions/moderate",
+        json={"create": ids[:2], "discard": ids},
+        headers={"X-KB-Request": "1"},
+    )
+    assert r.status_code == 200 and r.json()["created"] == ids[:2]
+    statuses = {s["id"]: s["status"] for s in conn.execute("SELECT id, status FROM suggestions")}
+    assert [statuses[i] for i in ids] == ["applied", "applied", "discarded", "discarded"]

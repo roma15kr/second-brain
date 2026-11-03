@@ -108,6 +108,7 @@ def thread_headers(conn: Conn, item_id: int) -> dict[str, Any]:
         "references": [*(r for r in last["refs"] if r), last["message_key"]],
         "last_author": last["author"],
         "participants": list(last["participants"]),
+        "metadata": dict(last["metadata"] or {}),
     }
 
 

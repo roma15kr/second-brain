@@ -26,3 +26,21 @@ def test_html_to_text_drops_scripts_and_styles():
     text = html_to_text("<style>x{}</style><p>Hello</p><script>alert(1)</script><div>World</div>")
     assert "Hello" in text and "World" in text
     assert "alert" not in text and "x{}" not in text
+
+
+def test_direct_recipients_and_bulk_mail():
+    from kb import email_parse
+
+    person = (
+        b"From: Olga <olga@dealer.example>\r\nTo: me@example.com\r\nCc: team@x.example\r\n"
+        b"Subject: Prices\r\n\r\nCan you confirm?\r\n"
+    )
+    p = email_parse.parse(person)
+    assert p.to == ["me@example.com"] and not p.bulk
+    news = (
+        b"From: news@shop.example\r\nTo: me@example.com\r\nList-Unsubscribe: <mailto:u@x>\r\n"
+        b"Subject: Sale\r\n\r\nSale!\r\n"
+    )
+    assert email_parse.parse(news).bulk
+    robot = b"From: a@x\r\nTo: me@example.com\r\nAuto-Submitted: auto-replied\r\n\r\nAway\r\n"
+    assert email_parse.parse(robot).bulk

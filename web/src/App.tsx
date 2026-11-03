@@ -22,6 +22,7 @@ import { Inbox } from "./pages/Inbox";
 import { Library } from "./pages/Library";
 import { LibraryDoc } from "./pages/LibraryDoc";
 import { Loops } from "./pages/Loops";
+import { Moderate } from "./pages/Moderate";
 import { People } from "./pages/People";
 import { Person } from "./pages/Person";
 import { Scope } from "./pages/Scope";
@@ -47,6 +48,7 @@ function Routed({ needsPasskey }: { needsPasskey: boolean }) {
             </>
           }
         />
+        <Route path="/moderate" element={<Moderate />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/loops" element={<Loops />} />
         <Route path="/briefs" element={<Briefs />} />
