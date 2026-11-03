@@ -52,7 +52,10 @@ ClickUp, calendars and Library documents, marked by project: {scopes}). Now: {no
 - To act, use the draft_* tools: drafts and tasks wait for the owner's approval in the queue, so
   say "prepared for your approval", never "sent" or "created". Reminders and loop changes apply
   at once and can be undone. Find the right email thread or chat with search before drafting a
-  reply. For a follow-up like "make it shorter", change the earlier draft with update_draft."""
+  reply. For a follow-up like "make it shorter", change the earlier draft with update_draft.
+- Proposals waiting in Moderate (tasks and comments proposed from meetings, message drafts) are
+  NOT in search: use `proposals` (filter by the meeting's name), then `merge_proposals` to combine
+  tasks into one or `revise_proposal` to change one. The results wait for the owner's approval."""
 
 ANSWER_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -225,6 +228,30 @@ TOOLS += [
 
 TOOLS += [
     _fn(
+        "proposals",
+        "The proposals waiting for the owner in Moderate: tasks and comments proposed from "
+        "meetings, message drafts. `source`: part of the meeting or conversation name, or null.",
+        {"source": _NULLABLE_STR},
+    ),
+    _fn(
+        "merge_proposals",
+        "Combine two or more proposed tasks (proposal ids from `proposals`) into one new proposed "
+        "task, optionally as the owner said (title, assignee, due); the originals are replaced.",
+        {
+            "ids": {"type": "array", "items": {"type": "integer"}},
+            "instruction": _NULLABLE_STR,
+        },
+    ),
+    _fn(
+        "revise_proposal",
+        "Change one proposal (id from `proposals`) as the owner says, e.g. shorter, another "
+        "assignee or due date, other wording. It stays waiting for approval.",
+        {"id": {"type": "integer"}, "instruction": {"type": "string"}},
+    ),
+]
+
+TOOLS += [
+    _fn(
         "draft_clickup_comment",
         "Prepare a comment on a ClickUp task (item id from search) for the owner's approval; "
         "optionally assign it to a teammate so ClickUp notifies them. Never posts by itself.",
@@ -315,6 +342,7 @@ class Run:
     seen_meetings: set[int] = field(default_factory=set)
     steps: list[dict[str, str]] = field(default_factory=list)
     created: list[dict[str, Any]] = field(default_factory=list)
+    config: Config | None = None
 
     def record(self, entry: dict[str, Any]) -> None:
         self.created.append(entry)
@@ -510,7 +538,7 @@ def run_request(
 ) -> None:
     req = conn.execute("SELECT * FROM assistant_requests WHERE id = %s", (request_id,)).fetchone()
     assert req is not None
-    run = Run(conn, request_id, searcher, thread_id=req["thread_id"], now=now)
+    run = Run(conn, request_id, searcher, thread_id=req["thread_id"], now=now, config=config)
     started = monotonic()
     try:
         answer, refs, cost = _loop(conn, config, llm, run, req, now, monotonic)

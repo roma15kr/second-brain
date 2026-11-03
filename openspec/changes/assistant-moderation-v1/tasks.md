@@ -13,6 +13,7 @@
 ## 2b. Changing proposals (owner 2026-11-03: "not only approve — comments for AI modification or my custom text/voice edit")
 - [x] 2.2 Server: `POST /api/suggestions/{id}/revise {instruction}` (AI rewrites the editable fields: task title/description/assignee/due, comment or message text; assignee resolved to the team; revision history kept) and `PATCH /api/suggestions/{id}` (owner's own fields); verify `test_revise_task_by_instruction`, `test_owner_edit_used_on_create`
 - [x] 2.3 Web: per proposal "Change with AI" (type or dictate an instruction) and "Edit" (fields, dictation into the text); verify `Moderate.test.tsx` revise and edit cases
+- [x] 2.4 Merge: `POST /api/suggestions/merge {ids, instruction}` and Moderate "Merge (n)" (typed or dictated how); assistant tools `proposals`, `merge_proposals`, `revise_proposal`; verify `test_merge_three_proposals_into_one`, `test_assistant_finds_and_merges_proposals`, `Moderate.test.tsx` merge case
 
 ## 3. Acceptance
 - [ ] 3.1 Owner: a week of drafts in Gmail and meeting proposals moderated; share keep-rate from Status

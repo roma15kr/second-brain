@@ -116,3 +116,83 @@ def test_revise_route_and_refusals(conn, pg_url, config):
     suggestions.discard(conn, sid, "no", NOW + timedelta(minutes=1))
     r = client.post(f"/api/suggestions/{sid}/revise", json={"instruction": "x"}, headers=H)
     assert r.status_code == 400 and "discarded" in r.json()["detail"]
+
+
+def seo_tasks(conn):
+    return [
+        suggestions.propose(
+            conn,
+            "task",
+            {"list_id": "L1", "name": n, "description": d, "assignee_name": "Kate Oleksyuk",
+             "assignee_emails": [], "due_date": due, "source_item_id": 77},
+            reason="From the meeting “Weekly Kate”",
+            refs=["item:77"],
+            scopes=["quokka"],
+            item_id=77,
+        )
+        for n, d, due in [
+            ("SEO: titles for puzzles", "Rewrite 40 titles", "2026-11-07"),
+            ("SEO: descriptions", "Add keywords to descriptions", "2026-11-05"),
+            ("SEO: alt texts", "Alt texts for images", None),
+        ]
+    ]  # fmt: skip
+
+
+def test_merge_three_proposals_into_one(conn, config):
+    ids = seo_tasks(conn)
+    llm = FakeLlm(
+        {
+            "name": "SEO optimisation of puzzle listings",
+            "description": "- Rewrite 40 titles\n- Keywords in descriptions\n- Alt texts",
+            "assignee": "Kate Oleksyuk",
+            "due": "2026-11-05",
+        }
+    )
+    s = revise.merge(conn, config, llm, ids, "one SEO task for Kate", NOW)
+    p = s["payload"]
+    assert s["kind"] == "task" and s["status"] == "proposed"
+    assert p["name"] == "SEO optimisation of puzzle listings" and p["merged_from"] == ids
+    assert p["list_id"] == "L1" and p["source_item_id"] == 77 and p["due_date"] == "2026-11-05"
+    assert s["reason"] == "From the meeting “Weekly Kate”" and s["refs"] == ["item:77"]
+    old = conn.execute("SELECT status, discard_reason FROM suggestions WHERE id = ANY(%s)", (ids,))
+    assert {(r["status"], r["discard_reason"]) for r in old} == {
+        ("discarded", f"merged into proposal {s['id']}")
+    }
+    assert "Rewrite 40 titles" in llm.calls[0]["text"]
+
+
+def test_merge_needs_two_open_task_proposals(conn, config):
+    ids = seo_tasks(conn)
+    llm = FakeLlm({})
+    import pytest
+
+    with pytest.raises(suggestions.SuggestionError, match="at least two"):
+        revise.merge(conn, config, llm, ids[:1], "", NOW)
+    comment = suggestions.propose(conn, "clickup_comment", {"body": "x"}, reason="r")
+    with pytest.raises(suggestions.SuggestionError, match="only task"):
+        revise.merge(conn, config, llm, [ids[0], comment], "", NOW)
+
+
+def test_assistant_finds_and_merges_proposals(conn, config, monkeypatch):
+    from kb.assistant import actions, agent
+
+    ids = seo_tasks(conn)
+    run = agent.Run(conn, 0, None, now=NOW, config=config)
+    monkeypatch.setattr(run, "step", lambda tool, summary: None)
+    monkeypatch.setattr(run, "record", lambda entry: None)
+    found = actions.proposals(run, "Weekly Kate")
+    assert {f["proposal_id"] for f in found} == set(ids)
+    assert found[0]["task"].startswith("SEO")
+    llm = FakeLlm(
+        {
+            "name": "SEO optimisation",
+            "description": "- all three",
+            "assignee": "Kate Oleksyuk",
+            "due": "",
+        }
+    )
+    monkeypatch.setattr(actions, "_structured_llm", lambda run: llm)
+    out = actions.merge_proposals(run, ids, None)
+    assert out["merged_into"]["task"] == "SEO optimisation"
+    assert "proposals" in {t["name"] for t in agent.TOOLS}
+    assert "`proposals`" in agent.SYSTEM
