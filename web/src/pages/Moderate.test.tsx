@@ -58,7 +58,7 @@ test("the owner ticks two proposals of a meeting and creates them; the rest is d
   expect(screen.getByRole("button", { name: "Discard all" })).toBeInTheDocument();
   await userEvent.click(screen.getByLabelText("Task: Update the bundle page"));
   await userEvent.click(screen.getByLabelText("Comment on “Bundles redesign”"));
-  await userEvent.click(screen.getByRole("button", { name: "Create selected (2)" }));
+  await userEvent.click(screen.getByRole("button", { name: "Create (2)" }));
   await waitFor(() => expect(calls.some((c) => c.path === "/api/suggestions/moderate")).toBe(true));
   const post = calls.find((c) => c.path === "/api/suggestions/moderate");
   expect(JSON.parse(String(post?.init?.body))).toEqual({ create: [1, 2], discard: [1, 2, 3] });

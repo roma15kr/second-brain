@@ -280,13 +280,14 @@ function GroupCard({ group, onDone }: { group: Group; onDone: () => void }) {
           );
         })}
       </ul>
-      <div className="actions">
+      <div className={`actions${picked.size ? " selection-bar" : ""}`}>
+        {picked.size > 0 && <span className="selected">{picked.size} selected</span>}
         <button
           className="btn primary"
           disabled={send.isPending || picked.size === 0}
           onClick={() => send.mutate([...picked])}
         >
-          {picked.size ? `Create selected (${picked.size})` : "Create selected"}
+          {picked.size ? `Create (${picked.size})` : "Create selected"}
         </button>
         <button className="btn" disabled={send.isPending} onClick={() => send.mutate([])}>
           Discard all

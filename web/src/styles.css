@@ -1184,3 +1184,54 @@ blockquote.match {
     min-height: 36px;
   }
 }
+
+/* Form fields that carry the button class (older pages) keep field shapes, not pills. */
+textarea.btn,
+input.btn,
+select.btn {
+  display: block;
+  border-radius: var(--radius-s);
+  font-weight: 400;
+  text-align: left;
+  min-height: 44px;
+}
+input.btn,
+select.btn {
+  display: inline-block;
+}
+input[type="checkbox"].btn,
+input[type="radio"].btn {
+  min-height: 0;
+}
+/* text fields grow with what was typed or dictated */
+textarea {
+  field-sizing: content;
+  min-height: 5.5em;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.composer textarea {
+  min-height: 4.5em;
+}
+
+/* Moderate: what is ticked stays reachable while scrolling a long group */
+.selection-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 2;
+  padding: 10px 12px;
+  margin: 12px -6px 0;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 28px rgba(23, 27, 38, 0.12);
+}
+.selection-bar .selected {
+  font-weight: 600;
+  margin-right: 4px;
+}
+@media (max-width: 760px) {
+  .selection-bar {
+    bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+}
