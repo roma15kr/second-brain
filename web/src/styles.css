@@ -1235,3 +1235,15 @@ textarea {
     bottom: calc(78px + env(safe-area-inset-bottom));
   }
 }
+
+/* dictation result: form tabs, text and actions with room between them */
+.dictation-result {
+  display: grid;
+  gap: 14px;
+}
+.dictation-result > * {
+  margin: 0;
+}
+.dictation-result .actions {
+  margin-top: 0;
+}

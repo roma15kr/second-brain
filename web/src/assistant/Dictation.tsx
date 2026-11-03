@@ -71,7 +71,7 @@ function Result({ d }: { d: DictationData }) {
     if (f !== "verbatim" && !d.forms[f] && !render.isPending) render.mutate(f);
   };
   return (
-    <div>
+    <div className="dictation-result">
       <div className="row" role="tablist">
         {TABS.map(([f, label]) => (
           <button
