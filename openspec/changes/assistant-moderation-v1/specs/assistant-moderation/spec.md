@@ -40,6 +40,17 @@ For each processed meeting the system SHALL produce a summary of at most 5 lines
 - **WHEN** the owner selects two proposals and taps "Create selected"
 - **THEN** exactly those two are created in ClickUp and the other two disappear
 
+### Requirement: Proposals can be changed before they are created
+For every proposal in the Moderate list the owner SHALL be able to (a) give an instruction, typed or dictated, after which the AI rewrites the proposal accordingly and shows the new version for moderation, or (b) edit the proposal's text, title, assignee or due date directly, typing or dictating; nothing SHALL be created until the owner approves the changed version.
+
+#### Scenario: AI revision by voice
+- **WHEN** the owner dictates "make it shorter and assign it to Kate, due Monday" on a proposed task
+- **THEN** the task shows a shorter title, Kate Oleksyuk as assignee and next Monday as due date, still waiting for approval
+
+#### Scenario: Own wording
+- **WHEN** the owner replaces the text of a proposed ClickUp comment with their own words
+- **THEN** exactly that text is posted when the owner creates it
+
 ### Requirement: The owner's team
 The owner SHALL set "My team" in Settings (default: Anastasiya Tarasova, Kate Oleksyuk, Bogdan Stetsenko, Galyna Tkachenko); the team SHALL be used for mentions and assignments that notify the owner, for delegation suggestions and for meeting task assignees, matched to ClickUp members and People by name or email.
 

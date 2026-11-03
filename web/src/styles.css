@@ -1153,3 +1153,34 @@ blockquote.match {
 .segmented + * {
   margin-top: 12px;
 }
+
+/* --- changing a proposal (Moderate) -------------------------------------------------------- */
+.change {
+  margin: 4px 0 0 32px;
+}
+.change-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  font-size: 14px;
+}
+.change-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: var(--radius-s);
+  background: var(--soft);
+}
+.change-panel .row input {
+  flex: 1 1 160px;
+}
+@media (max-width: 760px) {
+  .change {
+    margin-left: 0;
+  }
+  .change-links .link {
+    min-height: 36px;
+  }
+}

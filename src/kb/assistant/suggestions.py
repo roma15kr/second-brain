@@ -493,23 +493,36 @@ def listing(conn: Conn, status: str = "proposed", limit: int = 100) -> list[dict
         " ORDER BY coalesce(s.decided_at, s.created_at) DESC LIMIT %s",
         (statuses, status != "recent", limit),
     ).fetchall()
-    return [
-        {
-            "id": r["id"],
-            "kind": r["kind"],
-            "payload": r["payload"],
-            "reason": r["reason"],
-            "refs": list(r["refs"]),
-            "scopes": list(r["scopes"]),
-            "item_id": r["item_id"],
-            "item_title": r["item_title"],
-            "status": r["status"],
-            "applied_ref": r["applied_ref"],
-            "error": r["error"],
-            "created_at": r["created_at"].isoformat(),
-        }
-        for r in rows
-    ]
+    return [_row(r) for r in rows]
+
+
+def _row(r: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": r["id"],
+        "kind": r["kind"],
+        "payload": r["payload"],
+        "reason": r["reason"],
+        "refs": list(r["refs"]),
+        "scopes": list(r["scopes"]),
+        "item_id": r["item_id"],
+        "item_title": r.get("item_title"),
+        "status": r["status"],
+        "applied_ref": r["applied_ref"],
+        "error": r["error"],
+        "created_at": r["created_at"].isoformat(),
+    }
+
+
+def one(conn: Conn, sid: int) -> dict[str, Any]:
+    """A suggestion as the lists show it."""
+    r = conn.execute(
+        "SELECT s.*, i.title AS item_title FROM suggestions s LEFT JOIN items i ON i.id = s.item_id"
+        " WHERE s.id = %s",
+        (sid,),
+    ).fetchone()
+    if r is None:
+        raise SuggestionError(f"no suggestion {sid}")
+    return _row(dict(r))
 
 
 def clickup_client_factory(conn: Conn) -> Callable[[], Any] | None:
